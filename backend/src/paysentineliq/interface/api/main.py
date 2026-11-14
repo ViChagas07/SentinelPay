@@ -34,6 +34,7 @@ from paysentineliq.interface.api.routes.auth import router as auth_router
 from paysentineliq.interface.api.routes.documents import router as documents_router
 from paysentineliq.interface.api.routes.example import router as example_router
 from paysentineliq.interface.api.routes.ops import router as ops_router
+from paysentineliq.interface.api.routes.payables import router as payables_router
 from paysentineliq.interface.api.routes.protected import router as protected_router
 from paysentineliq.interface.api.routes.users import router as users_router
 from paysentineliq.interface.api.security_headers import SecurityHeadersMiddleware
@@ -170,6 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(protected_router, prefix=API_V1_PREFIX)
     app.include_router(documents_router, prefix=API_V1_PREFIX)
     app.include_router(analyses_router, prefix=API_V1_PREFIX)
+    app.include_router(payables_router, prefix=API_V1_PREFIX)
     app.include_router(example_router, prefix=API_V1_PREFIX)
     return app
 

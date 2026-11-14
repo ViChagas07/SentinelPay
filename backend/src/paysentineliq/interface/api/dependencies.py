@@ -15,6 +15,10 @@ from paysentineliq.application.commands.documents import (
     DocumentPreparer,
     UploadDocumentHandler,
 )
+from paysentineliq.application.commands.payables import (
+    PayableCommandHandler,
+    ReminderPreferenceHandler,
+)
 from paysentineliq.application.errors import (
     ForbiddenError,
     InvalidAccessTokenError,
@@ -32,6 +36,11 @@ from paysentineliq.application.ports.document_read_repository import DocumentRea
 from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
 from paysentineliq.application.ports.oidc import OIDCClient
 from paysentineliq.application.ports.oidc_state import OIDCStateStore
+from paysentineliq.application.ports.payables import (
+    PayableReadRepositoryPort,
+    PayableWriteRepositoryPort,
+    ReminderPreferenceRepositoryPort,
+)
 from paysentineliq.application.ports.readiness import ReadinessChecker
 from paysentineliq.application.ports.repository import ExampleRepository
 from paysentineliq.application.ports.revoked_tokens import RevokedTokenStore
@@ -47,6 +56,7 @@ from paysentineliq.application.queries.analyses import (
 )
 from paysentineliq.application.queries.documents import GetDocumentDownloadUrlHandler
 from paysentineliq.application.queries.example import GetExampleHandler
+from paysentineliq.application.queries.payables import ListPayablesHandler
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.db.repositories.analyses import (
@@ -60,6 +70,11 @@ from paysentineliq.infrastructure.db.repositories.documents import (
 )
 from paysentineliq.infrastructure.db.repositories.example import (
     SqlAlchemyExampleRepository,
+)
+from paysentineliq.infrastructure.db.repositories.payables import (
+    SqlAlchemyPayableReadRepository,
+    SqlAlchemyPayableWriteRepository,
+    SqlAlchemyReminderPreferenceRepository,
 )
 from paysentineliq.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from paysentineliq.infrastructure.messaging.celery_app import build_celery_app
@@ -246,6 +261,50 @@ def get_analysis_list_query(
     ],
 ) -> ListAnalysesHandler:
     return ListAnalysesHandler(repository)
+
+
+def get_payable_read_repository(request: Request) -> PayableReadRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return SqlAlchemyPayableReadRepository(session_factory)
+
+
+def get_payable_write_repository(request: Request) -> PayableWriteRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return SqlAlchemyPayableWriteRepository(session_factory)
+
+
+def get_reminder_preference_repository(
+    request: Request,
+) -> ReminderPreferenceRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return SqlAlchemyReminderPreferenceRepository(session_factory)
+
+
+def get_payable_command_handler(
+    repository: Annotated[
+        PayableWriteRepositoryPort,
+        Depends(get_payable_write_repository),
+    ],
+) -> PayableCommandHandler:
+    return PayableCommandHandler(repository)
+
+
+def get_payable_list_query(
+    repository: Annotated[
+        PayableReadRepositoryPort,
+        Depends(get_payable_read_repository),
+    ],
+) -> ListPayablesHandler:
+    return ListPayablesHandler(repository)
+
+
+def get_reminder_preference_handler(
+    repository: Annotated[
+        ReminderPreferenceRepositoryPort,
+        Depends(get_reminder_preference_repository),
+    ],
+) -> ReminderPreferenceHandler:
+    return ReminderPreferenceHandler(repository)
 
 
 def get_document_download_query(
