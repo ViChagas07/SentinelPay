@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P10 em andamento (RAG). P10.3 (embedding) concluido.
+- Fase atual: P10 em andamento (RAG). P10.4 (vetores/migration) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -88,3 +88,4 @@
 - P10.1 Auditoria/spec/ADR: 21 PDFs em 8 categorias; pasta vazia `{febraban,...}` ignorada e reportada; nenhum PII real (apenas placeholders `000.000.000-00`/`usuario@dominio.com`); sem `knowledge/MANIFEST.yaml`, metadados default unknown; LM Studio indisponivel, embedding real NAO VALIDADO. SPEC 0011/ADR-0014 definem chunking, embedding configuravel, PGVector/Pinecone, idempotencia, citacoes e privacidade. `pgvector 0.5.1` e `pinecone 10.3.0` adicionados.
 - P10.2 Dominio/chunking/fonte: `KnowledgeDocument`/`KnowledgeChunk`/`Provenance`/filtros e citacoes; metadados com fonte/proveniencia/versao/vigencia e hash canonico; chunking de PDF por pagina e Markdown por titulo, com sobreposicao, blocos de tabela atomicos e posicao/hash; fonte real le PDF/MD, ignora pasta de nome estranho e reporta falhas. 12 testes verdes; Ruff, format e mypy verdes.
 - P10.3 Embedding: `EmbeddingPort`, adaptador OpenAI-compatible com lotes/timeout/retry e recusa de dimensao divergente, e `DeterministicHashEmbedding` para desenvolvimento/teste. Testes com `httpx.MockTransport` (lote, 503, timeout, dimensao) e fake normalizado; 7 testes verdes. LM Studio real NAO VALIDADO.
+- P10.4 Vetores/migration: `VectorStorePort`, PGVector (SQLAlchemy) e Pinecone (contrato fake), migration `0004_knowledge_chunks` com `vector(EMBEDDING_DIM)` e indice/campos de citacao; idempotencia por hash/chunk-set, filtros de categoria/proveniencia/vigencia e delete por documento. API image rebuilt; backup `paysentineliq_20261114T153101Z.sql` antes da migration; `make db-check` "No new upgrade operations detected"; PGVector Docker 1 passed e 4 testes Pinecone. `EMBEDDING_DIM=8` e apenas o fake de desenvolvimento; Pinecone/LM Studio reais NAO VALIDADOS.

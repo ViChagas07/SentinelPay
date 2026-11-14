@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from paysentineliq.infrastructure.config import get_settings
 from paysentineliq.infrastructure.db import models  # noqa: F401
 from paysentineliq.infrastructure.db.base import Base
+from paysentineliq.infrastructure.rag import models as rag_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

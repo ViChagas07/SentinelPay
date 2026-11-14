@@ -96,6 +96,21 @@ class Settings(BaseSettings):
     ocr_timeout_seconds: float = 120.0
     ocr_max_image_pixels: int = 25_000_000
     ocr_native_min_chars: int = 40
+    embedding_base_url: str = ""
+    embedding_model: str = ""
+    embedding_dim: int = 0
+    embedding_api_key: str = ""
+    embedding_timeout_seconds: float = 30.0
+    embedding_batch_size: int = 32
+    embedding_max_retries: int = 3
+    embedding_retry_backoff_seconds: float = 1.0
+    vector_store: Literal["pgvector", "pinecone"] = "pgvector"
+    pinecone_api_key: str = ""
+    pinecone_index: str = ""
+    pinecone_namespace: str = "knowledge"
+    rag_chunk_size: int = 1200
+    rag_chunk_overlap: int = 150
+    rag_fake_embedder: bool = False
 
     @property
     def ocr_languages_list(self) -> list[str]:
@@ -195,6 +210,20 @@ class Settings(BaseSettings):
             raise ValueError("OCR_MAX_IMAGE_PIXELS must be positive")
         if self.ocr_native_min_chars < 0:
             raise ValueError("OCR_NATIVE_MIN_CHARS must be non-negative")
+        if self.embedding_dim < 0:
+            raise ValueError("EMBEDDING_DIM must be non-negative")
+        if self.embedding_timeout_seconds <= 0:
+            raise ValueError("EMBEDDING_TIMEOUT_SECONDS must be positive")
+        if self.embedding_batch_size <= 0:
+            raise ValueError("EMBEDDING_BATCH_SIZE must be positive")
+        if self.embedding_max_retries < 0:
+            raise ValueError("EMBEDDING_MAX_RETRIES must be non-negative")
+        if self.embedding_retry_backoff_seconds < 0:
+            raise ValueError("EMBEDDING_RETRY_BACKOFF_SECONDS must be non-negative")
+        if self.rag_chunk_size <= 0:
+            raise ValueError("RAG_CHUNK_SIZE must be positive")
+        if not 0 <= self.rag_chunk_overlap < self.rag_chunk_size:
+            raise ValueError("RAG_CHUNK_OVERLAP must be between 0 and RAG_CHUNK_SIZE")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")
