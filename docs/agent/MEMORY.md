@@ -45,6 +45,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P10: `make ingest-knowledge` le `.env.example`, usa o Postgres local (55432) e `RAG_FAKE_EMBEDDER=1` sem LM Studio; 21 PDFs geraram 56 chunks e a segunda execucao fica skipped=21. `EMBEDDING_DIM=8` e so o fake de desenvolvimento; modelo/dimensao reais exigem nova migration e reindexacao.
 - P10: citacoes `compiled`/`unknown` tem `authoritative=False` e nao podem embasar regra de fraude; so `official` e autoritativo. LM Studio e Pinecone reais continuam NAO VALIDADOS.
 - P10: a pasta vazia `knowledge/{febraban,bacen,fraud_patterns,layouts,entities,historical_cases,faq,glossary}` e estranha e deve ser ignorada/reportada, nunca apagada; `knowledge/` continua fora do git e intocado. Nao indexar documentos de usuario.
+- P11: LangGraph orquestra, LangChain so prompts/parsers, CrewAI so interpretacao; o LLM nunca decide o score, o ajuste e limitado a 5, so soma e respeita o piso critico 80.
+- P11: relatorio em `users/{owner}/analyses/{id}/report.json`; `analysis_events` e append-only e nao leva PII/texto; score reproduzivel pelos eventos/versoes. `RunAnalysisUseCase` e on-demand (sem fila).
+- P11: `crewai.llm` chama `load_dotenv()` no import; importar CrewAI apenas lazy/depois da configuracao para nao carregar `.env` de producao em testes.
+- P11: CrewAI 1.15.41 exige `chromadb 1.5.9` com 4 CVEs de servidor sem fix; nao usamos Chroma (PGVector), `make audit` ignora esses IDs com justificativa e isso deve ser revisitado.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.

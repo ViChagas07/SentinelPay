@@ -2,7 +2,6 @@ import asyncio
 import json
 from typing import Protocol, cast
 
-from crewai import LLM, Agent, Crew, Process, Task
 from langchain_core.output_parsers import PydanticOutputParser
 
 from paysentineliq.application.errors import (
@@ -106,6 +105,8 @@ class CrewAIInterpreter:
                 )
             except SSRFBlockedError as exc:
                 raise LlmUnavailableError("LLM endpoint is blocked") from exc
+
+        from crewai import LLM, Agent, Crew, Process, Task
 
         llm = LLM(
             model=self._settings.llm_model,

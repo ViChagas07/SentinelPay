@@ -22,8 +22,9 @@ typecheck:
 arch:
 	$(POETRY) -C backend run lint-imports
 
+# chromadb e dependencia transitiva nao usada do CrewAI; o projeto usa PGVector e nao expoe Chroma.
 audit:
-	$(POETRY) -C backend run pip-audit --local
+	$(POETRY) -C backend run pip-audit --local --ignore-vuln PYSEC-2026-311 --ignore-vuln PYSEC-2026-3813 --ignore-vuln PYSEC-2026-3814 --ignore-vuln PYSEC-2026-3815
 
 bandit:
 	$(POETRY) -C backend run bandit -q -r src

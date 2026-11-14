@@ -11,7 +11,7 @@ from paysentineliq.infrastructure.ai.llm import OpenAICompatibleLLM
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.structured import StructuredInterpreter
 from paysentineliq.infrastructure.config import Settings
-from paysentineliq.infrastructure.security.ssrf import SSRFGuard, SafeHttpClient
+from paysentineliq.infrastructure.security.ssrf import SafeHttpClient, SSRFGuard
 
 pytestmark = pytest.mark.manual
 
