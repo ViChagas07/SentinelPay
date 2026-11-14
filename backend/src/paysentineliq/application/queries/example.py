@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 from uuid import UUID
 
 from paysentineliq.application.ports.repository import ExampleRepository
@@ -13,7 +14,7 @@ class GetExampleQuery:
 @dataclass(frozen=True, slots=True)
 class ExampleStatusDTO:
     item_id: UUID
-    status: str
+    status: Literal["ok"]
 
 
 class GetExampleHandler:

@@ -34,10 +34,10 @@ async def example(
             "123.456.789-00",
         )
 
-    await handler.handle(GetExampleQuery(item_id=item_id))
+    result = await handler.handle(GetExampleQuery(item_id=item_id))
     return ExampleResponse(
         item_id=item_id,
-        status="ok",
+        status=result.status,
         locale=locale,
         request_id=get_request_id(),
     )

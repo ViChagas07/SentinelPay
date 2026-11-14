@@ -26,6 +26,7 @@ Separar, na camada de aplicacao, casos de uso de escrita (`commands`) e de leitu
 ### Commands
 - Ficam em `paysentineliq.application.commands`.
 - Podem usar Unit of Work de escrita e portas de escrita.
+- A Unit of Work do upload expoe somente `DocumentWriteRepository.add`; o comando nao recebe metodo de leitura.
 - Retornam id ou DTO minimo; nao retornam entidade ORM nem `Document` inteiro.
 - `UploadDocumentCommand` + `UploadDocumentHandler` -> `UploadedDocumentResult` com id, analysis_id, kind, sha256, size, content_type, original_name_sanitized e created_at.
 - `AuthService` permanece como servico de comandos de sessao em `commands/auth.py`; `login_with_google`, `refresh` e `logout` mudam estado.

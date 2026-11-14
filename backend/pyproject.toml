@@ -123,5 +123,32 @@ forbidden_modules = [
     "pydantic_settings",
 ]
 
+[[tool.importlinter.contracts]]
+name = "Queries do not import commands"
+type = "forbidden"
+source_modules = ["paysentineliq.application.queries"]
+forbidden_modules = ["paysentineliq.application.commands"]
+
+[[tool.importlinter.contracts]]
+name = "Commands do not import queries"
+type = "forbidden"
+source_modules = ["paysentineliq.application.commands"]
+forbidden_modules = ["paysentineliq.application.queries"]
+
+[[tool.importlinter.contracts]]
+name = "Queries do not use write unit of work"
+type = "forbidden"
+source_modules = ["paysentineliq.application.queries"]
+forbidden_modules = [
+    "paysentineliq.application.ports.document_unit_of_work",
+    "paysentineliq.application.ports.auth_unit_of_work",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain does not import application"
+type = "forbidden"
+source_modules = ["paysentineliq.domain"]
+forbidden_modules = ["paysentineliq.application"]
+
 
 

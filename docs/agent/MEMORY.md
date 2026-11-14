@@ -34,6 +34,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P07: o motor de regras so aceita fonte em `knowledge/febraban/` ou `knowledge/layouts/`; regra sem fonte e descartada. O subscore e risco (0 seguro, 100 maximo), com piso 80 para qualquer regra critica.
 - P07: `make bandit` exige 0 achados e o Bandit B101 acusa `assert` em codigo de producao. Nao usar `assert` para narrowing no dominio; usar guarda explicita ou `typing.cast`.
 - P07: nesta sessao o Docker Desktop/daemon estava parado; `make test-docker` falha em `up` no npipe e a suite Docker fica NAO VALIDADA. Nao iniciar Docker Desktop automaticamente.
+- P07b: CQRS leve em `application/commands` (estado via UoW de escrita, retorno id/DTO minimo) e `application/queries` (somente leitura, sem commit, sem UoW de escrita, retorno DTO). Handlers pequenos, um por caso de uso; auth ainda e um servico de comandos com login/refresh/logout e sera dividido em fase propria.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
