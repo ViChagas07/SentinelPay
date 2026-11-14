@@ -25,21 +25,26 @@ O modelo nao decide sozinho, nao substitui revisao humana e nao deve ser usado c
 - Versao inicial: `fraud-risk-v1`.
 
 ## Metricas (SINTETICAS)
-As metricas abaixo sao geradas por `make train` e marcadas `synthetic=True` no registro. Elas NAO representam desempenho em dados reais.
+As metricas abaixo sao do ultimo treino sintetico reproduzivel e marcadas `synthetic=True` no registro. Elas NAO representam desempenho em dados reais. Valores 1.0 refletem a separabilidade artificial do dataset sintetico.
 
-| Metrica | Valor |
+| Metrica | Valor (teste) |
 | --- | --- |
 | Dataset | sintetico |
-| Seed | a preencher pelo treino |
-| Bases | a preencher pelo treino |
-| Linhas | a preencher pelo treino |
-| Precision | a preencher |
-| Recall | a preencher |
-| F1 | a preencher |
-| ROC-AUC | a preencher |
-| PR-AUC | a preencher |
-| Brier | a preencher |
-| Curva de calibracao | a preencher |
+| Seed | 42 |
+| Bases | 60 (36 treino / 12 validacao / 12 teste) |
+| Linhas | 240 (144 treino / 48 validacao / 48 teste) |
+| Dataset hash | `ccd1a6b3bfa1ae419eede959d90cc83a0663a09c6bcb711cc7bed8d6613ac16a` |
+| Precision | 1.0 |
+| Recall | 1.0 |
+| F1 | 1.0 |
+| ROC-AUC | 1.0 |
+| PR-AUC | 0.9999999999999999 |
+| Brier | 0.0023968040449143155 |
+| Curva de calibracao | `(0.0402, 0.0)` e `(0.9566, 1.0)` para (probabilidade media, fracao positiva) |
+
+Validacao sintetica: precision 1.0, recall 1.0, F1 1.0, ROC-AUC 1.0, PR-AUC 1.0, Brier 0.002788951220790531.
+
+Artefato do ultimo treino local (fora do git): `models/artifacts/fraud-risk-v1.joblib`, SHA-256 `7dc0cc4ef95654c4338b55b4a18add8b9928758a006ea04bc0af3f79ece11a3a`. O hash muda se o modelo for retreinado; o registro `.json` ao lado e a fonte de verdade para o carregamento.
 
 ## Limites e riscos
 - Dados sinteticos podem ser separaveis demais; metricas altas sao esperadas e nao provam desempenho real.

@@ -39,6 +39,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P08: CPF completo so existe na extracao interna; `PayslipAnalysis` expoe CPF mascarado. As fixtures de `tests/support/regulatory_factory.py` sao sinteticas e nao representam a lei.
 - P08: a suite Docker foi revalidada (20 passed, 1 skip) e `make test-docker` gera backup em `backups/` (ignorado) antes do `alembic upgrade head`.
 - Migrations: revisoes `000N_slug` (zero-padded, snake_case, descritiva, uma por mudanca logica, `upgrade`/`downgrade`); nunca editar revisao commitada; autogenerate revisado a mao; `make db-revision m='...'` calcula o proximo `000N`.
+- P09: modelos em `models/artifacts/` (fora do git) exigem SHA-256 e path confiavel antes de `joblib.load`; metricas do model card e `ml_synthetic` sao sempre sinteticas, nunca desempenho real.
+- P09: `make train` usa seed 42, 60 bases/240 linhas e artefato estavel entre execucoes; o servico sem modelo cai no deterministico/visual e marca `ml_unavailable`, com piso critico 80.
+- Bandit B311 no gerador sintetico: usar `# nosec B311` com justificativa; o PRNG deterministico nao e usado para seguranca.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.

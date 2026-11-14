@@ -2,7 +2,7 @@
 
 ## Comandos de checagem
 - Segredo fora do git: `git check-ignore -v .env` (deve retornar `.gitignore:2:.env	.env`) e `git ls-files | Select-String -Pattern '^\.env$'` (deve ser vazio).
-- Backend (na raiz): `make lint`, `make format-check`, `make format`, `make typecheck`, `make arch`, `make test`, `make test-docker`, `make check`.
+- Backend (na raiz): `make lint`, `make format-check`, `make format`, `make typecheck`, `make arch`, `make test`, `make test-docker`, `make check`. ML: `make train` (dataset sintetico seed 42; grava `models/artifacts/fraud-risk-v1.{joblib,json}`).
 - Auditoria: `make bandit` (0 achados) e `make audit` (`pip-audit --local`; sem vulnerabilidades conhecidas, com aviso de cobertura parcial do venv).
 - Backup/migration: `make backup` (grava `backups/*.sql`), `make db-migrate` (backup + `alembic upgrade head` no container da API), `make migrate` (alias de `db-migrate`), `make db-revision m='descricao'` (autogenerate com mount de `backend/migrations` e `--rev-id 000N` via `scripts/next_migration_id.py`) e `make db-check` (`alembic check`).
 - Equivalentes: `poetry -C backend run ruff check .`, `poetry -C backend run ruff format --check .`, `poetry -C backend run mypy src tests`, `poetry -C backend run lint-imports`, `poetry -C backend run pytest -m "not docker"`.
@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P09 em andamento (ML antifraude). P09.4 (treino/artefato) concluido.
+- Fase atual: P09 concluida (ML antifraude). P10 nao iniciada.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -84,3 +84,4 @@
 - P09.2 Features/fusao: `DeterministicSummary`/`EvidenceSummary`/`ScoringConfig`/`fuse_risk` com fallback e piso 80; `FEATURE_NAMES` fixas (subscore, evidencias por regra, confiancas, razoes, visuais) e factories de `BoletoAnalysis`/`PayslipAnalysis` sem texto bruto/PII. 21 testes verdes; Ruff, format e mypy verdes.
 - P09.3 Dataset: gerador sintetico deterministico `infrastructure/ml/synthetic.py` com semente, documentos boleto/contracheque, mutacoes rotuladas, sinais visuais sinteticos e hash canonico; split por `base_id` sem vazamento. 9 testes verdes; Ruff, format e mypy verdes.
 - P09.4 Treino/artefato: pipeline `StandardScaler + LogisticRegression` calibrado com sigmoid/CV, `IsolationForest` treinado nos validos, metricas sinteticas (precision/recall/F1/ROC-AUC/PR-AUC/Brier/calibracao), registro com SHA-256 e loader com path confiavel. `make train` gerou 240 linhas e artefato estavel; 10 testes de treino/artefato verdes.
+- P09.5 Servico/fechamento: `FraudScoringService` combina deterministico + ML + visual, fallback `ml_unavailable`, piso critico 80 e metadados do modelo; 8 testes. Model card atualizado com metricas sinteticas do treino (seed 42, 240 linhas, hash do dataset e SHA-256 do artefato); `make check` com 420 testes, `make test-docker` 21 passed + 1 skip, Bandit 0 e pip-audit sem vulnerabilidades.

@@ -168,3 +168,20 @@ def fuse_risk(
         ml_unavailable=ml_unavailable,
         critical_floor_applied=critical_floor_applied,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class FraudScore:
+    score: int
+    band: RiskBand
+    deterministic_score: int
+    ml_probability: float | None
+    anomaly_score: float | None
+    visual_score: float
+    ml_component: float | None
+    visual_component: float
+    critical_floor_applied: bool
+    ml_unavailable: bool
+    model_version: str | None
+    ml_synthetic: bool | None
+    calibration_note: str
