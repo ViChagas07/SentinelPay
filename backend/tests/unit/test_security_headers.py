@@ -25,6 +25,11 @@ def _production_app() -> FastAPI:
             database_url="postgresql+asyncpg://user:pass@db:5432/app",
             redis_url="redis://cache:6379/0",
             security_hash_secret="production-secret",
+            jwt_secret="x" * 64,
+            google_client_id="test-client",
+            google_client_secret="test-secret",
+            google_redirect_uri="https://example.com/api/v1/auth/google/callback",
+            frontend_url="https://app.example.com",
         )
     )
 

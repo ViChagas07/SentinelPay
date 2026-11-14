@@ -46,3 +46,23 @@ class SSRFBlockedError(ApplicationError):
             status_code=400,
             title="Bad request",
         )
+
+
+class InvalidAccessTokenError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_access_token",
+            message="Invalid or expired access token.",
+            status_code=401,
+            title="Unauthorized",
+        )
+
+
+class ForbiddenError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="forbidden",
+            message="Insufficient permissions.",
+            status_code=403,
+            title="Forbidden",
+        )

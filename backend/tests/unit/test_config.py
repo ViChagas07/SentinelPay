@@ -39,6 +39,11 @@ def test_non_local_accepts_external_urls() -> None:
         database_url="postgresql+asyncpg://user:pass@db:5432/app",
         redis_url="redis://cache:6379/0",
         security_hash_secret="production-secret",
+        jwt_secret="x" * 64,
+        google_client_id="test-client",
+        google_client_secret="test-secret",
+        google_redirect_uri="https://example.com/api/v1/auth/google/callback",
+        frontend_url="https://app.example.com",
     )
 
     assert settings.app_env == "production"
@@ -93,3 +98,26 @@ def test_cors_wildcard_is_rejected() -> None:
 def test_allowed_hosts_wildcard_is_rejected() -> None:
     with pytest.raises(ValidationError):
         Settings(app_env="local", allowed_hosts="*")
+
+
+def test_local_generates_jwt_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in ("JWT_SECRET", "JWT_SECRET_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = Settings(app_env="local")
+
+    assert len(settings.jwt_secret) >= 32
+    assert settings.google_configured is False
+
+
+def test_jwt_secret_reads_production_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("JWT_SECRET", raising=False)
+    monkeypatch.setenv("JWT_SECRET_KEY", "y" * 64)
+
+    settings = Settings(app_env="local")
+
+    assert settings.jwt_secret == "y" * 64

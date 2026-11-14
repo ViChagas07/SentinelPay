@@ -1,8 +1,8 @@
 import secrets
 from functools import lru_cache
-from typing import Self
+from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_LOCAL_DATABASE_URL = "postgresql+asyncpg://sentinel:CHANGE_ME@localhost:55432/paysentineliq"
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
         env_file=None,
         extra="ignore",
         case_sensitive=False,
+        populate_by_name=True,
     )
 
     app_env: str = "local"
@@ -37,6 +38,41 @@ class Settings(BaseSettings):
     bruteforce_base_block_seconds: int = 30
     bruteforce_max_block_seconds: int = 3600
     ssrf_allowed_hosts: str = "localhost,127.0.0.1"
+    jwt_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("JWT_SECRET", "JWT_SECRET_KEY"),
+    )
+    jwt_algorithm: Literal["HS256"] = "HS256"
+    access_token_ttl_minutes: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "ACCESS_TOKEN_TTL_MINUTES",
+            "ACCESS_TOKEN_EXPIRE_MINUTES",
+        ),
+    )
+    refresh_token_ttl_days: int = Field(
+        default=7,
+        validation_alias=AliasChoices(
+            "REFRESH_TOKEN_TTL_DAYS",
+            "REFRESH_TOKEN_EXPIRE_DAYS",
+        ),
+    )
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = ""
+    google_authorization_endpoint: str = "https://accounts.google.com/o/oauth2/v2/auth"
+    google_token_endpoint: str = "https://oauth2.googleapis.com/token"
+    google_jwks_uri: str = "https://www.googleapis.com/oauth2/v3/certs"
+    google_issuer: str = "https://accounts.google.com"
+    frontend_url: str = ""
+    cookie_domain: str = ""
+    oidc_state_ttl_seconds: int = 600
+
+    @property
+    def google_configured(self) -> bool:
+        return bool(
+            self.google_client_id and self.google_client_secret and self.google_redirect_uri
+        )
 
     @property
     def allowed_hosts_list(self) -> list[str]:
@@ -71,6 +107,31 @@ class Settings(BaseSettings):
                 self.security_hash_secret = secrets.token_urlsafe(32)
             else:
                 missing.append("SECURITY_HASH_SECRET")
+
+        if not self.jwt_secret:
+            if self.app_env == "local":
+                self.jwt_secret = secrets.token_urlsafe(48)
+            else:
+                missing.append("JWT_SECRET")
+
+        if self.app_env != "local":
+            for name, value in (
+                ("GOOGLE_CLIENT_ID", self.google_client_id),
+                ("GOOGLE_CLIENT_SECRET", self.google_client_secret),
+                ("GOOGLE_REDIRECT_URI", self.google_redirect_uri),
+                ("FRONTEND_URL", self.frontend_url),
+            ):
+                if not value:
+                    missing.append(name)
+            if self.jwt_secret and len(self.jwt_secret) < 32:
+                raise ValueError("JWT_SECRET must be at least 32 characters")
+
+        if self.access_token_ttl_minutes <= 0:
+            raise ValueError("ACCESS_TOKEN_TTL_MINUTES must be positive")
+        if self.refresh_token_ttl_days <= 0:
+            raise ValueError("REFRESH_TOKEN_TTL_DAYS must be positive")
+        if self.oidc_state_ttl_seconds <= 0:
+            raise ValueError("OIDC_STATE_TTL_SECONDS must be positive")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")
