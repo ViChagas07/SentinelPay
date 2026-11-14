@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.logging import configure_logging
 from paysentineliq.interface.api.middleware import RequestIdMiddleware
+from paysentineliq.interface.api.problems import register_exception_handlers
 
 
 class HealthResponse(BaseModel):
@@ -19,6 +20,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="PaySentinelIQ", version="0.1.0")
     app.state.settings = resolved_settings
     app.add_middleware(RequestIdMiddleware)
+    register_exception_handlers(app)
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     async def health() -> HealthResponse:

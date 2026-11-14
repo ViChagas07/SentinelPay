@@ -15,9 +15,7 @@ _logger = logging.getLogger("paysentineliq")
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         incoming = request.headers.get(REQUEST_ID_HEADER)
         if incoming is not None and _SAFE_REQUEST_ID.fullmatch(incoming):
             request_id = incoming

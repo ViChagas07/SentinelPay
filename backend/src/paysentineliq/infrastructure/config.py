@@ -4,9 +4,7 @@ from typing import Self
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEFAULT_LOCAL_DATABASE_URL = (
-    "postgresql+asyncpg://sentinel:CHANGE_ME@localhost:55432/paysentineliq"
-)
+DEFAULT_LOCAL_DATABASE_URL = "postgresql+asyncpg://sentinel:CHANGE_ME@localhost:55432/paysentineliq"
 DEFAULT_LOCAL_REDIS_URL = "redis://localhost:6379/0"
 
 
