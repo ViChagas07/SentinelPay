@@ -5,8 +5,13 @@ import pytest
 
 from paysentineliq.application.commands.process_analysis import ProcessedAnalysis
 from paysentineliq.application.errors import StorageNotConfiguredError
+from paysentineliq.application.notifications.delivery import DeliveryOutcome
+from paysentineliq.domain.notification import DeliveryChannel
 from paysentineliq.infrastructure.composition.analysis_worker import build_worker_runtime
-from paysentineliq.infrastructure.config import Settings
+from paysentineliq.infrastructure.composition.notification_worker import (
+    build_notification_runtime,
+)
+from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.messaging import tasks
 from paysentineliq.infrastructure.messaging.celery_app import celery_app
 
@@ -73,9 +78,95 @@ def test_eager_analysis_task_dispatches_pending_notification(
     assert dispatcher.notifications == [notification_id]
 
 
-def test_notification_task_is_a_pending_placeholder() -> None:
-    assert tasks.dispatch_notification.run(str(uuid4())) == "pending"
-    assert tasks.dispatch_notification.run("invalid") == "discarded"
+class _RetrySignal(Exception):
+    pass
+
+
+def test_notification_task_discards_invalid_id() -> None:
+    assert tasks.dispatch_notification.run("invalid") == {"status": "discarded"}
+
+
+def test_notification_task_delivers(monkeypatch: pytest.MonkeyPatch) -> None:
+    notification_id = uuid4()
+
+    async def fake_execute(
+        parsed_id: UUID,
+        *,
+        final_attempt: bool,
+    ) -> DeliveryOutcome:
+        assert parsed_id == notification_id
+        assert final_attempt is False
+        return DeliveryOutcome(notification_id=parsed_id, status="delivered")
+
+    monkeypatch.setattr(tasks, "_execute_notification", fake_execute)
+
+    assert tasks.dispatch_notification.run(str(notification_id)) == {"status": "delivered"}
+
+
+def test_notification_task_retries_failed_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    notification_id = uuid4()
+    countdowns: list[float] = []
+
+    async def fake_execute(
+        parsed_id: UUID,
+        *,
+        final_attempt: bool,
+    ) -> DeliveryOutcome:
+        return DeliveryOutcome(
+            notification_id=parsed_id,
+            status="retry",
+            failed=(DeliveryChannel.SMS,),
+        )
+
+    def fake_retry(*, countdown: float) -> None:
+        countdowns.append(countdown)
+        raise _RetrySignal
+
+    monkeypatch.setattr(tasks, "_execute_notification", fake_execute)
+    monkeypatch.setattr(tasks.dispatch_notification, "retry", fake_retry)
+
+    with pytest.raises(_RetrySignal):
+        tasks.dispatch_notification.run(str(notification_id))
+
+    assert countdowns == [
+        get_settings().notifications_delivery_retry_backoff_seconds,
+    ]
+
+
+def test_notification_task_marks_final_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    notification_id = uuid4()
+
+    async def fake_execute(
+        parsed_id: UUID,
+        *,
+        final_attempt: bool,
+    ) -> DeliveryOutcome:
+        return DeliveryOutcome(
+            notification_id=parsed_id,
+            status="failed",
+            failed=(DeliveryChannel.SMS,),
+        )
+
+    monkeypatch.setattr(tasks, "_execute_notification", fake_execute)
+
+    assert tasks.dispatch_notification.run(str(notification_id)) == {"status": "failed"}
+
+
+def test_notification_task_discards_missing_notification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notification_id = uuid4()
+
+    async def fake_execute(
+        parsed_id: UUID,
+        *,
+        final_attempt: bool,
+    ) -> DeliveryOutcome:
+        return DeliveryOutcome(notification_id=parsed_id, status="not_found")
+
+    monkeypatch.setattr(tasks, "_execute_notification", fake_execute)
+
+    assert tasks.dispatch_notification.run(str(notification_id)) == {"status": "discarded"}
 
 
 def test_sweep_task_returns_count(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -128,3 +219,15 @@ def test_payable_tasks_return_counts(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert tasks.dispatch_payable_reminders.run() == 3
     assert tasks.mark_overdue_payables.run() == 1
+
+
+async def test_notification_runtime_builds_handler() -> None:
+    settings = Settings(
+        app_env="local",
+        database_url="postgresql+asyncpg://user:pass@localhost:55432/db",
+        rabbitmq_url="memory://",
+        celery_result_backend="cache+memory://",
+    )
+
+    async with build_notification_runtime(settings) as handler:
+        assert handler is not None

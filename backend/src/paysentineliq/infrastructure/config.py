@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     payables_reminder_interval_seconds: int = 120
     payables_overdue_interval_seconds: int = 600
     payables_reminder_lookback_days: int = 7
+    notifications_delivery_max_retries: int = 3
+    notifications_delivery_retry_backoff_seconds: float = 60.0
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_from: str = "no-reply@paysentineliq.local"
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_starttls: bool = False
+    smtp_timeout_seconds: float = 10.0
+    sms_provider: Literal["console"] = "console"
+    whatsapp_provider: Literal["console"] = "console"
     fraud_model_dir: str = "models/artifacts"
     llm_interpreter: Literal["structured", "crewai"] = "structured"
     log_level: str = "INFO"
@@ -333,6 +344,20 @@ class Settings(BaseSettings):
             raise ValueError("PAYABLES_OVERDUE_INTERVAL_SECONDS must be positive")
         if self.payables_reminder_lookback_days < 0:
             raise ValueError("PAYABLES_REMINDER_LOOKBACK_DAYS must be non-negative")
+        if self.notifications_delivery_max_retries < 0:
+            raise ValueError("NOTIFICATIONS_DELIVERY_MAX_RETRIES must be non-negative")
+        if self.notifications_delivery_retry_backoff_seconds <= 0:
+            raise ValueError(
+                "NOTIFICATIONS_DELIVERY_RETRY_BACKOFF_SECONDS must be positive",
+            )
+        if not self.smtp_host.strip():
+            raise ValueError("SMTP_HOST must not be empty")
+        if not 1 <= self.smtp_port <= 65535:
+            raise ValueError("SMTP_PORT must be between 1 and 65535")
+        if not self.smtp_from.strip():
+            raise ValueError("SMTP_FROM must not be empty")
+        if self.smtp_timeout_seconds <= 0:
+            raise ValueError("SMTP_TIMEOUT_SECONDS must be positive")
         if not self.fraud_model_dir.strip():
             raise ValueError("FRAUD_MODEL_DIR must not be empty")
 

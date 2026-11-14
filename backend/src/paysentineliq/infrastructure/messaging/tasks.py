@@ -10,6 +10,7 @@ from paysentineliq.application.commands.process_analysis import (
     ProcessedAnalysis,
     is_retryable_analysis_error,
 )
+from paysentineliq.application.notifications.delivery import DeliveryOutcome
 from paysentineliq.domain.analysis import AnalysisEvent, AnalysisEventType
 from paysentineliq.infrastructure.config import get_settings
 from paysentineliq.infrastructure.db.repositories.analyses import (
@@ -93,15 +94,49 @@ def run_analysis_task(self: Any, analysis_id: str, locale: str = "pt") -> dict[s
     return {"status": result.status}
 
 
-@celery_app.task(name=NOTIFICATION_TASK)  # type: ignore[untyped-decorator]
-def dispatch_notification(notification_id: str) -> str:
+async def _execute_notification(
+    notification_id: UUID,
+    *,
+    final_attempt: bool,
+) -> DeliveryOutcome:
+    from paysentineliq.infrastructure.composition.notification_worker import (
+        build_notification_runtime,
+    )
+
+    async with build_notification_runtime(get_settings()) as handler:
+        return await handler.execute(notification_id, final_attempt=final_attempt)
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    bind=True,
+    name=NOTIFICATION_TASK,
+    max_retries=get_settings().notifications_delivery_max_retries,
+)
+def dispatch_notification(self: Any, notification_id: str) -> dict[str, str]:
     try:
-        UUID(str(notification_id))
+        parsed_id = UUID(str(notification_id))
     except (TypeError, ValueError):
         _logger.error("notification_task_invalid_id")
-        return "discarded"
-    _logger.info("notification_pending_delivery")
-    return "pending"
+        return {"status": "discarded"}
+    retries = int(self.request.retries or 0)
+    max_retries = int(
+        self.max_retries
+        if self.max_retries is not None
+        else get_settings().notifications_delivery_max_retries
+    )
+    outcome = run_async(
+        lambda: _execute_notification(
+            parsed_id,
+            final_attempt=retries >= max_retries,
+        ),
+    )
+    if outcome.status == "not_found":
+        _logger.warning("notification_not_found")
+        return {"status": "discarded"}
+    if outcome.status == "retry" and retries < max_retries:
+        countdown = get_settings().notifications_delivery_retry_backoff_seconds * (2**retries)
+        raise self.retry(countdown=countdown)
+    return {"status": outcome.status}
 
 
 @celery_app.task(name=SWEEP_TASK)  # type: ignore[untyped-decorator]
