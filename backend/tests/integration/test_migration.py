@@ -19,7 +19,7 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_empty_migration_applies() -> None:
+def test_migrations_apply() -> None:
     result = _run(["exec", "-T", "api", "alembic", "upgrade", "head"])
 
     assert result.returncode == 0, result.stderr
@@ -39,4 +39,27 @@ def test_alembic_version_table_is_populated() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "0001_initial"
+    assert result.stdout.strip() == "0002_auth"
+
+
+def test_auth_tables_exist() -> None:
+    result = _run(
+        [
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            "sentinel",
+            "-d",
+            "paysentineliq",
+            "-tAc",
+            "SELECT tablename FROM pg_tables WHERE schemaname='public' "
+            "AND tablename IN ('users', 'refresh_tokens') ORDER BY tablename",
+        ]
+    )
+
+    assert result.returncode == 0, result.stderr
+    tables = result.stdout.split()
+    assert "refresh_tokens" in tables
+    assert "users" in tables

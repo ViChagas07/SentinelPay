@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from paysentineliq.application.locale import resolve_locale
+from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
 from paysentineliq.application.ports.readiness import ReadinessChecker
 from paysentineliq.application.ports.unit_of_work import UnitOfWork
 from paysentineliq.application.use_cases.example import ExampleService
@@ -26,6 +27,12 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 def get_unit_of_work(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> UnitOfWork:
+    return SqlAlchemyUnitOfWork(session)
+
+
+def get_auth_unit_of_work(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AuthUnitOfWork:
     return SqlAlchemyUnitOfWork(session)
 
 

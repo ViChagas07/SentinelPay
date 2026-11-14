@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from paysentineliq.infrastructure.config import get_settings
+from paysentineliq.infrastructure.db import models  # noqa: F401
 from paysentineliq.infrastructure.db.base import Base
 
 config = context.config

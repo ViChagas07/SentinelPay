@@ -32,7 +32,7 @@ security: audit bandit
 test:
 	$(POETRY) -C backend run pytest -m "not docker"
 
-test-docker: up
+test-docker: up migrate
 	$(POETRY) -C backend run pytest -m docker --run-docker
 
 backup:

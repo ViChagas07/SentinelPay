@@ -10,6 +10,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - O Compose local usa `--env-file .env.example` (nunca o `.env` de producao); o Makefile e o unico ponto de entrada dos comandos.
 - O Makefile usa `poetry -C backend`; rode os alvos a partir da raiz.
 - `make migrate` sempre executa `make backup` antes de `alembic upgrade head`; nao rode migration direto no ambiente de desenvolvimento.
+- `make test-docker` executa `up` + `migrate` (com backup) antes dos testes; a imagem da API precisa ser rebuildada quando migrations novas forem adicionadas.
 - Os testes forcam `APP_ENV=local` e URLs locais no `backend/conftest.py`, mesmo que exista configuracao de producao no ambiente.
 - `httpx` e dependencia de runtime (usada pela guarda SSRF), nao apenas de teste; nao mover para o grupo dev.
 - Fora de local, `SECURITY_HASH_SECRET` e obrigatorio para pseudonimizar chaves de rate limit/forca bruta; o `.env` de producao atual ainda precisa receber esse valor.
