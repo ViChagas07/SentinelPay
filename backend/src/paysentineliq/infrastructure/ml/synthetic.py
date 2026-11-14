@@ -317,7 +317,8 @@ def generate_synthetic_dataset(
     config: SyntheticDatasetConfig | None = None,
 ) -> SyntheticDataset:
     actual = config if config is not None else SyntheticDatasetConfig()
-    rng = random.Random(actual.seed)
+    # Deterministic synthetic dataset; PRNG is not used for security.
+    rng = random.Random(actual.seed)  # nosec B311
     rows: list[DatasetRow] = []
     for index in range(actual.base_documents):
         document_type: Literal["boleto", "payslip"] = "boleto" if index % 2 == 0 else "payslip"
@@ -381,7 +382,8 @@ def split_rows_by_base(
         raise ValueError("validation and test fractions must sum to less than 1")
 
     base_ids = sorted({row.base_id for row in rows})
-    rng = random.Random(seed)
+    # Deterministic split; PRNG is not used for security.
+    rng = random.Random(seed)  # nosec B311
     rng.shuffle(base_ids)
     test_count = max(1, round(len(base_ids) * test_fraction))
     validation_count = max(1, round(len(base_ids) * validation_fraction))
