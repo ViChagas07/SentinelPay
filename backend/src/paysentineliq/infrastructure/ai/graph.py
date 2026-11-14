@@ -38,6 +38,7 @@ from paysentineliq.application.ports.storage import StoragePort
 from paysentineliq.application.queries.fraud_features import (
     summary_from_boleto,
     summary_from_payslip,
+    summary_from_receipt,
 )
 from paysentineliq.application.queries.fraud_scoring import (
     FraudScoringRequest,
@@ -83,6 +84,7 @@ from paysentineliq.domain.boleto.bank_directory import (
 from paysentineliq.domain.boleto.extraction import extract_boleto_fields
 from paysentineliq.domain.ingestion import VisualSignal
 from paysentineliq.domain.notification import Notification, NotificationType
+from paysentineliq.domain.payables import Payable, payable_status_for
 from paysentineliq.domain.payslip.analysis import PayslipAnalysis, analyze_payslip
 from paysentineliq.domain.payslip.extraction import extract_payslip_fields
 from paysentineliq.domain.payslip.regulatory import (
@@ -90,6 +92,8 @@ from paysentineliq.domain.payslip.regulatory import (
     load_regulatory_tables,
 )
 from paysentineliq.domain.payslip.rules import EvidenceStatus
+from paysentineliq.domain.receipt.analysis import ReceiptAnalysis, analyze_receipt
+from paysentineliq.domain.receipt.extraction import extract_receipt_fields
 from paysentineliq.domain.scoring import (
     DeterministicSummary,
     FraudScore,
@@ -102,6 +106,8 @@ from paysentineliq.infrastructure.ai.report import (
     boleto_fields,
     payslip_evidence,
     payslip_fields,
+    receipt_evidence,
+    receipt_fields,
 )
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.guardrails.training import (
@@ -121,6 +127,7 @@ class AnalysisGraphState(TypedDict, total=False):
     document_type: AnalysisDocumentType
     boleto_analysis: BoletoAnalysis | None
     payslip_analysis: PayslipAnalysis | None
+    receipt_analysis: ReceiptAnalysis | None
     deterministic_summary: DeterministicSummary | None
     fraud_score: FraudScore | None
     rag_passages: tuple[RetrievedPassage, ...]
@@ -201,6 +208,7 @@ class LangGraphAnalysisOrchestrator:
         graph.add_node("classify", self._classify_node)
         graph.add_node("boleto", self._boleto_node)
         graph.add_node("payslip", self._payslip_node)
+        graph.add_node("receipt", self._receipt_node)
         graph.add_node("fraud", self._fraud_node)
         graph.add_node("rag", self._rag_node)
         graph.add_node("interpret", self._interpret_node)
@@ -212,10 +220,11 @@ class LangGraphAnalysisOrchestrator:
         graph.add_conditional_edges(
             "classify",
             self._route_document,
-            {"boleto": "boleto", "payslip": "payslip"},
+            {"boleto": "boleto", "payslip": "payslip", "receipt": "receipt"},
         )
         graph.add_edge("boleto", "fraud")
         graph.add_edge("payslip", "fraud")
+        graph.add_edge("receipt", "fraud")
         graph.add_edge("fraud", "rag")
         graph.add_edge("rag", "interpret")
         graph.add_edge("interpret", "persist")
@@ -405,6 +414,35 @@ class LangGraphAnalysisOrchestrator:
         )
         return {
             "payslip_analysis": analysis,
+            "deterministic_summary": summary,
+        }
+
+    async def _receipt_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
+        flags = self._flags(state)
+        try:
+            analysis, summary = await asyncio.wait_for(
+                asyncio.to_thread(self._run_receipt, state["ocr_text"]),
+                timeout=self._node_timeout,
+            )
+        except TimeoutError as exc:
+            raise AnalysisTimeoutError("receipt") from exc
+        await self._append_rule_events(
+            state["analysis_id"],
+            analysis.evidence,
+            analysis.rule_set_version,
+        )
+        await self._processing(
+            state["analysis_id"],
+            "receipt",
+            {
+                "node": "receipt",
+                "subscore": str(analysis.subscore),
+                "evidence": str(len(analysis.evidence)),
+            },
+            flags,
+        )
+        return {
+            "receipt_analysis": analysis,
             "deterministic_summary": summary,
         }
 
@@ -746,6 +784,47 @@ class LangGraphAnalysisOrchestrator:
             merged.append(item)
         return tuple(merged[:12])
 
+    def _payable_for_receipt(
+        self,
+        state: AnalysisGraphState,
+        receipt: ReceiptAnalysis,
+        analysis_id: UUID,
+        owner_id: UUID,
+    ) -> Payable | None:
+        amount = receipt.fields.amount
+        due_date = receipt.fields.due_date
+        if amount is None or amount.confidence < 0.5 or amount.value <= 0:
+            return None
+        if due_date is None or due_date.confidence < 0.5:
+            return None
+        status = payable_status_for(
+            state.get("final_band", RiskBand.LOW),
+            injection_detected=bool(state.get("input_guard_triggered", False)),
+        )
+        if status is None:
+            return None
+        cents = int((amount.value * 100).to_integral_value())
+        if cents <= 0:
+            return None
+        issuer = receipt.fields.issuer.value if receipt.fields.issuer is not None else ""
+        reference = receipt.fields.reference.value if receipt.fields.reference is not None else ""
+        description = (
+            " - ".join(part for part in (issuer.strip(), reference.strip()) if part)
+            or "Conta de consumo"
+        )
+        now = self._clock()
+        return Payable(
+            id=uuid4(),
+            owner_id=owner_id,
+            analysis_id=analysis_id,
+            description=description[:200],
+            amount_cents=cents,
+            due_date=due_date.value,
+            status=status,
+            created_at=now,
+            updated_at=now,
+        )
+
     def _sensitive_terms(self, state: AnalysisGraphState) -> tuple[str, ...]:
         terms: list[str] = []
         boleto = state.get("boleto_analysis")
@@ -777,8 +856,9 @@ class LangGraphAnalysisOrchestrator:
     async def _persist_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
         boleto = state.get("boleto_analysis")
         payslip = state.get("payslip_analysis")
+        receipt = state.get("receipt_analysis")
         fraud = state.get("fraud_score")
-        if boleto is None and payslip is None:
+        if boleto is None and payslip is None and receipt is None:
             raise RuntimeError("analysis result is missing")
         if fraud is None:
             raise RuntimeError("fraud score is missing")
@@ -791,13 +871,18 @@ class LangGraphAnalysisOrchestrator:
             evidence = boleto_evidence(boleto)
             rule_set_version = boleto.rule_set_version
             document_type = AnalysisDocumentType.BOLETO
-        else:
-            if payslip is None:
-                raise RuntimeError("payslip analysis is missing")
+        elif payslip is not None:
             fields = payslip_fields(payslip)
             evidence = payslip_evidence(payslip)
             rule_set_version = payslip.rule_set_version
             document_type = AnalysisDocumentType.PAYSLIP
+        else:
+            if receipt is None:
+                raise RuntimeError("receipt analysis is missing")
+            fields = receipt_fields(receipt)
+            evidence = receipt_evidence(receipt)
+            rule_set_version = receipt.rule_set_version
+            document_type = AnalysisDocumentType.RECEIPT
         guardrail_evidence = tuple(state.get("guardrail_evidence", ()))
         evidence = (*guardrail_evidence, *evidence)
         model_versions: dict[str, str] = {"guardrails": GUARDRAIL_RULE_SET_VERSION}
@@ -843,6 +928,16 @@ class LangGraphAnalysisOrchestrator:
             size=len(payload),
             metadata={"analysis_id": str(analysis_id)},
         )
+        payables: tuple[Payable, ...] = ()
+        if receipt is not None:
+            payable = self._payable_for_receipt(
+                state,
+                receipt,
+                analysis_id,
+                document.owner_id,
+            )
+            if payable is not None:
+                payables = (payable,)
         terminal_status = AnalysisStatus.DEGRADED if flags else AnalysisStatus.COMPLETED
         notification = Notification(
             id=uuid4(),
@@ -885,6 +980,7 @@ class LangGraphAnalysisOrchestrator:
                 ),
             ),
             notifications=(notification,),
+            payables=payables,
         )
         return {"report": report}
 
@@ -991,11 +1087,22 @@ class LangGraphAnalysisOrchestrator:
         )
         return analysis, summary_from_payslip(analysis)
 
+    def _run_receipt(
+        self,
+        text: str,
+    ) -> tuple[ReceiptAnalysis, DeterministicSummary]:
+        analysis = analyze_receipt(
+            extract_receipt_fields(text, bank_directory=self._bank_directory),
+        )
+        return analysis, summary_from_receipt(analysis)
+
     def _document_type(self, document: AnalysisDocument) -> AnalysisDocumentType | None:
         if document.kind.value == "bank_slip":
             return AnalysisDocumentType.BOLETO
         if document.kind.value == "payslip":
             return AnalysisDocumentType.PAYSLIP
+        if document.kind.value == "receipt":
+            return AnalysisDocumentType.RECEIPT
         return None
 
     def _rag_query(self, state: AnalysisGraphState) -> str:
@@ -1029,6 +1136,17 @@ class LangGraphAnalysisOrchestrator:
                 )
                 for item in payslip.evidence
                 if item.status is EvidenceStatus.TRIGGERED
+            )
+        receipt = state.get("receipt_analysis")
+        if receipt is not None:
+            return tuple(
+                InterpretationEvidence(
+                    rule_id=item.rule_id,
+                    severity=item.severity.value,
+                    weight=item.weight,
+                    message_key=item.message_key,
+                )
+                for item in receipt.evidence
             )
         return ()
 

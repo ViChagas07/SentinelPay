@@ -9,7 +9,6 @@ from paysentineliq.application.commands.run_analysis import RunAnalysisUseCase
 from paysentineliq.application.errors import (
     AnalysisTimeoutError,
     DocumentNotFoundError,
-    UnsupportedDocumentError,
 )
 from paysentineliq.application.ports.analysis import AnalysisDocument
 from paysentineliq.domain.analysis import (
@@ -260,14 +259,14 @@ async def test_missing_document_raises_without_creating_analysis() -> None:
     assert analyses.created_event is None
 
 
-async def test_unsupported_document_raises_without_creating_analysis() -> None:
+async def test_receipt_document_is_supported() -> None:
     document = _document(DocumentKind.RECEIPT)
     use_case, analyses = _use_case(FakeSource(document), FakeOrchestrator())
 
-    with pytest.raises(UnsupportedDocumentError):
-        await use_case.execute(document.id)
+    report = await use_case.execute(document.id)
 
-    assert analyses.created is None
+    assert report.score == 10
+    assert analyses.created is not None
 
 
 async def test_orchestrator_failure_marks_analysis_failed() -> None:
@@ -313,3 +312,4 @@ async def test_timeout_has_specific_error_code() -> None:
 
     assert analyses.failed is not None
     assert analyses.failed["error_code"] == "analysis_timeout"
+

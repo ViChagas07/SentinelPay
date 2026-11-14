@@ -41,6 +41,7 @@ class DegradationFlag(StrEnum):
 class AnalysisDocumentType(StrEnum):
     BOLETO = "boleto"
     PAYSLIP = "payslip"
+    RECEIPT = "receipt"
 
 
 @dataclass(frozen=True, slots=True)

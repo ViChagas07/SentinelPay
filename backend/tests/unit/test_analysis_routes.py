@@ -200,9 +200,17 @@ async def test_post_analysis_maps_payslip() -> None:
     assert handler.commands[0].kind is DocumentKind.PAYSLIP
 
 
-async def test_post_analysis_rejects_receipt_kind() -> None:
+async def test_post_analysis_accepts_receipt_kind() -> None:
     handler = FakeHandler()
     response = await _post(_app(handler), kind="receipt")
+
+    assert response.status_code == 202
+    assert handler.commands[0].kind is DocumentKind.RECEIPT
+
+
+async def test_post_analysis_rejects_unknown_kind() -> None:
+    handler = FakeHandler()
+    response = await _post(_app(handler), kind="unknown")
 
     assert response.status_code == 422
     assert handler.commands == []

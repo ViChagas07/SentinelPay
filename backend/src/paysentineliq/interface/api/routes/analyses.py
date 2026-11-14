@@ -32,11 +32,13 @@ router = APIRouter(prefix="/analyses", tags=["analyses"])
 class AnalysisKind(StrEnum):
     BOLETO = "boleto"
     PAYSLIP = "payslip"
+    RECEIPT = "receipt"
 
 
 _DOCUMENT_KIND = {
     AnalysisKind.BOLETO: DocumentKind.BANK_SLIP,
     AnalysisKind.PAYSLIP: DocumentKind.PAYSLIP,
+    AnalysisKind.RECEIPT: DocumentKind.RECEIPT,
 }
 
 

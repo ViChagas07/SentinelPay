@@ -185,6 +185,7 @@ class FakeAnalysisRepository:
             "report_s3_key": report_s3_key,
             "event": event,
             "notifications": notifications,
+            "payables": payables,
         }
         return True
 

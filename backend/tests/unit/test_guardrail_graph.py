@@ -135,6 +135,7 @@ def build_orchestrator(
     classifier: InjectionClassifierPort | None = None,
     settings: Settings | None = None,
     metrics: InMemoryGuardrailMetrics | None = None,
+    model: FakeModel | None = None,
 ) -> tuple[
     LangGraphAnalysisOrchestrator,
     FakeAnalysisRepository,
@@ -150,7 +151,7 @@ def build_orchestrator(
     metrics = metrics or InMemoryGuardrailMetrics()
     orchestrator = LangGraphAnalysisOrchestrator(
         ingestion=FakeIngestion(text),
-        fraud_service=FraudScoringService(model=FakeModel()),
+        fraud_service=FraudScoringService(model=model or FakeModel()),
         retriever=FakeRag(_rag_result()),
         interpreter=fake_interpreter,
         analyses=analyses,

@@ -3,6 +3,7 @@ from typing import Any
 from paysentineliq.domain.analysis import AnalysisEvidence
 from paysentineliq.domain.boleto.analysis import BoletoAnalysis
 from paysentineliq.domain.payslip.analysis import PayslipAnalysis
+from paysentineliq.domain.receipt.analysis import ReceiptAnalysis
 
 
 def _extracted(field: Any) -> dict[str, Any] | None:
@@ -115,6 +116,54 @@ def boleto_evidence(analysis: BoletoAnalysis) -> tuple[AnalysisEvidence, ...]:
 
 
 def payslip_evidence(analysis: PayslipAnalysis) -> tuple[AnalysisEvidence, ...]:
+    return tuple(
+        AnalysisEvidence(
+            rule_id=item.rule_id,
+            severity=item.severity.value,
+            weight=item.weight,
+            message_key=item.message_key,
+            source=item.source,
+        )
+        for item in analysis.evidence
+    )
+
+
+def receipt_fields(analysis: ReceiptAnalysis) -> dict[str, Any]:
+    fields = analysis.fields
+    decoded = analysis.decoded
+    return {
+        "line": _extracted(fields.line),
+        "barcode": _extracted(fields.barcode),
+        "amount": (
+            {"value": str(fields.amount.value), "confidence": fields.amount.confidence}
+            if fields.amount is not None
+            else None
+        ),
+        "due_date": (
+            {
+                "value": fields.due_date.value.isoformat(),
+                "confidence": fields.due_date.confidence,
+            }
+            if fields.due_date is not None
+            else None
+        ),
+        "issuer": _extracted(fields.issuer),
+        "reference": _extracted(fields.reference),
+        "decoded": (
+            {
+                "blocks": list(decoded.blocks),
+                "dvs": list(decoded.dvs),
+                "barcode": decoded.barcode_digits,
+            }
+            if decoded is not None
+            else None
+        ),
+        "barcode_checked": analysis.barcode_checked,
+        "not_validated": list(analysis.not_validated),
+    }
+
+
+def receipt_evidence(analysis: ReceiptAnalysis) -> tuple[AnalysisEvidence, ...]:
     return tuple(
         AnalysisEvidence(
             rule_id=item.rule_id,

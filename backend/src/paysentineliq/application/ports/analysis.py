@@ -129,9 +129,9 @@ class AnalysisOrchestratorPort(Protocol):
     ) -> AnalysisReport: ...
 
 
-def document_type_for(kind: DocumentKind) -> AnalysisDocumentType | None:
-    if kind is DocumentKind.BANK_SLIP:
-        return AnalysisDocumentType.BOLETO
-    if kind is DocumentKind.PAYSLIP:
-        return AnalysisDocumentType.PAYSLIP
-    return None
+def document_type_for(kind: DocumentKind) -> AnalysisDocumentType:
+    return {
+        DocumentKind.BANK_SLIP: AnalysisDocumentType.BOLETO,
+        DocumentKind.PAYSLIP: AnalysisDocumentType.PAYSLIP,
+        DocumentKind.RECEIPT: AnalysisDocumentType.RECEIPT,
+    }[kind]
