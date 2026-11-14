@@ -1,7 +1,8 @@
 POETRY ?= poetry
 COMPOSE ?= docker compose --env-file .env.example
+DB_REVISION_ID := $(shell python scripts/next_migration_id.py)
 
-.PHONY: install lint format format-check typecheck arch test test-docker backup migrate compose-config up stop check audit bandit security
+.PHONY: install lint format format-check typecheck arch test test-docker backup migrate db-migrate db-revision db-check compose-config up stop check audit bandit security
 
 install:
 	$(POETRY) -C backend install
@@ -38,8 +39,21 @@ test-docker: up migrate
 backup:
 	python scripts/db_backup
 
-migrate: backup
+db-migrate: backup
 	$(COMPOSE) exec -T api alembic upgrade head
+
+migrate: db-migrate
+
+db-revision:
+ifeq ($(m),)
+	@echo uso: make db-revision m='descricao'
+	@exit 1
+else
+	$(COMPOSE) run --rm -v ./backend/migrations:/app/migrations api alembic revision --autogenerate --rev-id "$(DB_REVISION_ID)" -m "$(m)"
+endif
+
+db-check:
+	$(COMPOSE) exec -T api alembic check
 
 compose-config:
 	$(COMPOSE) config --quiet

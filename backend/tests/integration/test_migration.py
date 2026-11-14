@@ -19,6 +19,12 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _current_head() -> str:
+    result = _run(["exec", "-T", "api", "alembic", "heads"])
+    assert result.returncode == 0, result.stderr
+    return result.stdout.split()[0]
+
+
 def test_migrations_apply() -> None:
     result = _run(["exec", "-T", "api", "alembic", "upgrade", "head"])
 
@@ -39,7 +45,7 @@ def test_alembic_version_table_is_populated() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "0003_documents"
+    assert result.stdout.strip() == _current_head()
 
 
 def test_auth_tables_exist() -> None:
@@ -65,3 +71,18 @@ def test_auth_tables_exist() -> None:
     assert "documents" in tables
     assert "refresh_tokens" in tables
     assert "users" in tables
+
+
+def test_migrations_roundtrip_and_alembic_check() -> None:
+    try:
+        downgrade = _run(["exec", "-T", "api", "alembic", "downgrade", "base"])
+        assert downgrade.returncode == 0, downgrade.stderr
+
+        upgrade = _run(["exec", "-T", "api", "alembic", "upgrade", "head"])
+        assert upgrade.returncode == 0, upgrade.stderr
+
+        check = _run(["exec", "-T", "api", "alembic", "check"])
+        assert check.returncode == 0, check.stderr
+        assert "No new upgrade operations detected" in check.stdout
+    finally:
+        _run(["exec", "-T", "api", "alembic", "upgrade", "head"])

@@ -38,6 +38,11 @@
 - API RESTful, versionada em /api/v1, erros no formato problem+json.
 - Evite N+1: carregamento explicito (selectinload/joinedload) e teste que conta queries nos endpoints de listagem.
 - Falha de componente opcional (LLM, vetor, notificacao) nunca derruba a analise: degrade com sinalizacao.
+- Toda mudanca de schema e uma migration Alembic versionada no git, nunca alteracao manual no banco.
+- Uma migration por mudanca logica, com mensagem descritiva e `upgrade` e `downgrade` implementados.
+- Nunca edite uma migration ja commitada: crie uma nova.
+- Migrations autogeradas sao revisadas a mao antes do commit.
+- Backup (pg_dump) antes de aplicar, como ja definido.
 
 ## 4. Checagens padrao
 Rode as aplicaveis ao passo (use os comandos anotados em PROGRESS.md):

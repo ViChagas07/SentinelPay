@@ -4,7 +4,7 @@
 - Segredo fora do git: `git check-ignore -v .env` (deve retornar `.gitignore:2:.env	.env`) e `git ls-files | Select-String -Pattern '^\.env$'` (deve ser vazio).
 - Backend (na raiz): `make lint`, `make format-check`, `make format`, `make typecheck`, `make arch`, `make test`, `make test-docker`, `make check`.
 - Auditoria: `make bandit` (0 achados) e `make audit` (`pip-audit --local`; sem vulnerabilidades conhecidas, com aviso de cobertura parcial do venv).
-- Backup/migration: `make backup` (grava `backups/*.sql`), `make migrate` (backup + `alembic upgrade head` no container da API).
+- Backup/migration: `make backup` (grava `backups/*.sql`), `make db-migrate` (backup + `alembic upgrade head` no container da API), `make migrate` (alias de `db-migrate`), `make db-revision m='descricao'` (autogenerate com mount de `backend/migrations` e `--rev-id 000N` via `scripts/next_migration_id.py`) e `make db-check` (`alembic check`).
 - Equivalentes: `poetry -C backend run ruff check .`, `poetry -C backend run ruff format --check .`, `poetry -C backend run mypy src tests`, `poetry -C backend run lint-imports`, `poetry -C backend run pytest -m "not docker"`.
 - OCR real (opcional, host): `$env:RUN_REAL_OCR='1'; poetry -C backend run pytest tests/integration/test_paddle_ocr_real.py -q -s --run-docker`.
 - Compose (na raiz): `make compose-config` (= `docker compose --env-file .env.example config --quiet`), `make up`, `make stop`.
@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P08 concluida (contracheques deterministicos). P09 nao iniciada.
+- Fase atual: P08 concluida (contracheques deterministicos) + reforco de migrations concluido. P09 nao iniciada.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -79,3 +79,4 @@
 - P08.3 Calculadores: INSS progressivo com teto, IRRF por faixa/deducao, lookups por competencia para minimo e parametro CLT. Fixtures sinteticas em `tests/support/regulatory_factory.py` (fonte explicita, nao legal) e contracheque sintetico alinhado aos valores do fixture. Loader rejeita INSS sem faixa aberta/teto e IRRF sem ultima faixa aberta. 12 testes verdes; Ruff, format e mypy verdes.
 - P08.4 Motor/analise: `payslip-v1` com 14 regras (somas, liquido, INSS, IRRF, minimo, horas extras, competencia, CNPJ/CPF, duplicidade, arredondamento, campos ilegiveis), piso critico 80, evidencias TRIGGERED/NOT_VERIFICABLE e i18n pt/es/en. Sem tabela oficial, as regras regulatorias ficam NOT_VERIFICABLE com peso 0 e o contracheque valido pontua 0; cada adulteracao isolada dispara a regra esperada. 23 testes de analise + 4 de i18n; `make check` com 372 testes verdes, Ruff/mypy/import-linter verdes e cobertura do pacote payslip em 91%.
 - P08.5 Fechamento: `make check` 372 testes sem Docker; `make test-docker` 20 passed + 1 skip (backup `backups/` e `alembic upgrade head`, sem migration nova); `make bandit` 0 achados; `make audit` sem vulnerabilidades conhecidas; cobertura do pacote payslip 91% (analysis 97%, extraction 92%, rules 92%). `docs/normas/` continua sem tabelas oficiais, entao INSS/IRRF/minimo/horas extras ficam NAO VERIFICAVEIS em producao. Sem endpoint, ML ou LLM. Docker revalidado nesta sessao.
+- Reforco migrations: auditoria confirmou `migrations/env.py` async (`async_engine_from_config`/`asyncio.run`), 3 revisions rastreadas (`git ls-files`) e nenhuma ignorada (`git check-ignore` vazio); RULES sec.3 atualizada. Makefile: `db-migrate` (backup + upgrade), `db-revision m=...` (autogenerate com mount e `--rev-id 000N` via `scripts/next_migration_id.py`), `db-check`. `make db-check` -> "No new upgrade operations detected"; `test_migration.py` Docker 4 passed (roundtrip downgrade/upgrade/check). Revisao temporaria `0004_temp_check` gerada e removida; nenhuma migration nova commitada.

@@ -38,6 +38,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P08: `docs/normas/` so tem LEIA-ME; `data/regulatory/*.yaml` ficam vazios e as regras de INSS/IRRF/minimo/horas extras retornam NOT_VERIFICABLE com peso 0. A tabela INSS 2024 do PDF de holerite nao e fonte oficial; nao copiar para os dados.
 - P08: CPF completo so existe na extracao interna; `PayslipAnalysis` expoe CPF mascarado. As fixtures de `tests/support/regulatory_factory.py` sao sinteticas e nao representam a lei.
 - P08: a suite Docker foi revalidada (20 passed, 1 skip) e `make test-docker` gera backup em `backups/` (ignorado) antes do `alembic upgrade head`.
+- Migrations: revisoes `000N_slug` (zero-padded, snake_case, descritiva, uma por mudanca logica, `upgrade`/`downgrade`); nunca editar revisao commitada; autogenerate revisado a mao; `make db-revision m='...'` calcula o proximo `000N`.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
