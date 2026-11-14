@@ -111,6 +111,16 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 1200
     rag_chunk_overlap: int = 150
     rag_fake_embedder: bool = False
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
+    llm_temperature: float = 0.1
+    llm_timeout_seconds: float = 30.0
+    llm_max_retries: int = 2
+    llm_max_output_tokens: int = 800
+    llm_max_score_adjustment: int = 5
+    llm_language: str = "pt"
+    ai_node_timeout_seconds: float = 60.0
 
     @property
     def ocr_languages_list(self) -> list[str]:
@@ -224,6 +234,20 @@ class Settings(BaseSettings):
             raise ValueError("RAG_CHUNK_SIZE must be positive")
         if not 0 <= self.rag_chunk_overlap < self.rag_chunk_size:
             raise ValueError("RAG_CHUNK_OVERLAP must be between 0 and RAG_CHUNK_SIZE")
+        if not 0.0 <= self.llm_temperature <= 1.0:
+            raise ValueError("LLM_TEMPERATURE must be between 0 and 1")
+        if self.llm_timeout_seconds <= 0:
+            raise ValueError("LLM_TIMEOUT_SECONDS must be positive")
+        if self.llm_max_retries < 0:
+            raise ValueError("LLM_MAX_RETRIES must be non-negative")
+        if self.llm_max_output_tokens <= 0:
+            raise ValueError("LLM_MAX_OUTPUT_TOKENS must be positive")
+        if not 0 <= self.llm_max_score_adjustment <= 20:
+            raise ValueError("LLM_MAX_SCORE_ADJUSTMENT must be between 0 and 20")
+        if self.llm_language not in ("pt", "es", "en"):
+            raise ValueError("LLM_LANGUAGE must be pt, es or en")
+        if self.ai_node_timeout_seconds <= 0:
+            raise ValueError("AI_NODE_TIMEOUT_SECONDS must be positive")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")

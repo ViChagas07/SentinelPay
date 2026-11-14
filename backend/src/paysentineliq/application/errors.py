@@ -298,3 +298,7 @@ class EmbeddingDimensionError(ValueError):
 
 class EmbeddingUnavailableError(RuntimeError):
     pass
+
+
+class LlmUnavailableError(RuntimeError):
+    pass

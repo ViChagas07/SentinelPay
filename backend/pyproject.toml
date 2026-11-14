@@ -28,6 +28,9 @@ scikit-learn = "^1.9.1"
 joblib = "^1.6.0"
 pgvector = "^0.5.1"
 pinecone = "^10.3.0"
+crewai = "1.15.41"
+langgraph = "^1.2.22"
+langchain-core = "^1.8.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
@@ -41,7 +44,7 @@ dev = [
     "ruff (>=0.17.5,<0.18.0)",
     "mypy (>=2.4.1,<3.0.0)",
     "import-linter (>=2.16,<3.0)",
-    "pip-audit (>=2.10.1,<3.0.0)",
+    "pip-audit (==2.9.0)",
     "bandit (>=1.9.4,<2.0.0)",
     "types-authlib (>=1.8.0.20261106,<2.0.0.0)",
     "types-psutil (>=7.2.2.20261111,<8.0.0.0)",
@@ -72,7 +75,7 @@ plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["boto3", "boto3.*", "botocore", "botocore.*", "cv2", "joblib", "joblib.*", "paddleocr", "paddleocr.*", "paddle", "paddle.*", "paddlex", "paddlex.*", "pymupdf", "pymupdf.*", "fitz", "sklearn", "sklearn.*"]
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "crewai", "crewai.*", "cv2", "joblib", "joblib.*", "langchain", "langchain.*", "langchain_core", "langchain_core.*", "langgraph", "langgraph.*", "paddleocr", "paddleocr.*", "paddle", "paddle.*", "paddlex", "paddlex.*", "pymupdf", "pymupdf.*", "fitz", "sklearn", "sklearn.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
@@ -87,6 +90,7 @@ markers = [
     "unit: fast tests without external services",
     "integration: tests that may use local services",
     "docker: tests that require docker compose up and --run-docker",
+    "manual: tests that need a real local LLM and are opt-in",
 ]
 
 [tool.coverage.run]
