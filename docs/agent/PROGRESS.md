@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P11 concluida (agentes de IA). P12 nao iniciada.
+- Fase atual: P12 em andamento (guardrails em 4 camadas). P12.1 (spec/ADR) concluido; P12.2 nao iniciado.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0004_knowledge_chunks` aplicada e rotas de auth/documentos ativas; 21 documentos de `knowledge/` indexados no PGVector com embedder fake local. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS; embeddings reais do LM Studio e Pinecone real tambem NAO VALIDADOS (indice local usa embedder fake 8D); CrewAI/LM Studio reais e o grafo de agentes real seguem NAO VALIDADOS (testes usam LLM/crew fakes).
 
@@ -96,3 +96,4 @@
 - P11.2 Analyses/events: modelos `AnalysisReport`/`AnalysisRecord`/`AnalysisEvent`, portas de documento/repositorio/eventos/orquestrador e migration `0005_analyses` com `analyses` e `analysis_events` append-only (somente INSERT). Backup `paysentineliq_20261114T170232Z.sql` (88066 bytes) antes da migration; `make db-check` verde; teste Docker de persistencia/eventos 1 passed. Imagem da API reconstruida e stack recriada.
 - P11.1 LLM/telemetria/prompts: `LLMPort` + adaptador OpenAI-compatible com SSRF guard, retry/timeout, prompts pt/es/en versionados por hash, JSON Pydantic com reparo limitado e telemetria/tracing desligados. 18 testes; import-linter e mypy verdes. Dependencias `crewai 1.15.41`, `langgraph 1.2.22` e `langchain-core 1.8.0`; `pip-audit` ficou 2.9.0 para resolver conflito de tomli do CrewAI. LM Studio real NAO VALIDADO.
 - P10.6 Fechamento: `make check` 452 testes sem Docker; `make test-docker` 22 passed + 1 skip (roundtrip da migration 0004 e PGVector); apos o roundtrip a ingestao foi refeita (21 docs, 56 chunks, 0 falhas) e `make db-check` segue "No new upgrade operations detected"; `make bandit` 0 achados e `make audit` sem vulnerabilidades. Consulta final devolveu 5 trechos com citacao (proveniencia unknown, authoritative=false). Embeddings reais do LM Studio e Pinecone real NAO VALIDADOS; `EMBEDDING_DIM=8` e apenas desenvolvimento/teste.
+- P12.1 Spec/ADR: SPEC 0013 e ADR 0016 definem modelo de ameaca da injecao indireta, as 4 camadas (prompt, codigo, classificador e judge), invariantes (score intocado, deteccao vira evidencia `guardrail.*`, saida reprovada vira template, metricas sem PII) e limites NAO VALIDADOS (ataques reais/adaptativos e modelo real). Ainda sem codigo; nada a validar alem dos documentos.
