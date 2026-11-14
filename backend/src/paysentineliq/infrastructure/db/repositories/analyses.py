@@ -208,6 +208,35 @@ class SqlAlchemyAnalysisRepository:
                 session.add(_notification_model(notification))
             return True
 
+    async def requeue_for_retry(
+        self,
+        analysis_id: UUID,
+        *,
+        error_code: str,
+        state: Mapping[str, object],
+        event: AnalysisEvent,
+    ) -> bool:
+        async with self._session_factory() as session, session.begin():
+            result = await session.execute(
+                update(AnalysisModel)
+                .where(
+                    AnalysisModel.id == analysis_id,
+                    AnalysisModel.status == AnalysisStatus.PROCESSING.value,
+                )
+                .values(
+                    status=AnalysisStatus.QUEUED.value,
+                    error_code=error_code,
+                    processing_started_at=None,
+                    state=dict(state),
+                    updated_at=func.now(),
+                )
+                .returning(AnalysisModel.id),
+            )
+            if result.scalar_one_or_none() is None:
+                return False
+            session.add(_event_model(event))
+            return True
+
     async def claim_for_processing(
         self,
         analysis_id: UUID,
@@ -230,7 +259,6 @@ class SqlAlchemyAnalysisRepository:
                         and_(
                             AnalysisModel.status == AnalysisStatus.PROCESSING.value,
                             or_(
-                                AnalysisModel.task_id == task_id,
                                 AnalysisModel.processing_started_at.is_(None),
                                 AnalysisModel.processing_started_at < cutoff,
                             ),

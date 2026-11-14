@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.signals import worker_ready
 from kombu import Exchange, Queue
 
 from paysentineliq.infrastructure.config import Settings, get_settings
@@ -72,6 +73,7 @@ def build_celery_app(settings: Settings) -> Celery:
         task_acks_on_failure_or_timeout=False,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,
+        worker_max_tasks_per_child=1,
         task_default_queue=ANALYSIS_QUEUE,
         task_default_exchange=ANALYSIS_QUEUE,
         task_default_routing_key=ANALYSIS_QUEUE,
@@ -95,6 +97,7 @@ def build_celery_app(settings: Settings) -> Celery:
         },
         task_always_eager=settings.celery_task_always_eager,
         task_eager_propagates=settings.celery_task_always_eager,
+        imports=("paysentineliq.infrastructure.messaging.tasks",),
         result_expires=3600,
         broker_connection_retry_on_startup=True,
         broker_transport_options={"confirm_publish": True},
@@ -111,3 +114,11 @@ def build_celery_app(settings: Settings) -> Celery:
 
 
 celery_app = build_celery_app(get_settings())
+
+
+@worker_ready.connect  # type: ignore[untyped-decorator]
+def _declare_dead_letter_queues(sender: Celery, **_: object) -> None:
+    with sender.connection_for_write() as connection:
+        channel = connection.default_channel
+        for name in (ANALYSIS_QUEUE, NOTIFICATIONS_QUEUE, SCHEDULER_QUEUE):
+            _dead_letter_queue(name)(channel).declare()

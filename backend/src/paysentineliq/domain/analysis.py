@@ -21,6 +21,7 @@ class AnalysisEventType(StrEnum):
     PROCESSING = "processing"
     RULE_TRIGGERED = "rule_triggered"
     GUARDRAIL_TRIGGERED = "guardrail_triggered"
+    RETRY_SCHEDULED = "retry_scheduled"
     COMPLETED = "completed"
     FAILED = "failed"
     DEGRADED = "degraded"

@@ -16,7 +16,7 @@ A P11 entrega o grafo de analise on-demand. A P13 precisa tirar a analise do req
 - **Transactional outbox**: status terminal, evento e notificacao na mesma transacao. Publicacao na fila `notifications` so depois do commit; a entrega fica para a P15.
 - **GETs em `application/queries`** e POST em `application/commands`, mantendo CQRS leve. Listagem por cursor `(created_at, id)` em uma query, sem N+1.
 - **Sem Flower** nesta fase (YAGNI); observabilidade fica para a P16.
-- **Beat** roda `sweep_stale_analyses` para nao deixar `processing` eterno apos morte do worker. Recuperacao automatica/reenfileiramento fica para a P16.
+- **Beat** roda `sweep_stale_analyses` para devolver `processing` com lease vencido a `queued` e republicar a tarefa, evitando `processing` eterno apos morte do worker. Limite de recuperacoes e alertas ficam para a P16.
 - **`degraded` continua terminal de sucesso** (heranca P11) quando componentes opcionais falham; `failed` e reservado a falha sem resultado confiavel.
 
 ## Alternativas descartadas
@@ -33,3 +33,4 @@ A P11 entrega o grafo de analise on-demand. A P13 precisa tirar a analise do req
 - O worker nao compartilha pool/loop, ao custo de abrir conexao por tarefa (aceitavel na escala atual).
 - Uma falha do broker no POST deixa a analise `queued` sem mensagem; a P16 deve reprocessar. A API retorna erro seguro quando a publicacao falha.
 - **NAO VALIDADO**: carga real, DLQ em producao, multiplas instancias de beat, recuperacao de mensagens orfas e entrega de notificacoes. O sistema nao promete exactly-once.
+

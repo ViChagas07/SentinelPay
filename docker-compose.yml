@@ -145,7 +145,8 @@ services:
         "paysentineliq.infrastructure.messaging.celery_app:celery_app",
         "worker",
         "--loglevel=INFO",
-        "--concurrency=2",
+        "--pool=solo",
+        "--concurrency=1",
         "--prefetch-multiplier=1",
         "-Q",
         "analysis,notifications,scheduler",
@@ -279,3 +280,5 @@ volumes:
   rabbitmq_data:
   minio_data:
   mailpit_data:
+
+

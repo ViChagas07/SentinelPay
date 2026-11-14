@@ -112,11 +112,28 @@ async def test_claim_is_idempotent_and_recovers_expired_lease() -> None:
             task_id="task-a",
             lease_seconds=300,
         )
+        requeued = await analyses.requeue_for_retry(
+            analysis_id,
+            error_code="analysis_failed",
+            state={"node": "retry"},
+            event=AnalysisEvent(
+                analysis_id=analysis_id,
+                event_type=AnalysisEventType.RETRY_SCHEDULED,
+                payload={"error_code": "analysis_failed"},
+            ),
+        )
+        reclaimed = await analyses.claim_for_processing(
+            analysis_id,
+            task_id="task-a",
+            lease_seconds=300,
+        )
 
         assert first is not None
         assert first.status is AnalysisStatus.PROCESSING
         assert duplicate is None
-        assert retry is not None
+        assert retry is None
+        assert requeued is True
+        assert reclaimed is not None
 
         async with factory() as session:
             await session.execute(

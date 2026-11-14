@@ -29,7 +29,7 @@ queued --claim--> processing --ok--> completed
 - Falha final marca `failed` com `error_code` seguro (sem PII/texto) e o evento `failed`; a mensagem e rejeitada para a DLQ (`task_acks_on_failure_or_timeout=False`).
 - DLX `paysentineliq.dlx` roteia mensagens rejeitadas/expiradas de cada fila para `*.dlq` (`analysis.dlq`, `notifications.dlq`, `scheduler.dlq`).
 - Descarte: mensagem malformada ou de analise inexistente e rejeitada sem reexecucao; nunca cria analise nova.
-- Beat: `scheduler.sweep_stale_analyses` a cada 5 min marca `processing` com lease vencido como `failed` (`analysis_stale`) e grava evento na mesma transacao. Recuperacao automatica fica para a P16.
+- Beat: `scheduler.sweep_stale_analyses` a cada 5 min devolve `processing` com lease vencido para `queued` (evento `retry_scheduled`, causa `analysis_stale`) e republica a tarefa; a contagem de recuperacoes e o limite de tentativas ficam para a P16.
 
 ## Ponte async e banco no worker
 - Tarefa Celery e sincrona; chama o caso de uso async por `run_async` com loop novo dedicado por tarefa, encerrando pending tasks/async gens e fechando o loop.
@@ -82,8 +82,9 @@ queued --claim--> processing --ok--> completed
 
 ## Riscos e NAO VALIDADO
 - **NAO VALIDADO**: throughput/carga real do worker, DLQ em producao, RabbitMQ em cluster, beat com multiplas instancias e exactly-once (o modelo e at-least-once + idempotencia).
-- **NAO VALIDADO**: recuperacao automatica de analises stale (P16); aqui o sweeper apenas falha com causa segura.
+- **NAO VALIDADO**: limite de recuperacoes de analises stale e alerta (P16); aqui o sweeper reenfileira uma vez por varredura.
 - **NAO VALIDADO**: entrega de notificacao (P15); nesta fase so o outbox e a publicacao pos-commit.
 - Broker/Redis indisponiveis no POST: a analise pode ficar `queued` sem mensagem; a P16 deve varrer/reenfileirar. A API responde erro seguro quando a publicacao falha.
 - A imagem do worker executa PaddleOCR; OCR real dentro do container continua NAO VALIDADO.
 - Nao ha garantia de ordem entre analises; a cota e por usuario e o score e deterministico.
+

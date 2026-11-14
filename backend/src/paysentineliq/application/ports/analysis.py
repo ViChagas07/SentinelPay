@@ -86,6 +86,15 @@ class AnalysisRepositoryPort(AnalysisLookupPort, Protocol):
         notifications: tuple[Notification, ...] = (),
     ) -> bool: ...
 
+    async def requeue_for_retry(
+        self,
+        analysis_id: UUID,
+        *,
+        error_code: str,
+        state: Mapping[str, object],
+        event: AnalysisEvent,
+    ) -> bool: ...
+
     async def claim_for_processing(
         self,
         analysis_id: UUID,

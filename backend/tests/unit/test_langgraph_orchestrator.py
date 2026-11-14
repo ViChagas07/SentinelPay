@@ -199,6 +199,16 @@ class FakeAnalysisRepository:
         self.failed = {"analysis_id": analysis_id, "error_code": error_code}
         return True
 
+    async def requeue_for_retry(
+        self,
+        analysis_id: UUID,
+        *,
+        error_code: str,
+        state: Mapping[str, object],
+        event: AnalysisEvent,
+    ) -> bool:
+        return True
+
     async def claim_for_processing(
         self,
         analysis_id: UUID,
