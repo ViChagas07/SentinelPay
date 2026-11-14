@@ -90,10 +90,10 @@ async def test_method_not_allowed_becomes_problem_json() -> None:
 
 
 async def test_validation_error_is_generic_and_safe() -> None:
-    response = await _request(_test_app(), "GET", "/validate?value=abc")
+    response = await _request(_test_app(), "GET", "/validate?value=zz-reflect-marker")
 
     assert response.status_code == 422
     assert response.headers["content-type"].startswith("application/problem+json")
     body = response.json()
     assert body["code"] == "validation_error"
-    assert "abc" not in response.text
+    assert "zz-reflect-marker" not in response.text
