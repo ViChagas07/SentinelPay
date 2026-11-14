@@ -44,6 +44,9 @@ def test_non_local_accepts_external_urls() -> None:
         google_client_secret="test-secret",
         google_redirect_uri="https://example.com/api/v1/auth/google/callback",
         frontend_url="https://app.example.com",
+        s3_bucket="test-bucket",
+        s3_access_key_id="test-key",
+        s3_secret_access_key="test-secret",
     )
 
     assert settings.app_env == "production"

@@ -67,12 +67,39 @@ class Settings(BaseSettings):
     frontend_url: str = ""
     cookie_domain: str = ""
     oidc_state_ttl_seconds: int = 600
+    s3_endpoint_url: str = ""
+    s3_region: str = Field(
+        default="us-east-1",
+        validation_alias=AliasChoices("S3_REGION", "AWS_REGION"),
+    )
+    s3_bucket: str = "paysentineliq-documents"
+    s3_access_key_id: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "S3_ACCESS_KEY_ID",
+            "AWS_ACCESS_KEY_ID",
+        ),
+    )
+    s3_secret_access_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "S3_SECRET_ACCESS_KEY",
+            "AWS_SECRET_ACCESS_KEY",
+        ),
+    )
+    upload_max_mb: int = 25
+    pdf_max_pages: int = 50
+    s3_presigned_url_ttl_seconds: int = 300
 
     @property
     def google_configured(self) -> bool:
         return bool(
             self.google_client_id and self.google_client_secret and self.google_redirect_uri
         )
+
+    @property
+    def s3_configured(self) -> bool:
+        return bool(self.s3_bucket and self.s3_access_key_id and self.s3_secret_access_key)
 
     @property
     def allowed_hosts_list(self) -> list[str]:
@@ -120,6 +147,9 @@ class Settings(BaseSettings):
                 ("GOOGLE_CLIENT_SECRET", self.google_client_secret),
                 ("GOOGLE_REDIRECT_URI", self.google_redirect_uri),
                 ("FRONTEND_URL", self.frontend_url),
+                ("S3_BUCKET", self.s3_bucket),
+                ("S3_ACCESS_KEY_ID", self.s3_access_key_id),
+                ("S3_SECRET_ACCESS_KEY", self.s3_secret_access_key),
             ):
                 if not value:
                     missing.append(name)
@@ -132,6 +162,12 @@ class Settings(BaseSettings):
             raise ValueError("REFRESH_TOKEN_TTL_DAYS must be positive")
         if self.oidc_state_ttl_seconds <= 0:
             raise ValueError("OIDC_STATE_TTL_SECONDS must be positive")
+        if self.upload_max_mb <= 0:
+            raise ValueError("UPLOAD_MAX_MB must be positive")
+        if self.pdf_max_pages <= 0:
+            raise ValueError("PDF_MAX_PAGES must be positive")
+        if self.s3_presigned_url_ttl_seconds <= 0:
+            raise ValueError("S3_PRESIGNED_URL_TTL_SECONDS must be positive")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")

@@ -1,4 +1,4 @@
-from paysentineliq.domain.errors import DomainError
+from paysentineliq.domain.errors import DomainError, NotFoundError
 
 
 class ApplicationError(DomainError):
@@ -137,3 +137,102 @@ class TooManyAttemptsError(ApplicationError):
             title="Too many requests",
         )
         self.retry_after_seconds = retry_after_seconds
+
+
+class UploadTooLargeError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="upload_too_large",
+            message="Upload exceeds the allowed size.",
+            status_code=413,
+            title="Payload too large",
+        )
+
+
+class EmptyDocumentError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="empty_document",
+            message="Uploaded document is empty.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class UnsupportedDocumentTypeError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="unsupported_document_type",
+            message="Only PDF, PNG and JPEG are accepted.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class InvalidDocumentError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_document",
+            message="Document content is invalid.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class PdfPageLimitError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="pdf_page_limit_exceeded",
+            message="PDF exceeds the allowed page count.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class EncryptedPdfError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="encrypted_pdf",
+            message="Encrypted PDF is not accepted.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class DangerousPdfError(ApplicationError):
+    def __init__(self, evidence: tuple[str, ...]) -> None:
+        super().__init__(
+            code="pdf_active_content",
+            message="PDF contains active or embedded content.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+        self.evidence = evidence
+
+
+class StorageNotConfiguredError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="storage_not_configured",
+            message="Document storage is not configured.",
+            status_code=503,
+            title="Service unavailable",
+        )
+
+
+class StorageUnavailableError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="storage_unavailable",
+            message="Document storage is unavailable.",
+            status_code=503,
+            title="Service unavailable",
+        )
+
+
+class DocumentNotFoundError(NotFoundError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="document_not_found",
+            message="Document not found.",
+        )
