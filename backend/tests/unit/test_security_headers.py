@@ -35,6 +35,7 @@ def _production_app() -> FastAPI:
             s3_bucket="test-bucket",
             s3_access_key_id="test-key",
             s3_secret_access_key="test-secret",
+            metrics_token="production-metrics-token",
         )
     )
 

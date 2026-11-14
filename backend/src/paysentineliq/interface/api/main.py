@@ -10,6 +10,10 @@ from paysentineliq.infrastructure.cache.swr import SWRCache
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.db.engine import build_engine, build_session_factory
 from paysentineliq.infrastructure.logging import configure_logging
+from paysentineliq.infrastructure.observability.metrics import (
+    PlatformMetrics,
+    set_platform_metrics,
+)
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.google_oidc import GoogleOIDCClient
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService
@@ -128,6 +132,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=("/openapi.json" if resolved_settings.app_env == "local" else None),
     )
     app.state.settings = resolved_settings
+    metrics = PlatformMetrics()
+    app.state.metrics = metrics
+    set_platform_metrics(metrics)
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(AuthContextMiddleware)
     app.add_middleware(

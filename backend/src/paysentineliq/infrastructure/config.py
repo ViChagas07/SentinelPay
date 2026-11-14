@@ -1,6 +1,7 @@
 import secrets
 from functools import lru_cache
 from typing import Literal, Self
+from urllib.parse import unquote, urlparse
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -49,6 +50,15 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: float = 10.0
     sms_provider: Literal["console"] = "console"
     whatsapp_provider: Literal["console"] = "console"
+    metrics_token: str = ""
+    otel_sdk_disabled: bool = True
+    otel_exporter_otlp_endpoint: str = ""
+    otel_service_name: str = "paysentineliq-api"
+    otel_service_version: str = "0.1.0"
+    otel_traces_sampler_ratio: float = 1.0
+    otel_exporter_timeout_seconds: float = 5.0
+    queue_depth_refresh_seconds: float = 15.0
+    rabbitmq_management_url: str = ""
     fraud_model_dir: str = "models/artifacts"
     llm_interpreter: Literal["structured", "crewai"] = "structured"
     log_level: str = "INFO"
@@ -192,6 +202,22 @@ class Settings(BaseSettings):
     @property
     def guardrail_allowed_output_urls_list(self) -> list[str]:
         return [url.strip() for url in self.guardrail_allowed_output_urls.split(",") if url.strip()]
+
+    @property
+    def rabbitmq_management_endpoint(self) -> str:
+        if self.rabbitmq_management_url.strip():
+            return self.rabbitmq_management_url.strip().rstrip("/")
+        parsed = urlparse(self.rabbitmq_url)
+        host = parsed.hostname or "localhost"
+        return f"http://{host}:15672"
+
+    @property
+    def rabbitmq_management_credentials(self) -> tuple[str, str]:
+        parsed = urlparse(self.rabbitmq_url)
+        return (
+            unquote(parsed.username or ""),
+            unquote(parsed.password or ""),
+        )
 
     @model_validator(mode="after")
     def _apply_local_defaults_or_fail(self) -> Self:
@@ -396,6 +422,33 @@ class Settings(BaseSettings):
             )
         if "*" in self.ssrf_allowed_hosts_list:
             raise ValueError("SSRF_ALLOWED_HOSTS must not contain a wildcard")
+
+        if not self.metrics_token.strip():
+            if self.app_env == "local":
+                self.metrics_token = "local-metrics-token"
+            else:
+                missing.append("METRICS_TOKEN")
+        elif self.app_env != "local" and self.metrics_token.strip() in {
+            "CHANGE_ME",
+            "local-metrics-token",
+        }:
+            raise ValueError("METRICS_TOKEN must be changed outside local")
+        if not self.otel_service_name.strip():
+            raise ValueError("OTEL_SERVICE_NAME must not be empty")
+        if not 0.0 <= self.otel_traces_sampler_ratio <= 1.0:
+            raise ValueError("OTEL_TRACES_SAMPLER_RATIO must be between 0 and 1")
+        if self.otel_exporter_timeout_seconds <= 0:
+            raise ValueError("OTEL_EXPORTER_TIMEOUT_SECONDS must be positive")
+        if not self.otel_sdk_disabled:
+            endpoint = self.otel_exporter_otlp_endpoint.strip()
+            if not endpoint:
+                raise ValueError(
+                    "OTEL_EXPORTER_OTLP_ENDPOINT is required when OTEL_SDK_DISABLED=false",
+                )
+            if not endpoint.startswith(("http://", "https://")):
+                raise ValueError("OTEL_EXPORTER_OTLP_ENDPOINT must use http or https")
+        if self.queue_depth_refresh_seconds <= 0:
+            raise ValueError("QUEUE_DEPTH_REFRESH_SECONDS must be positive")
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")

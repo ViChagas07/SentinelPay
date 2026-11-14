@@ -61,7 +61,7 @@ Prefixo `paysentineliq_`:
   exponha tambem as metricas da pipeline; em single-process usa-se um registry proprio.
 - Queue depth e atualizada por um monitor que consulta a Management API do RabbitMQ e mantem
   gauges para `analysis`, `notifications`, `scheduler` e as DLQs.
-- `/metrics` retorna `text/plain; version=0.0.4` e exige token. Sem token valido: 401
+- `/metrics` retorna a exposicao Prometheus em `text/plain` e exige token. Sem token valido: 401
   problem+json. A rota fica fora do tracing para evitar ruido.
 
 ## Tracing

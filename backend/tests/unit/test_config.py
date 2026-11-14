@@ -49,6 +49,7 @@ def test_non_local_accepts_external_urls() -> None:
         s3_bucket="test-bucket",
         s3_access_key_id="test-key",
         s3_secret_access_key="test-secret",
+        metrics_token="production-metrics-token",
     )
 
     assert settings.app_env == "production"
