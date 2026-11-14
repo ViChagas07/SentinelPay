@@ -34,7 +34,7 @@ class EvidenceSummary:
 
 @dataclass(frozen=True, slots=True)
 class DeterministicSummary:
-    document_type: Literal["boleto", "payslip"]
+    document_type: Literal["boleto", "payslip", "receipt"]
     subscore: int
     evidence: tuple[EvidenceSummary, ...]
     field_confidences: tuple[float, ...]
@@ -49,8 +49,8 @@ class DeterministicSummary:
     net: Decimal | None = None
 
     def __post_init__(self) -> None:
-        if self.document_type not in ("boleto", "payslip"):
-            raise ValueError("document_type must be boleto or payslip")
+        if self.document_type not in ("boleto", "payslip", "receipt"):
+            raise ValueError("document_type must be boleto, payslip or receipt")
         if not 0 <= self.subscore <= 100:
             raise ValueError("subscore must be between 0 and 100")
         if any(not 0.0 <= value <= 1.0 for value in self.field_confidences):

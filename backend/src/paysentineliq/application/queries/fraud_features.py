@@ -11,6 +11,7 @@ from paysentineliq.domain.payslip.rules import (
 from paysentineliq.domain.payslip.rules import (
     EvidenceStatus,
 )
+from paysentineliq.domain.receipt.analysis import ReceiptAnalysis
 from paysentineliq.domain.scoring import (
     DeterministicSummary,
     EvidenceSummary,
@@ -120,6 +121,43 @@ def summary_from_boleto(analysis: BoletoAnalysis) -> DeterministicSummary:
         amount_cents=decoded.amount.cents if decoded is not None else None,
         due_factor=decoded.due_factor if decoded is not None else None,
         barcode_read=barcode_read,
+    )
+
+
+def summary_from_receipt(analysis: ReceiptAnalysis) -> DeterministicSummary:
+    fields = analysis.fields
+    confidences = _field_confidences(
+        (
+            fields.line,
+            fields.barcode,
+            fields.amount,
+            fields.due_date,
+            fields.issuer,
+            fields.reference,
+        ),
+    )
+    amount = fields.amount
+    amount_cents = None
+    if amount is not None:
+        scaled = amount.value * 100
+        if scaled == scaled.to_integral_value():
+            amount_cents = int(scaled)
+    return DeterministicSummary(
+        document_type="receipt",
+        subscore=analysis.subscore,
+        evidence=tuple(
+            EvidenceSummary(
+                rule_id=evidence.rule_id,
+                severity=evidence.severity,
+                weight=evidence.weight,
+            )
+            for evidence in analysis.evidence
+        ),
+        field_confidences=confidences,
+        not_validated_count=len(analysis.not_validated),
+        amount_cents=amount_cents,
+        due_factor=None,
+        barcode_read=True if analysis.barcode_checked else None,
     )
 
 

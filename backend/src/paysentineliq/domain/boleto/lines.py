@@ -179,5 +179,24 @@ class UtilityDigitableLine:
     def __post_init__(self) -> None:
         _validate_digits(self.digits, 48, "utility digitable line")
 
+    def blocks(self) -> tuple[str, str, str, str]:
+        return (
+            self.digits[0:11],
+            self.digits[12:23],
+            self.digits[24:35],
+            self.digits[36:47],
+        )
+
+    def field_dvs(self) -> tuple[int, int, int, int]:
+        return (
+            int(self.digits[11]),
+            int(self.digits[23]),
+            int(self.digits[35]),
+            int(self.digits[47]),
+        )
+
+    def barcode_digits(self) -> str:
+        return "".join(self.blocks())
+
     def to_barcode(self) -> Barcode:
         raise NotVerifiableLayoutError()
