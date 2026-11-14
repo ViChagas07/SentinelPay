@@ -37,6 +37,25 @@ def format_date(value: date) -> str:
     return value.strftime("%d/%m/%Y")
 
 
+def format_line(digits: str) -> str:
+    if len(digits) != 47:
+        raise ValueError("line must have 47 digits")
+    groups = (
+        digits[0:5],
+        digits[5:10],
+        digits[10:15],
+        digits[15:21],
+        digits[21:26],
+        digits[26:32],
+        digits[32:33],
+        digits[33:47],
+    )
+    return (
+        f"{groups[0]}.{groups[1]} {groups[2]}.{groups[3]} "
+        f"{groups[4]}.{groups[5]} {groups[6]} {groups[7]}"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class SyntheticBoleto:
     bank: str
@@ -56,20 +75,7 @@ class SyntheticBoleto:
 
     @property
     def formatted_line(self) -> str:
-        groups = (
-            self.line[0:5],
-            self.line[5:10],
-            self.line[10:15],
-            self.line[15:21],
-            self.line[21:26],
-            self.line[26:32],
-            self.line[32:33],
-            self.line[33:47],
-        )
-        return (
-            f"{groups[0]}.{groups[1]} {groups[2]}.{groups[3]} "
-            f"{groups[4]}.{groups[5]} {groups[6]} {groups[7]}"
-        )
+        return format_line(self.line)
 
     def ocr_text(self) -> str:
         lines = [
