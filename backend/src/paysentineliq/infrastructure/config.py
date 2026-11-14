@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     cors_allowed_origins: str = "http://localhost:3000"
     max_request_body_bytes: int = 1_048_576
     request_timeout_seconds: float = 30.0
+    bruteforce_max_attempts: int = 5
+    bruteforce_window_seconds: int = 900
+    bruteforce_base_block_seconds: int = 30
+    bruteforce_max_block_seconds: int = 3600
 
     @property
     def allowed_hosts_list(self) -> list[str]:
@@ -85,6 +89,16 @@ class Settings(BaseSettings):
             raise ValueError("MAX_REQUEST_BODY_BYTES must be positive")
         if self.request_timeout_seconds <= 0:
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be positive")
+        if self.bruteforce_max_attempts <= 0:
+            raise ValueError("BRUTEFORCE_MAX_ATTEMPTS must be positive")
+        if self.bruteforce_window_seconds <= 0:
+            raise ValueError("BRUTEFORCE_WINDOW_SECONDS must be positive")
+        if self.bruteforce_base_block_seconds <= 0:
+            raise ValueError("BRUTEFORCE_BASE_BLOCK_SECONDS must be positive")
+        if self.bruteforce_max_block_seconds < self.bruteforce_base_block_seconds:
+            raise ValueError(
+                "BRUTEFORCE_MAX_BLOCK_SECONDS must be >= BRUTEFORCE_BASE_BLOCK_SECONDS"
+            )
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")

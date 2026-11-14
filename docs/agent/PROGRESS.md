@@ -37,3 +37,4 @@
 - P03.3 Cache SWR: utilitario generico com TTL macio/duro, jitter, lock `SET NX EX` e entrega de valor velho; teste Redis com 20 chamadas concorrentes apos expiracao gerou 1 recomputacao. Config validada; suite unitaria 61 verdes.
 - P03.4 Headers/TrustedHost/CORS: headers de seguranca e CSP em todas as respostas, HSTS fora de local, allowlists explicitas de Host/Origin sem wildcard e CORS com credenciais apenas para origem configurada; 70 testes unitarios verdes.
 - P03.5 Limites/sanitizacao: corpo maximo retorna 413, timeout retorna 504, `PlainText` rejeita HTML/controle e limita 10k, respostas JSON com Content-Type correto; 77 testes unitarios verdes.
+- P03.6 CSRF/forca bruta: double-submit com comparacao em tempo constante e cookie legivel/Secure; `BruteForceService` com contadores por IP/identificador, janela, backoff e fail-closed; testes unitarios e integracao Redis verdes. Suite unitaria 82 verdes.

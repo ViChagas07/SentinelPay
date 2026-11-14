@@ -10,6 +10,7 @@ from paysentineliq.infrastructure.cache.swr import SWRCache
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.db.engine import build_engine, build_session_factory
 from paysentineliq.infrastructure.logging import configure_logging
+from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.rate_limit import TokenBucketRateLimiter
 from paysentineliq.interface.api.constants import API_V1_PREFIX, REQUEST_ID_HEADER
 from paysentineliq.interface.api.limits import MaxBodySizeMiddleware, TimeoutMiddleware
@@ -48,6 +49,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             jitter_ratio=resolved_settings.swr_jitter_ratio,
             lock_ttl_seconds=resolved_settings.swr_lock_ttl_seconds,
             wait_timeout_seconds=resolved_settings.swr_wait_timeout_seconds,
+        )
+        application.state.brute_force = BruteForceService(
+            redis,
+            max_attempts=resolved_settings.bruteforce_max_attempts,
+            window_seconds=resolved_settings.bruteforce_window_seconds,
+            base_block_seconds=resolved_settings.bruteforce_base_block_seconds,
+            max_block_seconds=resolved_settings.bruteforce_max_block_seconds,
+            hash_secret=resolved_settings.security_hash_secret,
         )
         try:
             yield
