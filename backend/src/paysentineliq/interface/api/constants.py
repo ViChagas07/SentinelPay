@@ -1,0 +1,3 @@
+API_V1_PREFIX = "/api/v1"
+REQUEST_ID_HEADER = "X-Request-ID"
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"

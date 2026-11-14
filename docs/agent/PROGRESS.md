@@ -25,3 +25,4 @@
 - P01.6 Checagens finais: `make check` verde (Ruff, format, mypy, import-linter, 2 testes unitarios e `docker compose config --quiet`). Compose usa `.env.example`, nunca o `.env` de producao.
 - P02.1 Spec e ADR: SPEC 0002 e ADR-0005 registram configuracao, DI, UoW, erros problem+json, logs, locale e readiness. Sem codigo de negocio; nada a validar alem dos documentos.
 - P02.2 Config: `Settings` com pydantic-settings lendo so ambiente (`env_file=None`), defaults locais e falha na inicializacao fora de local sem `DATABASE_URL`/`REDIS_URL`; 5 testes verdes. Ruff, mypy strict e import-linter verdes.
+- P02.3 Logs e request_id: logger JSON no stdout com `ContextVar`, middleware que aceita/gera `X-Request-ID` e filtro de PII (CPF, CNPJ, e-mail, telefone, JWT, Bearer, chaves e segredos); 16 testes de logging/request_id verdes, alem dos 2 de health. Ruff, mypy e import-linter verdes.
