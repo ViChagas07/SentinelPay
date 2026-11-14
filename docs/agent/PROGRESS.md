@@ -9,7 +9,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P01 concluida (monorepo, Poetry, qualidade, Compose e /health). Proximo passo: P02, conforme instrucao do dono.
+- Fase atual: P02 em andamento (fundacao transversal do backend). P01 concluida.
 - Stack local no ar com 6 servicos saudaveis; `GET /health` responde 200. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
 
 ## Historico
@@ -23,3 +23,4 @@
 - P01.4 Health (TDD): teste unitario falhou por ausencia do app e passou depois de `GET /health`; 2 testes verdes (200 com corpo exato e 405 para POST). Ruff, format, mypy strict e import-linter verdes. A rota nao toca banco nem Redis.
 - P01.5 Infra e Docker: Dockerfile multi-stage com usuario `app` (uid 999); Compose com Postgres+pgvector (55432), Redis, RabbitMQ, MinIO (ADR-0004), Mailpit e API; volumes nomeados e healthchecks. `make up` OK, `/health` 200, extensao `vector` presente e `make test-docker` com 1 teste verde.
 - P01.6 Checagens finais: `make check` verde (Ruff, format, mypy, import-linter, 2 testes unitarios e `docker compose config --quiet`). Compose usa `.env.example`, nunca o `.env` de producao.
+- P02.1 Spec e ADR: SPEC 0002 e ADR-0005 registram configuracao, DI, UoW, erros problem+json, logs, locale e readiness. Sem codigo de negocio; nada a validar alem dos documentos.
