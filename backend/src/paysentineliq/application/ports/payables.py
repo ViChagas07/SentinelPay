@@ -16,6 +16,12 @@ class PayableTransitionResult:
     outcome: Literal["updated", "unchanged", "not_found", "invalid_state"]
 
 
+@dataclass(frozen=True, slots=True)
+class ReminderDispatchResult:
+    created: int = 0
+    notification_ids: tuple[UUID, ...] = ()
+
+
 class PayableReadRepositoryPort(Protocol):
     async def get_for_owner(
         self,
@@ -74,6 +80,6 @@ class PayableReminderRepositoryPort(Protocol):
         now: datetime,
         *,
         lookback_days: int,
-    ) -> int: ...
+    ) -> ReminderDispatchResult: ...
 
-    async def mark_overdue(self, now: datetime) -> int: ...
+    async def mark_overdue(self, now: datetime) -> ReminderDispatchResult: ...

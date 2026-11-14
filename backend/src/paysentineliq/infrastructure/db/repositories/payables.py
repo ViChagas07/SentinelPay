@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from paysentineliq.application.ports.payables import (
     PayableTransitionResult,
+    ReminderDispatchResult,
 )
 from paysentineliq.domain.notification import NotificationStatus, NotificationType
 from paysentineliq.domain.payables import (
@@ -214,7 +215,7 @@ class SqlAlchemyPayableReminderRepository:
         now: datetime,
         *,
         lookback_days: int,
-    ) -> int:
+    ) -> ReminderDispatchResult:
         if now.tzinfo is None:
             raise ValueError("now must be timezone-aware")
         if lookback_days < 0:
@@ -222,7 +223,7 @@ class SqlAlchemyPayableReminderRepository:
         today = now.astimezone(UTC).date()
         candidates_from = today - timedelta(days=lookback_days + 1)
         candidates_to = today + timedelta(days=32)
-        created = 0
+        created_ids: list[UUID] = []
         async with self._session_factory() as session, session.begin():
             rows = (
                 await session.execute(
@@ -250,66 +251,111 @@ class SqlAlchemyPayableReminderRepository:
                 preference = _to_preference(preference_model, payable.owner_id)
                 zone = _zone(timezone_name)
                 for offset in preference.sorted_offsets:
-                    for channel in preference.channels:
-                        local_due = datetime.combine(
-                            payable.due_date - timedelta(days=offset),
-                            preference.local_time,
-                            tzinfo=zone,
+                    local_due = datetime.combine(
+                        payable.due_date - timedelta(days=offset),
+                        preference.local_time,
+                        tzinfo=zone,
+                    )
+                    if local_due.astimezone(UTC) > now:
+                        continue
+                    notification_type = (
+                        NotificationType.PAYABLE_DUE_TODAY
+                        if offset == 0
+                        else NotificationType.PAYABLE_DUE_SOON
+                    )
+                    notification_id = uuid4()
+                    result = await session.execute(
+                        pg_insert(NotificationModel)
+                        .values(
+                            id=notification_id,
+                            owner_id=payable.owner_id,
+                            analysis_id=payable.analysis_id,
+                            type=notification_type.value,
+                            payload={
+                                "payable_id": str(payable.id),
+                                "due_date": payable.due_date.isoformat(),
+                                "offset_days": str(offset),
+                                "type": notification_type.value,
+                                "channel": NotificationChannel.IN_APP.value,
+                            },
+                            status=NotificationStatus.PENDING.value,
+                            channel=NotificationChannel.IN_APP.value,
+                            payable_id=payable.id,
+                            reminder_due_date=payable.due_date,
+                            reminder_offset_days=offset,
+                            created_at=now,
+                            updated_at=now,
                         )
-                        if local_due.astimezone(UTC) > now:
-                            continue
-                        result = await session.execute(
-                            pg_insert(NotificationModel)
-                            .values(
-                                id=uuid4(),
-                                owner_id=payable.owner_id,
-                                analysis_id=payable.analysis_id,
-                                type=NotificationType.PAYABLE_DUE_REMINDER.value,
-                                payload={
-                                    "payable_id": str(payable.id),
-                                    "due_date": payable.due_date.isoformat(),
-                                    "offset_days": str(offset),
-                                    "channel": channel.value,
-                                },
-                                status=NotificationStatus.PENDING.value,
-                                channel=channel.value,
-                                payable_id=payable.id,
-                                reminder_due_date=payable.due_date,
-                                reminder_offset_days=offset,
-                                created_at=now,
-                                updated_at=now,
-                            )
-                            .on_conflict_do_nothing(
-                                index_elements=[
-                                    "payable_id",
-                                    "reminder_due_date",
-                                    "reminder_offset_days",
-                                    "channel",
-                                ],
-                            ),
-                        )
-                        if getattr(result, "rowcount", 0):
-                            created += 1
-        return created
+                        .on_conflict_do_nothing(
+                            index_elements=[
+                                "payable_id",
+                                "reminder_due_date",
+                                "reminder_offset_days",
+                                "channel",
+                            ],
+                        ),
+                    )
+                    if getattr(result, "rowcount", 0):
+                        created_ids.append(notification_id)
+        return ReminderDispatchResult(
+            created=len(created_ids),
+            notification_ids=tuple(created_ids),
+        )
 
-    async def mark_overdue(self, now: datetime) -> int:
+    async def mark_overdue(self, now: datetime) -> ReminderDispatchResult:
         if now.tzinfo is None:
             raise ValueError("now must be timezone-aware")
+        created_ids: list[UUID] = []
         async with self._session_factory() as session, session.begin():
-            result = await session.execute(
-                text(
-                    """
-                    UPDATE payables p
-                    SET status = 'overdue', updated_at = :now
-                    FROM users u
-                    WHERE p.owner_id = u.id
-                      AND p.status IN ('pending', 'pending_confirmation')
-                      AND p.due_date < (CAST(:now AS timestamptz) AT TIME ZONE u.timezone)::date
-                    """,
-                ),
-                {"now": now},
-            )
-        return int(getattr(result, "rowcount", 0) or 0)
+            rows = (
+                await session.execute(
+                    text(
+                        """
+                        UPDATE payables p
+                        SET status = 'overdue', updated_at = :now
+                        FROM users u
+                        WHERE p.owner_id = u.id
+                          AND p.status IN ('pending', 'pending_confirmation')
+                          AND p.due_date <
+                              (CAST(:now AS timestamptz) AT TIME ZONE u.timezone)::date
+                        RETURNING p.id, p.owner_id, p.analysis_id, p.due_date
+                        """,
+                    ),
+                    {"now": now},
+                )
+            ).all()
+            for payable_id, owner_id, analysis_id, due_date in rows:
+                notification_id = uuid4()
+                result = await session.execute(
+                    pg_insert(NotificationModel)
+                    .values(
+                        id=notification_id,
+                        owner_id=owner_id,
+                        analysis_id=analysis_id,
+                        type=NotificationType.PAYABLE_OVERDUE.value,
+                        payload={
+                            "payable_id": str(payable_id),
+                            "due_date": due_date.isoformat(),
+                            "type": NotificationType.PAYABLE_OVERDUE.value,
+                            "channel": NotificationChannel.IN_APP.value,
+                        },
+                        status=NotificationStatus.PENDING.value,
+                        channel=NotificationChannel.IN_APP.value,
+                        payable_id=payable_id,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=["payable_id"],
+                        index_where=text("type = 'payable_overdue'"),
+                    ),
+                )
+                if getattr(result, "rowcount", 0):
+                    created_ids.append(notification_id)
+        return ReminderDispatchResult(
+            created=len(created_ids),
+            notification_ids=tuple(created_ids),
+        )
 
 
 async def _cancel_pending_reminders(

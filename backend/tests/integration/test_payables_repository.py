@@ -374,13 +374,16 @@ async def test_reminders_respect_timezone_rollover_and_do_not_duplicate() -> Non
                 )
             ).all()
             kiritimati_count = sum(1 for item in reminders if item.owner_id == kiritimati)
+            reminder_types = {item.type for item in reminders}
 
-        assert before == 0
-        assert after == 1
-        assert repeated == 0
+        assert before.created == 0
+        assert after.created == 1
+        assert after.notification_ids
+        assert repeated.created == 0
         assert kiritimati_count == 1
-        assert sao_before == 0
-        assert sao_after == 1
+        assert sao_before.created == 0
+        assert sao_after.created == 1
+        assert reminder_types <= {"payable_due_soon", "payable_due_today"}
     finally:
         await _cleanup(factory, owners, analyses, documents)
         await engine.dispose()
@@ -419,16 +422,24 @@ async def test_mark_overdue_uses_user_local_date() -> None:
             status = await session.scalar(
                 select(PayableModel.status).where(PayableModel.id == payable.id),
             )
-            pending = await session.scalar(
+            overdue_notifications = await session.scalar(
                 select(func.count(NotificationModel.id)).where(
+                    NotificationModel.payable_id == payable.id,
+                    NotificationModel.type == "payable_overdue",
+                ),
+            )
+            notification_type = await session.scalar(
+                select(NotificationModel.type).where(
                     NotificationModel.payable_id == payable.id,
                 ),
             )
 
-        assert updated == 1
-        assert repeated == 0
+        assert updated.created == 1
+        assert updated.notification_ids
+        assert repeated.created == 0
         assert status == PayableStatus.OVERDUE.value
-        assert pending == 0
+        assert overdue_notifications == 1
+        assert notification_type == "payable_overdue"
     finally:
         await _cleanup(factory, owners, analyses, documents)
         await engine.dispose()

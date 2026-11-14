@@ -939,11 +939,16 @@ class LangGraphAnalysisOrchestrator:
             if payable is not None:
                 payables = (payable,)
         terminal_status = AnalysisStatus.DEGRADED if flags else AnalysisStatus.COMPLETED
+        notification_type = NotificationType.ANALYSIS_COMPLETED
+        if report.band is RiskBand.HIGH:
+            notification_type = NotificationType.HIGH_RISK_DETECTED
+        elif document_type is AnalysisDocumentType.RECEIPT:
+            notification_type = NotificationType.RECEIPT_ANALYZED
         notification = Notification(
             id=uuid4(),
             owner_id=document.owner_id,
             analysis_id=analysis_id,
-            type=NotificationType.ANALYSIS_COMPLETED,
+            type=notification_type,
             payload={
                 "analysis_id": str(analysis_id),
                 "document_type": document_type.value,

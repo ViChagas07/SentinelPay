@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -10,6 +11,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     Time,
     UniqueConstraint,
     Uuid,
@@ -178,7 +180,9 @@ class NotificationModel(Base):
     __tablename__ = "notifications"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('analysis_completed', 'payable_due_reminder')",
+            "type IN ('analysis_completed', 'high_risk_detected', 'receipt_analyzed', "
+            "'payable_due_soon', 'payable_due_today', 'payable_overdue', "
+            "'payable_due_reminder')",
             name="ck_notifications_type",
         ),
         CheckConstraint(
@@ -186,6 +190,13 @@ class NotificationModel(Base):
             name="ck_notifications_status",
         ),
         Index("ix_notifications_owner_created_at", "owner_id", "created_at"),
+        Index("ix_notifications_owner_read_at", "owner_id", "read_at"),
+        Index(
+            "uq_notifications_payable_overdue",
+            "payable_id",
+            unique=True,
+            postgresql_where=text("type = 'payable_overdue'"),
+        ),
         UniqueConstraint(
             "payable_id",
             "reminder_due_date",
@@ -235,6 +246,7 @@ class NotificationModel(Base):
     )
     reminder_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reminder_offset_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class PayableModel(Base):
@@ -295,3 +307,75 @@ class ReminderPreferenceModel(Base):
         server_default=text("'[\"in_app\"]'::jsonb"),
         nullable=False,
     )
+
+
+class NotificationPreferenceModel(Base):
+    __tablename__ = "notification_preferences"
+    __table_args__ = (
+        UniqueConstraint("user_id", "channel", name="uq_notification_preferences_user_channel"),
+        CheckConstraint(
+            "channel IN ('email', 'sms', 'whatsapp')",
+            name="ck_notification_preferences_channel",
+        ),
+        Index("ix_notification_preferences_user_id", "user_id"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
+    )
+    destination_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    consented_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+
+class NotificationDeliveryModel(Base):
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "notification_id",
+            "channel",
+            name="uq_notification_deliveries_notification_channel",
+        ),
+        CheckConstraint(
+            "channel IN ('email', 'sms', 'whatsapp')",
+            name="ck_notification_deliveries_channel",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'sent', 'failed', 'skipped')",
+            name="ck_notification_deliveries_status",
+        ),
+        Index("ix_notification_deliveries_notification_id", "notification_id"),
+        Index("ix_notification_deliveries_status", "status"),
+    )
+
+    notification_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("notifications.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default="pending",
+        server_default="pending",
+        nullable=False,
+    )
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+    last_error_safe: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

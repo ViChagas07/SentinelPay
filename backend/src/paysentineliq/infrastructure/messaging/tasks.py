@@ -159,10 +159,12 @@ async def _dispatch_payable_reminders() -> int:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         repository = SqlAlchemyPayableReminderRepository(session_factory)
-        return await repository.create_due_reminders(
+        result = await repository.create_due_reminders(
             datetime.now(UTC),
             lookback_days=settings.payables_reminder_lookback_days,
         )
+        _dispatch_notifications(result.notification_ids)
+        return result.created
     finally:
         await engine.dispose()
 
@@ -182,6 +184,19 @@ async def _mark_overdue_payables() -> int:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         repository = SqlAlchemyPayableReminderRepository(session_factory)
-        return await repository.mark_overdue(datetime.now(UTC))
+        result = await repository.mark_overdue(datetime.now(UTC))
+        _dispatch_notifications(result.notification_ids)
+        return result.created
     finally:
         await engine.dispose()
+
+
+def _dispatch_notifications(notification_ids: tuple[UUID, ...]) -> None:
+    if not notification_ids:
+        return
+    dispatcher = CeleryTaskDispatcher(celery_app)
+    for notification_id in notification_ids:
+        try:
+            dispatcher.dispatch_notification(notification_id)
+        except Exception:
+            _logger.error("notification_dispatch_failed")

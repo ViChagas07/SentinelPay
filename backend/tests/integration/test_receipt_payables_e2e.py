@@ -108,7 +108,7 @@ async def test_receipt_creates_payable_and_reminder_but_tampered_does_not() -> N
             duplicate_count = await session.scalar(
                 select(func.count(NotificationModel.id)).where(
                     NotificationModel.payable_id == UUID(payable["id"]),
-                    NotificationModel.type == "payable_due_reminder",
+                    NotificationModel.type == "payable_due_soon",
                     NotificationModel.reminder_offset_days == 3,
                     NotificationModel.channel == "in_app",
                 ),
@@ -176,7 +176,7 @@ async def _wait_for_reminder(
             count = await session.scalar(
                 select(func.count(NotificationModel.id)).where(
                     NotificationModel.payable_id == payable_id,
-                    NotificationModel.type == "payable_due_reminder",
+                    NotificationModel.type == "payable_due_soon",
                 ),
             )
         if count:

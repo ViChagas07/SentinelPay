@@ -4,6 +4,7 @@ import pytest
 
 from paysentineliq.domain.analysis import AnalysisDocumentType
 from paysentineliq.domain.document import DocumentKind
+from paysentineliq.domain.notification import NotificationType
 from paysentineliq.domain.payables import PayableStatus
 from paysentineliq.domain.scoring import RiskBand
 from tests.support.receipt_factory import build_receipt
@@ -39,6 +40,9 @@ async def test_legitimate_receipt_creates_pending_payable() -> None:
     assert payable.amount_cents == 18475
     assert payable.due_date == date(2026, 1, 15)
     assert "Energia Sul" in payable.description
+    notifications = analyses.completed["notifications"]
+    assert len(notifications) == 1
+    assert notifications[0].type is NotificationType.RECEIPT_ANALYZED
 
 
 async def test_attention_receipt_creates_pending_confirmation() -> None:
@@ -73,4 +77,7 @@ async def test_high_risk_receipt_does_not_create_payable() -> None:
     assert "receipt_dv_invalid" in {item.rule_id for item in report.evidence}
     assert analyses.completed is not None
     assert analyses.completed["payables"] == ()
+    notifications = analyses.completed["notifications"]
+    assert len(notifications) == 1
+    assert notifications[0].type is NotificationType.HIGH_RISK_DETECTED
     assert any(event.rule_code == "receipt_dv_invalid" for event in events.events)

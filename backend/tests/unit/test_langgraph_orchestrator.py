@@ -29,6 +29,7 @@ from paysentineliq.domain.ingestion import IngestionResult, TextBlock, VisualSig
 from paysentineliq.domain.knowledge import (
     Provenance,
 )
+from paysentineliq.domain.notification import NotificationType
 from paysentineliq.domain.payslip.regulatory import RegulatoryTables
 from paysentineliq.domain.scoring import RiskBand, ScoringConfig, fuse_risk
 from paysentineliq.infrastructure.ai.graph import LangGraphAnalysisOrchestrator
@@ -417,6 +418,7 @@ async def test_boleto_runs_end_to_end_with_fake_llm() -> None:
     notifications = analyses.completed["notifications"]
     assert len(notifications) == 1
     assert notifications[0].payload["status"] == "completed"
+    assert notifications[0].type is NotificationType.ANALYSIS_COMPLETED
 
 
 async def test_payslip_runs_with_synthetic_regulatory_tables() -> None:
