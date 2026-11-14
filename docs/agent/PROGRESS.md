@@ -3,14 +3,15 @@
 ## Comandos de checagem
 - Segredo fora do git: `git check-ignore -v .env` (deve retornar `.gitignore:2:.env	.env`) e `git ls-files | Select-String -Pattern '^\.env$'` (deve ser vazio).
 - Backend (na raiz): `make lint`, `make format-check`, `make format`, `make typecheck`, `make arch`, `make test`, `make test-docker`, `make check`.
+- Backup/migration: `make backup` (grava `backups/*.sql`), `make migrate` (backup + `alembic upgrade head` no container da API).
 - Equivalentes: `poetry -C backend run ruff check .`, `poetry -C backend run ruff format --check .`, `poetry -C backend run mypy src tests`, `poetry -C backend run lint-imports`, `poetry -C backend run pytest -m "not docker"`.
 - Compose (na raiz): `make compose-config` (= `docker compose --env-file .env.example config --quiet`), `make up`, `make stop`.
 - Graphify (regenerar o grafo; saida em `graphify-out/`): `graphify extract .` e depois `graphify cluster-only .`.
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P02 em andamento (fundacao transversal do backend). P01 concluida.
-- Stack local no ar com 6 servicos saudaveis; `GET /health` responde 200. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
+- Fase atual: P02 concluida (fundacao transversal do backend). Proximo passo: P03, conforme instrucao do dono.
+- Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200 e migration `0001_initial` aplicada. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
 
 ## Historico
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
@@ -29,3 +30,4 @@
 - P02.4 Erros e locale: hierarquia `DomainError`/`NotFoundError`/`ApplicationError`; handlers problem+json para dominio, validacao, HTTP e 500 generico sem stack/PII; resolvedor `Accept-Language` com 9 locales e fallback `en`; 44 testes unitarios verdes, Ruff/mypy/import-linter/format verdes.
 - P02.5 Banco/UoW/Alembic: engine async com asyncpg, sessao por requisicao, portas `UnitOfWork`/`ExampleRepository`, adaptadores SQLAlchemy, `Base` com UUID/timestamps e Alembic async com migration vazia; 46 testes unitarios verdes, Ruff/mypy/import-linter verdes. Testes docker e `alembic upgrade head` ficam para o passo de backup.
 - P02.6 Ready e rota de exemplo: `/ready` checa Postgres e Redis; rota removivel `/api/v1/example/{id}` executa SELECT via UoW, resolve locale/request_id e mapeia `document_not_found`. Access log do uvicorn desativado para nao vazar query string; 55 testes unitarios e 7 docker verdes. Mascara de telefone refinada para nao corromper UUIDs em logs.
+- P02.7 Backup/migration: `make backup` gerou dump de 974 bytes (nao vazio); `make migrate` executou backup e `alembic upgrade head` no container; `alembic_version=0001_initial` confirmado. `make check` e `make test-docker` verdes; stack no ar.

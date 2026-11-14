@@ -56,5 +56,5 @@ Autenticacao, autorizacao, modelos de negocio, tabelas de dominio, Celery, IA, O
 ## Riscos e NAO VALIDADO
 - Dependencia de Docker para os testes de integracao; sem daemon, marcar NAO VALIDADO.
 - A migration vazia e a unica alteracao de schema; qualquer tabela futura exige backup e nova migration.
-- Logs de terceiros (uvicorn) nao passam pelo formatter JSON da aplicacao nesta fase.
+- Logs de inicializacao do uvicorn permanecem em texto; o access log foi desativado para nao expor query string fora do filtro de PII.
 - A rota de exemplo deve ser removida quando a primeira rota de negocio existir.

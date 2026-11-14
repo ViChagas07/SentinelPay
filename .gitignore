@@ -27,6 +27,7 @@ uploads/
 models/artifacts/
 *.joblib
 *.pkl
+backups/
 
 # Docker / infra local
 infra/**/data/

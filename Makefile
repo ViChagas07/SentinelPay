@@ -1,7 +1,7 @@
 POETRY ?= poetry
 COMPOSE ?= docker compose --env-file .env.example
 
-.PHONY: install lint format format-check typecheck arch test test-docker compose-config up stop check
+.PHONY: install lint format format-check typecheck arch test test-docker backup migrate compose-config up stop check
 
 install:
 	$(POETRY) -C backend install
@@ -26,6 +26,12 @@ test:
 
 test-docker: up
 	$(POETRY) -C backend run pytest -m docker --run-docker
+
+backup:
+	python scripts/db_backup
+
+migrate: backup
+	$(COMPOSE) exec -T api alembic upgrade head
 
 compose-config:
 	$(COMPOSE) config --quiet
