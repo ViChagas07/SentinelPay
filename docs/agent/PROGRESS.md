@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P08 concluida (contracheques deterministicos) + reforco de migrations concluido. P09 nao iniciada.
+- Fase atual: P09 em andamento (ML antifraude). P09.1 (spec/ADR/model card) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -80,3 +80,4 @@
 - P08.4 Motor/analise: `payslip-v1` com 14 regras (somas, liquido, INSS, IRRF, minimo, horas extras, competencia, CNPJ/CPF, duplicidade, arredondamento, campos ilegiveis), piso critico 80, evidencias TRIGGERED/NOT_VERIFICABLE e i18n pt/es/en. Sem tabela oficial, as regras regulatorias ficam NOT_VERIFICABLE com peso 0 e o contracheque valido pontua 0; cada adulteracao isolada dispara a regra esperada. 23 testes de analise + 4 de i18n; `make check` com 372 testes verdes, Ruff/mypy/import-linter verdes e cobertura do pacote payslip em 91%.
 - P08.5 Fechamento: `make check` 372 testes sem Docker; `make test-docker` 20 passed + 1 skip (backup `backups/` e `alembic upgrade head`, sem migration nova); `make bandit` 0 achados; `make audit` sem vulnerabilidades conhecidas; cobertura do pacote payslip 91% (analysis 97%, extraction 92%, rules 92%). `docs/normas/` continua sem tabelas oficiais, entao INSS/IRRF/minimo/horas extras ficam NAO VERIFICAVEIS em producao. Sem endpoint, ML ou LLM. Docker revalidado nesta sessao.
 - Reforco migrations: auditoria confirmou `migrations/env.py` async (`async_engine_from_config`/`asyncio.run`), 3 revisions rastreadas (`git ls-files`) e nenhuma ignorada (`git check-ignore` vazio); RULES sec.3 atualizada. Makefile: `db-migrate` (backup + upgrade), `db-revision m=...` (autogenerate com mount e `--rev-id 000N` via `scripts/next_migration_id.py`), `db-check`. `make db-check` -> "No new upgrade operations detected"; `test_migration.py` Docker 4 passed (roundtrip downgrade/upgrade/check). Revisao temporaria `0004_temp_check` gerada e removida; nenhuma migration nova commitada.
+- P09.1 Spec/ADR/model card: SPEC 0010, ADR-0013 e `docs/ml/MODEL_CARD.md` definem dataset sintetico com semente fixa, split por `base_id`, features sem texto/PII, IsolationForest + LogisticRegression calibrada, fusao 0..100 com pesos/cortes a calibrar e piso critico, fallback `ml_unavailable`, artefato com SHA-256 e metricas marcadas como sinteticas. Dependencias `scikit-learn 1.9.1` e `joblib 1.6.0` adicionadas.
