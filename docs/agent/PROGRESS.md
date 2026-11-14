@@ -9,8 +9,8 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P01 em andamento (esqueleto, qualidade e /health).
-- Graphify 0.9.108 instalado; grafo gerado em `graphify-out/` (ignorado pelo git, ADR-0003).
+- Fase atual: P01 concluida (monorepo, Poetry, qualidade, Compose e /health). Proximo passo: P02, conforme instrucao do dono.
+- Stack local no ar com 6 servicos saudaveis; `GET /health` responde 200. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
 
 ## Historico
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
@@ -21,3 +21,5 @@
 - P01.2 Poetry: backend com Python 3.11.9 e `.venv` local; deps resolvidas no lock (fastapi 0.162.7, sqlalchemy 2.1.8, asyncpg 0.32.0, redis 8.1.0, alembic 1.20.1; dev: pytest 9.2.0, ruff 0.17.5, mypy 2.4.1, import-linter 2.16). `poetry install` e import do pacote OK.
 - P01.3 Qualidade e Makefile: Ruff, mypy strict, pytest (marcadores) e import-linter (2 contratos) configurados; `make lint`, `make format-check`, `make typecheck` e `make arch` verdes. `test` e `test-docker` dependem da rota e do Compose.
 - P01.4 Health (TDD): teste unitario falhou por ausencia do app e passou depois de `GET /health`; 2 testes verdes (200 com corpo exato e 405 para POST). Ruff, format, mypy strict e import-linter verdes. A rota nao toca banco nem Redis.
+- P01.5 Infra e Docker: Dockerfile multi-stage com usuario `app` (uid 999); Compose com Postgres+pgvector (55432), Redis, RabbitMQ, MinIO (ADR-0004), Mailpit e API; volumes nomeados e healthchecks. `make up` OK, `/health` 200, extensao `vector` presente e `make test-docker` com 1 teste verde.
+- P01.6 Checagens finais: `make check` verde (Ruff, format, mypy, import-linter, 2 testes unitarios e `docker compose config --quiet`). Compose usa `.env.example`, nunca o `.env` de producao.
