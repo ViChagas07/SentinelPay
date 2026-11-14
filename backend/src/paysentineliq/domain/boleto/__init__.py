@@ -14,6 +14,7 @@ from paysentineliq.domain.boleto.lines import (
     UtilityDigitableLine,
 )
 from paysentineliq.domain.boleto.money import Money
+from paysentineliq.domain.boleto.tax_id import Cnpj, Cpf, TaxId, TaxIdKind, parse_tax_id
 
 __all__ = [
     "FEBRABAN_BASE_DATE",
@@ -23,11 +24,16 @@ __all__ = [
     "BankDigitableLine",
     "BankDirectory",
     "Barcode",
+    "Cnpj",
+    "Cpf",
     "DvAlgorithm",
     "DvError",
     "Money",
     "NotVerifiableLayoutError",
+    "TaxId",
+    "TaxIdKind",
     "UtilityDigitableLine",
     "due_date_from_factor",
     "factor_from_due_date",
+    "parse_tax_id",
 ]

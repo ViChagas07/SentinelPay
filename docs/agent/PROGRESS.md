@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P07 em andamento (boletos FEBRABAN). P07.2 (value objects) concluido.
+- Fase atual: P07 em andamento (boletos FEBRABAN). P07.3 (CPF/CNPJ) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -65,3 +65,4 @@
 - P06.7 OWASP/fechamento: checklist atualizado com OCR/visao, limites e pendencias; imagem Docker com PaddleOCR/PyMuPDF/OpenCV construida e imports validados no container; `make check` 205 unitarios, `make test-docker` 20 verdes + 1 skip, `bandit` 0 achados e `pip-audit` sem vulnerabilidades conhecidas. OCR real medido no host: 19,6s/+444 MB; pt/es real e inferencia no container NAO VALIDADOS.
 - P07.1 Spec/ADR: SPEC 0007 e ADR-0010 definem linha de 47/48 digitos, codigo de barras, DVs modulo 10/11 (Bradesco campo 3 modulo 11), fator de vencimento, CPF/CNPJ, motor de regras `febraban-v1`, dados `febraban-banks-v1`, subscore com piso critico 80 e fontes por regra. Lacunas marcadas NAO VERIFICAVEIS: layout de 48 digitos, reinicio pos-2025 do fator, algoritmo de DV de CPF/CNPJ e consultas BACEN/CIP/Receita. Sem codigo de produto ainda.
 - P07.2 Value objects: `BankDigitableLine` (47), `UtilityDigitableLine` (48), `Barcode` (44), conversao linha<->barras, DVs modulo 10/11 com override Bradesco campo 3, `Money` em centavos e fator de vencimento (0=sem data; 9999=21/02/2025). 29 testes verdes; Ruff, format e mypy strict verdes. Linha de 48 digitos so valida estrutura e levanta `NotVerifiableLayoutError` na conversao.
+- P07.3 CPF/CNPJ: `Cpf`/`Cnpj` validam digitos verificadores, rejeitam zeros/repetidos e expoem mascara; `parse_tax_id` aceita formato com pontuacao ou digitos. 6 testes verdes; algoritmo de DV e lacuna registrada no ADR-0010 porque nao consta em knowledge/febraban ou knowledge/layouts.
