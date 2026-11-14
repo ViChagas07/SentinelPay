@@ -1,9 +1,10 @@
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from celery import Celery
 
 from paysentineliq.application.errors import TaskDispatchError
+from paysentineliq.infrastructure.logging import get_request_id
 from paysentineliq.infrastructure.messaging.celery_app import (
     ANALYSIS_QUEUE,
     ANALYSIS_TASK,
@@ -33,6 +34,7 @@ class CeleryTaskDispatcher:
                 queue=ANALYSIS_QUEUE,
                 retry=True,
                 retry_policy=_RETRY_POLICY,
+                headers=self._headers(),
             )
         except Exception as exc:
             _logger.error("analysis_dispatch_failed")
@@ -46,7 +48,12 @@ class CeleryTaskDispatcher:
                 queue=NOTIFICATIONS_QUEUE,
                 retry=True,
                 retry_policy=_RETRY_POLICY,
+                headers=self._headers(),
             )
         except Exception as exc:
             _logger.error("notification_dispatch_failed")
             raise TaskDispatchError() from exc
+
+    @staticmethod
+    def _headers() -> dict[str, str]:
+        return {"request_id": get_request_id() or str(uuid4())}

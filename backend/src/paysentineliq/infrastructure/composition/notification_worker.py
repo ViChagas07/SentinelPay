@@ -16,6 +16,9 @@ from paysentineliq.infrastructure.notifications.console import (
     ConsoleWhatsAppAdapter,
 )
 from paysentineliq.infrastructure.notifications.email import SmtpEmailAdapter
+from paysentineliq.infrastructure.observability.tracing import (
+    instrument_sqlalchemy_engine,
+)
 from paysentineliq.infrastructure.security.destination_cipher import DestinationCipher
 
 
@@ -28,6 +31,7 @@ async def build_notification_runtime(
         poolclass=NullPool,
         pool_pre_ping=True,
     )
+    instrument_sqlalchemy_engine(engine.sync_engine)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         repository = SqlAlchemyNotificationDeliveryRepository(

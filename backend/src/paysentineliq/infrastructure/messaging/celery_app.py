@@ -3,6 +3,7 @@ from celery.signals import worker_ready
 from kombu import Exchange, Queue
 
 from paysentineliq.infrastructure.config import Settings, get_settings
+from paysentineliq.infrastructure.observability.tracing import configure_tracing
 
 ANALYSIS_QUEUE = "analysis"
 NOTIFICATIONS_QUEUE = "notifications"
@@ -134,6 +135,7 @@ def build_celery_app(settings: Settings) -> Celery:
 
 
 celery_app = build_celery_app(get_settings())
+configure_tracing(get_settings())
 
 
 @worker_ready.connect  # type: ignore[untyped-decorator]

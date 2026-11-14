@@ -35,6 +35,9 @@ from paysentineliq.infrastructure.db.repositories.analysis_documents import (
 from paysentineliq.infrastructure.ingestion.service import DocumentIngestionService
 from paysentineliq.infrastructure.metrics.guardrails import InMemoryGuardrailMetrics
 from paysentineliq.infrastructure.ml.artifact import load_fraud_model_or_none
+from paysentineliq.infrastructure.observability.tracing import (
+    instrument_sqlalchemy_engine,
+)
 from paysentineliq.infrastructure.ocr.paddle import PaddleOcrAdapter
 from paysentineliq.infrastructure.rag.embeddings import OpenAICompatibleEmbedding
 from paysentineliq.infrastructure.rag.fake_embedding import DeterministicHashEmbedding
@@ -95,6 +98,7 @@ async def build_worker_runtime(
         poolclass=NullPool,
         pool_pre_ping=True,
     )
+    instrument_sqlalchemy_engine(engine.sync_engine)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         storage = S3StorageAdapter(settings)

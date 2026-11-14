@@ -14,6 +14,11 @@ from paysentineliq.infrastructure.observability.metrics import (
     PlatformMetrics,
     set_platform_metrics,
 )
+from paysentineliq.infrastructure.observability.tracing import (
+    configure_tracing,
+    instrument_fastapi_app,
+    instrument_sqlalchemy_engine,
+)
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.google_oidc import GoogleOIDCClient
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService
@@ -52,10 +57,12 @@ from paysentineliq.interface.api.upload_limit import UploadSizeLimitMiddleware
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings)
+    configure_tracing(resolved_settings)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         engine = build_engine(resolved_settings)
+        instrument_sqlalchemy_engine(engine.sync_engine)
         redis = Redis.from_url(
             resolved_settings.redis_url,
             decode_responses=True,
@@ -135,6 +142,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     metrics = PlatformMetrics()
     app.state.metrics = metrics
     set_platform_metrics(metrics)
+    instrument_fastapi_app(app, resolved_settings)
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(AuthContextMiddleware)
     app.add_middleware(
