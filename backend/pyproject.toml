@@ -31,6 +31,7 @@ pinecone = "^10.3.0"
 crewai = "1.15.41"
 langgraph = "^1.2.22"
 langchain-core = "^1.8.0"
+celery = "^5.7.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
