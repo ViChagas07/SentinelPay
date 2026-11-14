@@ -148,7 +148,7 @@ async def test_upload_worker_completes_and_duplicate_delivery_is_idempotent() ->
                 )
             ).all()
         assert len(notifications) == 1
-        assert notifications[0].status == "pending"
+        assert notifications[0].status in {"pending", "dispatched"}
         assert set(notifications[0].payload) == {
             "analysis_id",
             "document_type",

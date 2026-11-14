@@ -90,3 +90,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P14: lembretes usam `(payable, reminder_due_date, reminder_offset_days, channel)` unico, `FOR UPDATE SKIP LOCKED`, fuso do usuario via `zoneinfo` e `ON CONFLICT DO NOTHING`; overdue usa a data local do usuario. Pagar/descartar/ajustar cancela lembretes pendentes antigos.
 - P14: `analyze_image` com OpenCV NAO pode rodar em `asyncio.to_thread` neste ambiente: ORB/BFMatcher travava/crashava o worker. Rodar no thread principal da tarefa; `copy_move` so em pagina sem texto nativo; matcher reimplementado com Hamming limitado para preservar P06 sem estourar memoria/thread.
 - P14: migration `0007_payables` exige `reminder_preferences.id` (Base) alem de `user_id` unico; rodar backup antes e `alembic check` depois.
+- P15: Central usa `notifications.read_at`; canais externos ficam em `notification_deliveries` com unique `(notification_id, channel)` e status `pending/sent/failed/skipped`. `payable_overdue` tem indice parcial unico por payable.
+- P15: e-mail transacional e habilitado por padrao para o e-mail da conta; SMS/WhatsApp exigem `enabled` + `consented_at` + E.164. Telefone e cifrado com AES-GCM (HKDF-SHA256 de `SECURITY_HASH_SECRET`) e nunca entra em log/template externo.
+- P15: a task de entrega reenvia apenas canais `pending/failed`; `sent/skipped` sao ignorados, e falha de um canal nao impede os outros. Retry e exponencial e marca `failed` na ultima tentativa.
+- P15: no Compose use `SMTP_HOST: mailpit` fixo; `${SMTP_HOST:-mailpit}` resolve para `localhost` por causa do `.env.example`, que serve aos testes no host. Mailpit em `127.0.0.1:8025`.
+- P15: SWR faz dupla checagem de valor/soft apos adquirir o lock; sem isso, 20 chamadas concorrentes podem recomputar duas vezes depois do soft TTL.
+- P15: provedor real de SMS/WhatsApp segue pendente (ADR 0019); `SMS_PROVIDER`/`WHATSAPP_PROVIDER` so aceitam `console`.
