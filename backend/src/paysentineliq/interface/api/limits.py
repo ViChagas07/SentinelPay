@@ -10,14 +10,24 @@ from paysentineliq.interface.api.problems import build_problem_response
 
 
 class MaxBodySizeMiddleware:
-    def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        skip_paths: frozenset[str] = frozenset(),
+    ) -> None:
         if max_bytes <= 0:
             raise ValueError("max_bytes must be positive")
         self.app = app
         self._max_bytes = max_bytes
+        self._skip_paths = skip_paths
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        if str(scope.get("path", "")) in self._skip_paths:
             await self.app(scope, receive, send)
             return
 

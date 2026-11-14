@@ -19,6 +19,10 @@ from paysentineliq.infrastructure.security.revoked_tokens import (
     RedisRevokedTokenStore,
 )
 from paysentineliq.infrastructure.security.ssrf import SafeHttpClient, SSRFGuard
+from paysentineliq.infrastructure.storage.inspector import (
+    PdfImageDocumentInspector,
+)
+from paysentineliq.infrastructure.storage.s3 import S3StorageAdapter
 from paysentineliq.interface.api.auth_context import AuthContextMiddleware
 from paysentineliq.interface.api.constants import API_V1_PREFIX, REQUEST_ID_HEADER
 from paysentineliq.interface.api.limits import MaxBodySizeMiddleware, TimeoutMiddleware
@@ -26,11 +30,13 @@ from paysentineliq.interface.api.middleware import RequestIdMiddleware
 from paysentineliq.interface.api.problems import register_exception_handlers
 from paysentineliq.interface.api.rate_limit import RateLimitMiddleware
 from paysentineliq.interface.api.routes.auth import router as auth_router
+from paysentineliq.interface.api.routes.documents import router as documents_router
 from paysentineliq.interface.api.routes.example import router as example_router
 from paysentineliq.interface.api.routes.ops import router as ops_router
 from paysentineliq.interface.api.routes.protected import router as protected_router
 from paysentineliq.interface.api.routes.users import router as users_router
 from paysentineliq.interface.api.security_headers import SecurityHeadersMiddleware
+from paysentineliq.interface.api.upload_limit import UploadSizeLimitMiddleware
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -84,6 +90,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             jwks_uri=resolved_settings.google_jwks_uri,
             issuer=resolved_settings.google_issuer,
         )
+        application.state.document_inspector = PdfImageDocumentInspector()
+        if resolved_settings.s3_configured:
+            storage = S3StorageAdapter(
+                resolved_settings,
+                create_bucket_if_missing=(resolved_settings.app_env == "local"),
+            )
+            if resolved_settings.app_env == "local":
+                await storage.ensure_bucket()
+            application.state.storage = storage
+        else:
+            application.state.storage = None
         application.state.ssrf_guard = SSRFGuard(
             require_https=resolved_settings.app_env != "local",
             allowed_hosts=set(resolved_settings.ssrf_allowed_hosts_list),
@@ -110,6 +127,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         MaxBodySizeMiddleware,
         max_bytes=resolved_settings.max_request_body_bytes,
+        skip_paths=frozenset({"/api/v1/documents/upload"}),
+    )
+    app.add_middleware(
+        UploadSizeLimitMiddleware,
+        path="/api/v1/documents/upload",
+        max_bytes=resolved_settings.upload_max_mb * 1024 * 1024,
     )
     app.add_middleware(
         TimeoutMiddleware,
@@ -144,6 +167,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router, prefix=API_V1_PREFIX)
     app.include_router(users_router, prefix=API_V1_PREFIX)
     app.include_router(protected_router, prefix=API_V1_PREFIX)
+    app.include_router(documents_router, prefix=API_V1_PREFIX)
     app.include_router(example_router, prefix=API_V1_PREFIX)
     return app
 

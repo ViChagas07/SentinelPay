@@ -45,6 +45,7 @@ def build_problem_response(
     title: str,
     detail: str,
     extra_headers: Mapping[str, str] | None = None,
+    extra_fields: Mapping[str, object] | None = None,
 ) -> JSONResponse:
     request_id = _request_id(request)
     content: dict[str, object] = {
@@ -56,6 +57,8 @@ def build_problem_response(
         "code": code,
         "request_id": request_id,
     }
+    if extra_fields:
+        content.update(extra_fields)
     headers: dict[str, str] = {}
     if request_id:
         headers[REQUEST_ID_HEADER] = request_id
@@ -78,6 +81,14 @@ async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse
     extra_headers: dict[str, str] | None = None
     if isinstance(retry_after, int) and retry_after > 0:
         extra_headers = {"Retry-After": str(retry_after)}
+
+    raw_evidence = getattr(exc, "evidence", None)
+    extra_fields: dict[str, object] | None = None
+    if isinstance(raw_evidence, (tuple, list)) and all(
+        isinstance(item, str) for item in raw_evidence
+    ):
+        extra_fields = {"evidence": list(raw_evidence)}
+
     return build_problem_response(
         request,
         status_code=exc.status_code,
@@ -85,6 +96,7 @@ async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse
         title=exc.title,
         detail=exc.message,
         extra_headers=extra_headers,
+        extra_fields=extra_fields,
     )
 
 

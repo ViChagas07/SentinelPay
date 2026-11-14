@@ -9,19 +9,27 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-from paysentineliq.application.errors import ForbiddenError, InvalidAccessTokenError
+from paysentineliq.application.errors import (
+    ForbiddenError,
+    InvalidAccessTokenError,
+    StorageNotConfiguredError,
+)
 from paysentineliq.application.locale import resolve_locale
 from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
+from paysentineliq.application.ports.document_inspector import DocumentInspector
+from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
 from paysentineliq.application.ports.oidc import OIDCClient
 from paysentineliq.application.ports.oidc_state import OIDCStateStore
 from paysentineliq.application.ports.readiness import ReadinessChecker
 from paysentineliq.application.ports.revoked_tokens import RevokedTokenStore
+from paysentineliq.application.ports.storage import StoragePort
 from paysentineliq.application.ports.token_service import (
     AccessTokenClaims,
     AccessTokenService,
 )
 from paysentineliq.application.ports.unit_of_work import UnitOfWork
 from paysentineliq.application.use_cases.auth import AuthService
+from paysentineliq.application.use_cases.documents import DocumentService
 from paysentineliq.application.use_cases.example import ExampleService
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
@@ -45,6 +53,12 @@ def get_unit_of_work(
 def get_auth_unit_of_work(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AuthUnitOfWork:
+    return SqlAlchemyUnitOfWork(session)
+
+
+def get_document_unit_of_work(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> DocumentUnitOfWork:
     return SqlAlchemyUnitOfWork(session)
 
 
@@ -94,6 +108,37 @@ def get_oidc_state_store(request: Request) -> OIDCStateStore:
 def get_brute_force(request: Request) -> BruteForceService:
     service: BruteForceService = request.app.state.brute_force
     return service
+
+
+def get_storage(request: Request) -> StoragePort:
+    storage: StoragePort | None = request.app.state.storage
+    if storage is None:
+        raise StorageNotConfiguredError()
+    return storage
+
+
+def get_document_inspector(request: Request) -> DocumentInspector:
+    inspector: DocumentInspector = request.app.state.document_inspector
+    return inspector
+
+
+def get_document_service(
+    uow: Annotated[
+        DocumentUnitOfWork,
+        Depends(get_document_unit_of_work),
+    ],
+    storage: Annotated[StoragePort, Depends(get_storage)],
+    inspector: Annotated[DocumentInspector, Depends(get_document_inspector)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> DocumentService:
+    return DocumentService(
+        uow,
+        storage,
+        inspector,
+        max_bytes=settings.upload_max_mb * 1024 * 1024,
+        max_pdf_pages=settings.pdf_max_pages,
+        presigned_ttl_seconds=settings.s3_presigned_url_ttl_seconds,
+    )
 
 
 def get_auth_service(
