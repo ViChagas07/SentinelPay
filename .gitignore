@@ -1,0 +1,42 @@
+# Segredos: .env NUNCA vai para o git. Somente .env.example (sem valores reais).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Node (reservado para o futuro frontend)
+node_modules/
+.next/
+
+# Dados e artefatos locais (nunca versionar documentos reais nem modelos binarios)
+data/private/
+uploads/
+models/artifacts/
+*.joblib
+*.pkl
+
+# Docker / infra local
+infra/**/data/
+*.log
+
+# IDE / SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Graphify: grafo gerado localmente (ver docs/adr/0003-artefato-graphify.md)
+graphify-out/
