@@ -260,19 +260,16 @@ def analyze_boleto(
     if fields.beneficiary_tax_id is None or fields.beneficiary_tax_id.confidence < 0.5:
         illegible.append("beneficiary_tax_id")
 
-    if fields.amount is None:
+    if fields.amount is None or fields.amount.confidence < 0.5:
         illegible.append("amount")
-    else:
-        if fields.amount.confidence < 0.5:
-            illegible.append("amount")
-        if fields.amount.value != decoded.amount.as_decimal:
-            builder.add(
-                "amount_mismatch",
-                {
-                    "text": format(fields.amount.value, "f"),
-                    "decoded": format(decoded.amount.as_decimal, "f"),
-                },
-            )
+    elif fields.amount.value != decoded.amount.as_decimal:
+        builder.add(
+            "amount_mismatch",
+            {
+                "text": format(fields.amount.value, "f"),
+                "decoded": format(decoded.amount.as_decimal, "f"),
+            },
+        )
 
     if fields.due_date is None:
         if decoded.due_date is not None:
@@ -283,19 +280,16 @@ def analyze_boleto(
                 )
             else:
                 illegible.append("due_date")
-    else:
-        if fields.due_date.confidence < 0.5:
-            illegible.append("due_date")
-        if fields.due_date.value != decoded.due_date:
-            builder.add(
-                "due_date_mismatch",
-                {
-                    "text": fields.due_date.value.isoformat(),
-                    "decoded": decoded.due_date.isoformat()
-                    if decoded.due_date is not None
-                    else "none",
-                },
-            )
+    elif fields.due_date.confidence < 0.5:
+        illegible.append("due_date")
+    elif fields.due_date.value != decoded.due_date:
+        builder.add(
+            "due_date_mismatch",
+            {
+                "text": fields.due_date.value.isoformat(),
+                "decoded": decoded.due_date.isoformat() if decoded.due_date is not None else "none",
+            },
+        )
 
     if fields.bank_header is None:
         illegible.append("bank_header")

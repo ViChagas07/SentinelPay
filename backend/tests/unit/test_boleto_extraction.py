@@ -229,3 +229,30 @@ def test_barcode_with_ocr_confusion_keeps_digits_and_lowers_confidence() -> None
     assert fields.barcode is not None
     assert fields.barcode.value == boleto.barcode
     assert 0.5 <= fields.barcode.confidence < 0.95
+
+
+def test_issue_date_is_not_used_as_due_date() -> None:
+    boleto = build_boleto()
+    assert boleto.due_date is not None
+    text = boleto.ocr_text().replace(
+        f"VENCIMENTO: {boleto.due_date.strftime('%d/%m/%Y')}",
+        "EMISSAO: 01/01/2022",
+    )
+
+    fields = extract_boleto_fields(text, bank_directory=_directory())
+
+    assert fields.due_date is None
+
+
+def test_unlabeled_date_has_low_confidence() -> None:
+    boleto = build_boleto()
+    assert boleto.due_date is not None
+    text = boleto.ocr_text().replace(
+        f"VENCIMENTO: {boleto.due_date.strftime('%d/%m/%Y')}",
+        "01/01/2022",
+    )
+
+    fields = extract_boleto_fields(text, bank_directory=_directory())
+
+    assert fields.due_date is not None
+    assert fields.due_date.confidence == 0.45

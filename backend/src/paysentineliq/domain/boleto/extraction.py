@@ -233,12 +233,9 @@ def _extract_due_date(lines: tuple[_Line, ...]) -> ExtractedField[date] | None:
             parsed = _parse_date(match.group(1), match.group(2), match.group(3))
             if parsed is None:
                 continue
-            if "vencimento" in line.folded:
-                confidence = 1.0
-            elif "emissao" in line.folded:
-                confidence = 0.3
-            else:
-                confidence = 0.6
+            if "emissao" in line.folded:
+                continue
+            confidence = 1.0 if "vencimento" in line.folded else 0.45
             candidates.append((parsed, match.group(0), confidence))
     if not candidates:
         return None

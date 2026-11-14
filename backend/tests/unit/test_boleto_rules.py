@@ -503,3 +503,17 @@ def test_rule_matrix_with_one_alteration_at_a_time(
     else:
         assert _ids(analysis) == [expected_rule]
     assert analysis.subscore == expected_score
+
+
+def test_low_confidence_due_date_is_illegible_not_mismatch() -> None:
+    boleto = build_boleto()
+    assert boleto.due_date is not None
+    text = boleto.ocr_text().replace(
+        f"VENCIMENTO: {format_date(boleto.due_date)}",
+        "01/01/2022",
+    )
+
+    analysis = _analyze_text(text)
+
+    assert _ids(analysis) == ["field_illegible"]
+    assert "due_date" in analysis.evidence[0].details["fields"]
