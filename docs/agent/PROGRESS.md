@@ -11,7 +11,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P05 concluida (storage S3 e upload seguro). Proximo passo: P06, conforme instrucao do dono.
+- Fase atual: P06 em andamento (ingestao OCR e sinais visuais). P05 concluida.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -55,3 +55,4 @@
 - P05.3 Documentos/migration: tabela `documents` com owner, kind, s3_key, sha256, size, content_type, nome sanitizado e created_at; repositorio com filtro obrigatorio por dono; migration `0003_documents` aplicada apos backup (4677 bytes) e teste de IDOR no repositorio verde.
 - P05.4 Upload/rotas: `POST /api/v1/documents/upload` e `GET /api/v1/documents/{id}/url`; owner vem do JWT, chaves e extensao determinadas pelo sistema, limite streaming 413, compensacao de falha do banco e problem+json com `evidence` para PDF ativo. 182 unitarios e 19 docker verdes, incluindo roundtrip real no MinIO/Postgres.
 - P05.5 OWASP/fechamento: checklist atualizado com upload/storage/antivirus pendente; teste real da API grava no prefixo do dono, confirma SSE no MinIO e nega IDOR (404). `make check` 182 unitarios + `make test-docker` 20 verdes; `bandit` 0 achados e `pip-audit` sem vulnerabilidades conhecidas. Antivirus, AWS real e lifecycle permanecem NAO VALIDADOS; stack no ar.
+- P06.1 Spec/ADR e deps: SPEC 0006 e ADR-0009 definem OcrPort, PaddleOCR CPU lazy, PyMuPDF, deteccao nativo/escaneado, limites, sinais heuristicos e fixtures sinteticas. Versoes confirmadas no Poetry: paddleocr 3.7.0, paddlepaddle 3.3.1, paddlex 3.7.2, pymupdf 2.1, opencv-contrib-python 4.10.0.84, pillow 13.0.0, numpy 2.3.5. OpenCV headless removido por dependencia do PaddleOCR; Docker recebeu libGL/libglib/libgomp.
