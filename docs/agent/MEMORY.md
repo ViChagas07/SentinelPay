@@ -14,6 +14,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
 - A porta 5432 do host esta ocupada por um PostgreSQL local; o Compose mapeia o Postgres em `${POSTGRES_PORT}` (55432 no exemplo).
 - Healthcheck do Mailpit: usar `/mailpit readyz`, pois o binario nao esta no PATH (senao falha com "executable file not found").
+- `make test-docker` usa `API_BASE_URL` com default `http://localhost:8000`; se `API_PORT` mudar, exporte `API_BASE_URL` antes do alvo.
 - As imagens oficiais do MinIO sairam do Docker Hub (404) e o Quay exige autenticacao (401); a imagem local e comunitaria e fixada (ADR-0004).
 - Graphify com backend Gemini exige o extra `graphifyy[gemini]` (pacote `openai`); sem ele o chunk semantico falha com "the 'openai' package is required".
 - PowerShell 5.1 nao aceita `&&`; encadear comandos com `;` ou `if ($?)`.
