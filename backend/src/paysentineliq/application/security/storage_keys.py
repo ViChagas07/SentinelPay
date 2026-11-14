@@ -42,3 +42,7 @@ def sanitize_filename(name: str | None) -> str:
     if not base:
         return "upload"
     return base[:_MAX_NAME_LENGTH]
+
+
+def build_analysis_report_key(*, owner_id: UUID, analysis_id: UUID) -> str:
+    return f"users/{owner_id}/analyses/{analysis_id}/report.json"

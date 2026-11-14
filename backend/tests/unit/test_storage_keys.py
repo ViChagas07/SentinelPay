@@ -3,6 +3,7 @@ from uuid import uuid4
 import pytest
 
 from paysentineliq.application.security.storage_keys import (
+    build_analysis_report_key,
     build_original_key,
     build_report_key,
     sanitize_filename,
@@ -66,3 +67,12 @@ def test_filename_is_sanitized(raw: str | None, expected: str) -> None:
 
 def test_long_filename_is_truncated() -> None:
     assert len(sanitize_filename("a" * 500)) == 200
+
+def test_analysis_report_key_is_owner_scoped() -> None:
+    owner_id = uuid4()
+    analysis_id = uuid4()
+
+    assert build_analysis_report_key(
+        owner_id=owner_id,
+        analysis_id=analysis_id,
+    ) == f"users/{owner_id}/analyses/{analysis_id}/report.json"
