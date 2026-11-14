@@ -84,6 +84,9 @@ class SWRCache:
                 return decoder(_as_text(cached))
 
             try:
+                refreshed = await self._redis.get(value_key)
+                if refreshed is not None and await self._redis.exists(soft_key):
+                    return decoder(_as_text(refreshed))
                 value = await factory()
                 await self._store(value_key, soft_key, encoder(value))
                 return value
