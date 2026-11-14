@@ -75,11 +75,7 @@ class DocumentIngestionService:
         self._ensure_image_size(data)
 
         ocr_result = await self._run_ocr(data)
-        image_signals = await asyncio.to_thread(
-            self._visuals.analyze_image,
-            data,
-            page=1,
-        )
+        image_signals = self._visuals.analyze_image(data, page=1)
         blocks = tuple(
             TextBlock(
                 text=block.text,
@@ -132,6 +128,7 @@ class DocumentIngestionService:
                     page,
                     page_number,
                 )
+                native_chars = sum(len(block.text.strip()) for block in native_blocks)
                 pixmap = await asyncio.to_thread(
                     page.get_pixmap,
                     dpi=self._render_dpi,
@@ -141,14 +138,13 @@ class DocumentIngestionService:
                 png = await asyncio.to_thread(pixmap.tobytes, "png")
 
                 signals.extend(
-                    await asyncio.to_thread(
-                        self._visuals.analyze_image,
+                    self._visuals.analyze_image(
                         png,
                         page=page_number,
+                        include_copy_move=native_chars < self._native_min_chars,
                     )
                 )
 
-                native_chars = sum(len(block.text.strip()) for block in native_blocks)
                 if native_chars >= self._native_min_chars:
                     blocks.extend(native_blocks)
                     continue

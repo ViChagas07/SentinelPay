@@ -18,6 +18,7 @@ class VisualAnomalyService:
         image: bytes,
         *,
         page: int,
+        include_copy_move: bool = True,
     ) -> tuple[VisualSignal, ...]:
         if not image:
             raise InvalidDocumentError()
@@ -103,16 +104,17 @@ class VisualAnomalyService:
             )
         )
 
-        copy_value, copy_region = _copy_move(gray, width, height)
-        signals.append(
-            _signal(
-                "copy_move_orb",
-                copy_value,
-                "ORB keypoints with repeated geometry inside the page.",
-                page,
-                copy_region,
+        if include_copy_move:
+            copy_value, copy_region = _copy_move(gray, width, height)
+            signals.append(
+                _signal(
+                    "copy_move_orb",
+                    copy_value,
+                    "ORB keypoints with repeated geometry inside the page.",
+                    page,
+                    copy_region,
+                )
             )
-        )
 
         return tuple(signals)
 
@@ -262,44 +264,50 @@ def _copy_move(
     width: int,
     height: int,
 ) -> tuple[float, BBox | None]:
-    orb = cv2.ORB_create(nfeatures=1000)  # type: ignore[attr-defined]
+    max_features = 1000
+    orb = cv2.ORB_create(nfeatures=max_features)  # type: ignore[attr-defined]
     keypoints, descriptors = orb.detectAndCompute(gray, None)
     if descriptors is None or len(keypoints) < 10:
         return 0.0, None
 
-    matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
-    groups = matcher.knnMatch(descriptors, descriptors, k=3)
-    clusters: dict[tuple[float, float], list[tuple[float, float]]] = {}
+    count = min(len(keypoints), max_features)
+    points = np.asarray([keypoints[index].pt for index in range(count)], dtype=np.float64)
+    vectors = np.asarray(descriptors[:count], dtype=np.uint8)
+    xor = np.bitwise_xor(vectors[:, None, :], vectors[None, :, :])
+    hamming = np.unpackbits(xor, axis=2).sum(axis=2)
+    nearest = np.argsort(hamming, axis=1)[:, :4]
+    delta_x = points[None, :, 0] - points[:, None, 0]
+    delta_y = points[None, :, 1] - points[:, None, 1]
+    distance_squared = delta_x * delta_x + delta_y * delta_y
 
-    for group in groups:
-        for match in group:
-            if match.queryIdx == match.trainIdx:
+    clusters: dict[tuple[float, float], list[tuple[float, float]]] = {}
+    for query in range(count):
+        for candidate in nearest[query]:
+            train = int(candidate)
+            if query == train:
                 continue
-            if match.distance > 30:
+            if hamming[query, train] > 30:
                 continue
-            first = keypoints[match.queryIdx].pt
-            second = keypoints[match.trainIdx].pt
-            delta_x = second[0] - first[0]
-            delta_y = second[1] - first[1]
-            distance = (delta_x**2 + delta_y**2) ** 0.5
-            if distance < 80:
+            if distance_squared[query, train] < 6400:
                 continue
+            first = (float(points[query, 0]), float(points[query, 1]))
+            second = (float(points[train, 0]), float(points[train, 1]))
             key = (
-                round(delta_x / 25.0) * 25,
-                round(delta_y / 25.0) * 25,
+                round((second[0] - first[0]) / 25.0) * 25,
+                round((second[1] - first[1]) / 25.0) * 25,
             )
             clusters.setdefault(key, []).extend([first, second])
 
     if not clusters:
         return 0.0, None
 
-    points = max(clusters.values(), key=len)
-    match_count = len(points) // 2
+    points_in_cluster = max(clusters.values(), key=len)
+    match_count = len(points_in_cluster) // 2
     if match_count < 50:
         return 0.0, None
 
-    xs = [point[0] for point in points]
-    ys = [point[1] for point in points]
+    xs = [point[0] for point in points_in_cluster]
+    ys = [point[1] for point in points_in_cluster]
     region = (
         max(0.0, min(xs)),
         max(0.0, min(ys)),

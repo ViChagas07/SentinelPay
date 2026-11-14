@@ -312,4 +312,3 @@ async def test_timeout_has_specific_error_code() -> None:
 
     assert analyses.failed is not None
     assert analyses.failed["error_code"] == "analysis_timeout"
-

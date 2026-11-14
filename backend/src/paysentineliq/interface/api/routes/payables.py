@@ -3,7 +3,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from paysentineliq.application.commands.payables import (
     PayableCommandHandler,
@@ -52,6 +52,23 @@ class ReminderPreferenceRequest(BaseModel):
     channels: list[NotificationChannel] = Field(
         default_factory=lambda: [NotificationChannel.IN_APP],
     )
+
+    @field_validator("offsets_days")
+    @classmethod
+    def _validate_offsets(cls, value: list[int]) -> list[int]:
+        if not value or len(set(value)) != len(value) or any(not 0 <= item <= 30 for item in value):
+            raise ValueError("offsets_days must be unique values between 0 and 30")
+        return value
+
+    @field_validator("channels")
+    @classmethod
+    def _validate_channels(
+        cls,
+        value: list[NotificationChannel],
+    ) -> list[NotificationChannel]:
+        if not value or len(set(value)) != len(value):
+            raise ValueError("at least one unique channel is required")
+        return value
 
 
 class ReminderPreferenceResponse(BaseModel):
