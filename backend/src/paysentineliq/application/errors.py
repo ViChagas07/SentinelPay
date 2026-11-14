@@ -288,6 +288,34 @@ class TaskDispatchError(ApplicationError):
         )
 
 
+class NotificationNotFoundError(NotFoundError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="notification_not_found",
+            message="Notification not found.",
+        )
+
+
+class InvalidLocaleError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_locale",
+            message="Locale is not supported.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class InvalidNotificationPreferenceError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_notification_preference",
+            message="Notification preference is invalid.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
 class PayableNotFoundError(NotFoundError):
     def __init__(self) -> None:
         super().__init__(

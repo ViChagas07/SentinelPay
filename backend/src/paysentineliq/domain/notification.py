@@ -11,6 +11,14 @@ _E164 = re.compile(r"^\+[1-9]\d{7,14}$")
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
+def is_e164(value: str) -> bool:
+    return _E164.fullmatch(value) is not None
+
+
+def is_email(value: str) -> bool:
+    return _EMAIL.fullmatch(value) is not None
+
+
 class NotificationType(StrEnum):
     ANALYSIS_COMPLETED = "analysis_completed"
     HIGH_RISK_DETECTED = "high_risk_detected"
@@ -86,6 +94,7 @@ class NotificationPreference:
     enabled: bool = False
     destination: str | None = None
     consented_at: datetime | None = None
+    user_id: UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -94,9 +103,9 @@ class NotificationPreference:
         object.__setattr__(self, "destination", destination)
         if destination is not None:
             if self.channel is DeliveryChannel.EMAIL:
-                if not _EMAIL.match(destination):
+                if not is_email(destination):
                     raise ValueError("email destination is invalid")
-            elif not _E164.match(destination):
+            elif not is_e164(destination):
                 raise ValueError("phone destination must use E.164")
         if self.enabled:
             if self.channel is DeliveryChannel.EMAIL:

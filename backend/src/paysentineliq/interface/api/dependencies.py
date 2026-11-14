@@ -15,6 +15,10 @@ from paysentineliq.application.commands.documents import (
     DocumentPreparer,
     UploadDocumentHandler,
 )
+from paysentineliq.application.commands.notifications import (
+    NotificationCommandHandler,
+    NotificationPreferenceHandler,
+)
 from paysentineliq.application.commands.payables import (
     PayableCommandHandler,
     ReminderPreferenceHandler,
@@ -34,6 +38,11 @@ from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
 from paysentineliq.application.ports.document_inspector import DocumentInspector
 from paysentineliq.application.ports.document_read_repository import DocumentReadRepository
 from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
+from paysentineliq.application.ports.notifications import (
+    NotificationCenterRepositoryPort,
+    NotificationDeliveryRepositoryPort,
+    NotificationPreferenceRepositoryPort,
+)
 from paysentineliq.application.ports.oidc import OIDCClient
 from paysentineliq.application.ports.oidc_state import OIDCStateStore
 from paysentineliq.application.ports.payables import (
@@ -56,6 +65,7 @@ from paysentineliq.application.queries.analyses import (
 )
 from paysentineliq.application.queries.documents import GetDocumentDownloadUrlHandler
 from paysentineliq.application.queries.example import GetExampleHandler
+from paysentineliq.application.queries.notifications import ListNotificationsHandler
 from paysentineliq.application.queries.payables import ListPayablesHandler
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
@@ -71,6 +81,11 @@ from paysentineliq.infrastructure.db.repositories.documents import (
 from paysentineliq.infrastructure.db.repositories.example import (
     SqlAlchemyExampleRepository,
 )
+from paysentineliq.infrastructure.db.repositories.notifications import (
+    SqlAlchemyNotificationCenterRepository,
+    SqlAlchemyNotificationDeliveryRepository,
+    SqlAlchemyNotificationPreferenceRepository,
+)
 from paysentineliq.infrastructure.db.repositories.payables import (
     SqlAlchemyPayableReadRepository,
     SqlAlchemyPayableWriteRepository,
@@ -81,6 +96,7 @@ from paysentineliq.infrastructure.messaging.celery_app import build_celery_app
 from paysentineliq.infrastructure.messaging.dispatcher import CeleryTaskDispatcher
 from paysentineliq.infrastructure.readiness import SqlAlchemyRedisReadinessChecker
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
+from paysentineliq.infrastructure.security.destination_cipher import DestinationCipher
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -305,6 +321,60 @@ def get_reminder_preference_handler(
     ],
 ) -> ReminderPreferenceHandler:
     return ReminderPreferenceHandler(repository)
+
+
+def get_notification_center_repository(request: Request) -> NotificationCenterRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return SqlAlchemyNotificationCenterRepository(session_factory)
+
+
+def get_notification_delivery_repository(
+    request: Request,
+) -> NotificationDeliveryRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    settings: Settings = request.app.state.settings
+    return SqlAlchemyNotificationDeliveryRepository(
+        session_factory,
+        DestinationCipher(settings.security_hash_secret),
+    )
+
+
+def get_notification_preference_repository(
+    request: Request,
+) -> NotificationPreferenceRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    settings: Settings = request.app.state.settings
+    return SqlAlchemyNotificationPreferenceRepository(
+        session_factory,
+        DestinationCipher(settings.security_hash_secret),
+    )
+
+
+def get_notification_list_query(
+    repository: Annotated[
+        NotificationCenterRepositoryPort,
+        Depends(get_notification_center_repository),
+    ],
+) -> ListNotificationsHandler:
+    return ListNotificationsHandler(repository)
+
+
+def get_notification_command_handler(
+    repository: Annotated[
+        NotificationCenterRepositoryPort,
+        Depends(get_notification_center_repository),
+    ],
+) -> NotificationCommandHandler:
+    return NotificationCommandHandler(repository)
+
+
+def get_notification_preference_handler(
+    repository: Annotated[
+        NotificationPreferenceRepositoryPort,
+        Depends(get_notification_preference_repository),
+    ],
+) -> NotificationPreferenceHandler:
+    return NotificationPreferenceHandler(repository)
 
 
 def get_document_download_query(
