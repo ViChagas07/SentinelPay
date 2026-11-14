@@ -132,7 +132,12 @@ class FakeAnalysisRepository:
         self.completed: dict[str, Any] | None = None
         self.failed: dict[str, Any] | None = None
 
-    async def create(self, record: Any) -> None:
+    async def create(
+        self,
+        record: Any,
+        *,
+        event: AnalysisEvent | None = None,
+    ) -> None:
         return None
 
     async def update_state(
@@ -142,7 +147,8 @@ class FakeAnalysisRepository:
         status: AnalysisStatus,
         state: Mapping[str, object],
         degradation_flags: tuple[DegradationFlag, ...],
-    ) -> None:
+        event: AnalysisEvent | None = None,
+    ) -> bool:
         self.states.append(
             {
                 "analysis_id": analysis_id,
@@ -151,6 +157,7 @@ class FakeAnalysisRepository:
                 "flags": degradation_flags,
             },
         )
+        return True
 
     async def complete(
         self,
@@ -163,7 +170,9 @@ class FakeAnalysisRepository:
         degradation_flags: tuple[DegradationFlag, ...],
         state: Mapping[str, object],
         report_s3_key: str,
-    ) -> None:
+        event: AnalysisEvent | None = None,
+        notifications: tuple[Any, ...] = (),
+    ) -> bool:
         self.completed = {
             "analysis_id": analysis_id,
             "score": score,
@@ -173,7 +182,10 @@ class FakeAnalysisRepository:
             "flags": degradation_flags,
             "state": dict(state),
             "report_s3_key": report_s3_key,
+            "event": event,
+            "notifications": notifications,
         }
+        return True
 
     async def fail(
         self,
@@ -181,8 +193,33 @@ class FakeAnalysisRepository:
         *,
         error_code: str,
         state: Mapping[str, object],
-    ) -> None:
+        event: AnalysisEvent | None = None,
+        notifications: tuple[Any, ...] = (),
+    ) -> bool:
         self.failed = {"analysis_id": analysis_id, "error_code": error_code}
+        return True
+
+    async def claim_for_processing(
+        self,
+        analysis_id: UUID,
+        *,
+        task_id: str,
+        lease_seconds: int,
+        event: AnalysisEvent | None = None,
+    ) -> Any:
+        return None
+
+    async def get(self, analysis_id: UUID) -> Any:
+        return None
+
+    async def find_by_idempotency(self, owner_id: UUID, idempotency_key: str) -> Any:
+        return None
+
+    async def count_active_for_owner(self, owner_id: UUID) -> int:
+        return 0
+
+    async def list_stale_processing(self, before: datetime) -> tuple[Any, ...]:
+        return ()
 
 
 class FakeEventRepository:
@@ -360,7 +397,13 @@ async def test_boleto_runs_end_to_end_with_fake_llm() -> None:
     assert rag_client.query is not None
     assert interpreter.request is not None
     assert "Trecho de conhecimento." in interpreter.request.rag_snippets
-    assert any(event.event_type is AnalysisEventType.COMPLETED for event in events.events)
+    assert analyses.completed is not None
+    completed = analyses.completed["event"]
+    assert isinstance(completed, AnalysisEvent)
+    assert completed.event_type is AnalysisEventType.COMPLETED
+    notifications = analyses.completed["notifications"]
+    assert len(notifications) == 1
+    assert notifications[0].payload["status"] == "completed"
 
 
 async def test_payslip_runs_with_synthetic_regulatory_tables() -> None:
@@ -383,7 +426,7 @@ async def test_tampered_boleto_score_is_reproducible_from_events() -> None:
     boleto = build_boleto()
     tampered = boleto.line[:9] + str((int(boleto.line[9]) + 1) % 10) + boleto.line[10:]
     text = boleto.ocr_text().replace(boleto.formatted_line, format_line(tampered))
-    orchestrator, _, events, _, _, _, _ = _orchestrator(
+    orchestrator, analyses, events, _, _, _, _ = _orchestrator(
         text,
         model=FakeModel(),
     )
@@ -393,9 +436,9 @@ async def test_tampered_boleto_score_is_reproducible_from_events() -> None:
     rule_events = [
         event for event in events.events if event.event_type is AnalysisEventType.RULE_TRIGGERED
     ]
-    completed = next(
-        event for event in events.events if event.event_type is AnalysisEventType.COMPLETED
-    )
+    assert analyses.completed is not None
+    completed = analyses.completed["event"]
+    assert isinstance(completed, AnalysisEvent)
     assert rule_events
     weights = sum(int(event.payload["weight"]) for event in rule_events)
     critical = any(event.payload["severity"] == "critical" for event in rule_events)

@@ -11,7 +11,6 @@ from paysentineliq.application.errors import (
 )
 from paysentineliq.application.ports.analysis import (
     AnalysisDocumentPort,
-    AnalysisEventPort,
     AnalysisOrchestratorPort,
     AnalysisRepositoryPort,
     document_type_for,
@@ -31,14 +30,12 @@ class RunAnalysisUseCase:
         source: AnalysisDocumentPort,
         orchestrator: AnalysisOrchestratorPort,
         analyses: AnalysisRepositoryPort,
-        events: AnalysisEventPort,
         *,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._source = source
         self._orchestrator = orchestrator
         self._analyses = analyses
-        self._events = events
         self._clock = clock or (lambda: datetime.now(UTC))
 
     async def execute(
@@ -73,9 +70,7 @@ class RunAnalysisUseCase:
                 created_at=now,
                 updated_at=now,
             ),
-        )
-        await self._events.append(
-            AnalysisEvent(
+            event=AnalysisEvent(
                 analysis_id=analysis_id,
                 event_type=AnalysisEventType.QUEUED,
                 payload={"document_id": str(document.id)},
@@ -95,9 +90,7 @@ class RunAnalysisUseCase:
                 analysis_id,
                 error_code=error_code,
                 state={"node": "run"},
-            )
-            await self._events.append(
-                AnalysisEvent(
+                event=AnalysisEvent(
                     analysis_id=analysis_id,
                     event_type=AnalysisEventType.FAILED,
                     payload={"error": error_code},

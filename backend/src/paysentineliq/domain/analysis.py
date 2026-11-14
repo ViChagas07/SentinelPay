@@ -89,6 +89,10 @@ class AnalysisRecord:
     error_code: str | None
     created_at: datetime
     updated_at: datetime
+    idempotency_key: str | None = None
+    idempotency_request_hash: str | None = None
+    task_id: str | None = None
+    processing_started_at: datetime | None = None
 
 
 def _jsonable(value: object) -> object:

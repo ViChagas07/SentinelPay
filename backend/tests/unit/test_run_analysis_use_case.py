@@ -21,6 +21,7 @@ from paysentineliq.domain.analysis import (
     DegradationFlag,
 )
 from paysentineliq.domain.document import DocumentKind
+from paysentineliq.domain.notification import Notification
 from paysentineliq.domain.scoring import RiskBand
 
 pytestmark = pytest.mark.unit
@@ -103,10 +104,19 @@ class FakeOrchestrator:
 class FakeAnalysisRepository:
     def __init__(self) -> None:
         self.created: AnalysisRecord | None = None
+        self.created_event: AnalysisEvent | None = None
         self.failed: dict[str, object] | None = None
+        self.failed_event: AnalysisEvent | None = None
+        self.completed: dict[str, object] | None = None
 
-    async def create(self, record: AnalysisRecord) -> None:
+    async def create(
+        self,
+        record: AnalysisRecord,
+        *,
+        event: AnalysisEvent | None = None,
+    ) -> None:
         self.created = record
+        self.created_event = event
 
     async def update_state(
         self,
@@ -115,8 +125,9 @@ class FakeAnalysisRepository:
         status: AnalysisStatus,
         state: Mapping[str, object],
         degradation_flags: tuple[DegradationFlag, ...],
-    ) -> None:
-        return None
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        return True
 
     async def complete(
         self,
@@ -129,8 +140,16 @@ class FakeAnalysisRepository:
         degradation_flags: tuple[DegradationFlag, ...],
         state: Mapping[str, object],
         report_s3_key: str,
-    ) -> None:
-        return None
+        event: AnalysisEvent | None = None,
+        notifications: tuple[Notification, ...] = (),
+    ) -> bool:
+        self.completed = {
+            "analysis_id": analysis_id,
+            "score": score,
+            "event": event,
+            "notifications": notifications,
+        }
+        return True
 
     async def fail(
         self,
@@ -138,16 +157,38 @@ class FakeAnalysisRepository:
         *,
         error_code: str,
         state: Mapping[str, object],
-    ) -> None:
+        event: AnalysisEvent | None = None,
+        notifications: tuple[Notification, ...] = (),
+    ) -> bool:
         self.failed = {"analysis_id": analysis_id, "error_code": error_code}
+        self.failed_event = event
+        return True
 
+    async def claim_for_processing(
+        self,
+        analysis_id: UUID,
+        *,
+        task_id: str,
+        lease_seconds: int,
+        event: AnalysisEvent | None = None,
+    ) -> AnalysisRecord | None:
+        return None
 
-class FakeEventRepository:
-    def __init__(self) -> None:
-        self.events: list[AnalysisEvent] = []
+    async def get(self, analysis_id: UUID) -> AnalysisRecord | None:
+        return None
 
-    async def append(self, event: AnalysisEvent) -> None:
-        self.events.append(event)
+    async def find_by_idempotency(
+        self,
+        owner_id: UUID,
+        idempotency_key: str,
+    ) -> AnalysisRecord | None:
+        return None
+
+    async def count_active_for_owner(self, owner_id: UUID) -> int:
+        return 0
+
+    async def list_stale_processing(self, before: datetime) -> tuple[AnalysisRecord, ...]:
+        return ()
 
 
 def _document(kind: DocumentKind = DocumentKind.BANK_SLIP) -> AnalysisDocument:
@@ -164,19 +205,16 @@ def _document(kind: DocumentKind = DocumentKind.BANK_SLIP) -> AnalysisDocument:
 def _use_case(
     source: FakeSource,
     orchestrator: FakeOrchestrator,
-) -> tuple[RunAnalysisUseCase, FakeAnalysisRepository, FakeEventRepository]:
+) -> tuple[RunAnalysisUseCase, FakeAnalysisRepository]:
     analyses = FakeAnalysisRepository()
-    events = FakeEventRepository()
     return (
         RunAnalysisUseCase(
             source,
             orchestrator,
             analyses,
-            events,
             clock=lambda: _NOW,
         ),
         analyses,
-        events,
     )
 
 
@@ -184,7 +222,7 @@ async def test_success_creates_analysis_and_returns_report() -> None:
     document = _document()
     source = FakeSource(document)
     orchestrator = FakeOrchestrator()
-    use_case, analyses, events = _use_case(source, orchestrator)
+    use_case, analyses = _use_case(source, orchestrator)
 
     report = await use_case.execute(document.id, locale="es")
 
@@ -193,24 +231,25 @@ async def test_success_creates_analysis_and_returns_report() -> None:
     assert analyses.created.status is AnalysisStatus.QUEUED
     assert analyses.created.owner_id == document.owner_id
     assert analyses.created.document_type is AnalysisDocumentType.BOLETO
-    assert events.events[0].event_type is AnalysisEventType.QUEUED
+    assert analyses.created_event is not None
+    assert analyses.created_event.event_type is AnalysisEventType.QUEUED
     assert orchestrator.calls[0]["data"] == b"data"
     assert orchestrator.calls[0]["locale"] == "es"
 
 
 async def test_missing_document_raises_without_creating_analysis() -> None:
-    use_case, analyses, events = _use_case(FakeSource(None), FakeOrchestrator())
+    use_case, analyses = _use_case(FakeSource(None), FakeOrchestrator())
 
     with pytest.raises(DocumentNotFoundError):
         await use_case.execute(uuid4())
 
     assert analyses.created is None
-    assert events.events == []
+    assert analyses.created_event is None
 
 
 async def test_unsupported_document_raises_without_creating_analysis() -> None:
     document = _document(DocumentKind.RECEIPT)
-    use_case, analyses, _ = _use_case(FakeSource(document), FakeOrchestrator())
+    use_case, analyses = _use_case(FakeSource(document), FakeOrchestrator())
 
     with pytest.raises(UnsupportedDocumentError):
         await use_case.execute(document.id)
@@ -220,7 +259,7 @@ async def test_unsupported_document_raises_without_creating_analysis() -> None:
 
 async def test_orchestrator_failure_marks_analysis_failed() -> None:
     document = _document()
-    use_case, analyses, events = _use_case(
+    use_case, analyses = _use_case(
         FakeSource(document),
         FakeOrchestrator(error=RuntimeError("boom")),
     )
@@ -230,15 +269,13 @@ async def test_orchestrator_failure_marks_analysis_failed() -> None:
 
     assert analyses.failed is not None
     assert analyses.failed["error_code"] == "analysis_failed"
-    assert [event.event_type for event in events.events] == [
-        AnalysisEventType.QUEUED,
-        AnalysisEventType.FAILED,
-    ]
+    assert analyses.failed_event is not None
+    assert analyses.failed_event.event_type is AnalysisEventType.FAILED
 
 
 async def test_read_failure_marks_analysis_failed() -> None:
     document = _document()
-    use_case, analyses, events = _use_case(
+    use_case, analyses = _use_case(
         FakeSource(document, read_error=OSError("storage offline")),
         FakeOrchestrator(),
     )
@@ -248,12 +285,12 @@ async def test_read_failure_marks_analysis_failed() -> None:
 
     assert analyses.failed is not None
     assert analyses.failed["error_code"] == "analysis_failed"
-    assert events.events[-1].event_type is AnalysisEventType.FAILED
+    assert analyses.failed_event is not None
 
 
 async def test_timeout_has_specific_error_code() -> None:
     document = _document()
-    use_case, analyses, _ = _use_case(
+    use_case, analyses = _use_case(
         FakeSource(document),
         FakeOrchestrator(error=AnalysisTimeoutError("ingest")),
     )

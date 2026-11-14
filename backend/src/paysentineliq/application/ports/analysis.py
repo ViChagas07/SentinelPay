@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -12,6 +13,7 @@ from paysentineliq.domain.analysis import (
     DegradationFlag,
 )
 from paysentineliq.domain.document import DocumentKind
+from paysentineliq.domain.notification import Notification
 from paysentineliq.domain.scoring import RiskBand
 
 
@@ -32,7 +34,12 @@ class AnalysisDocumentPort(Protocol):
 
 
 class AnalysisRepositoryPort(Protocol):
-    async def create(self, record: AnalysisRecord) -> None: ...
+    async def create(
+        self,
+        record: AnalysisRecord,
+        *,
+        event: AnalysisEvent | None = None,
+    ) -> None: ...
 
     async def update_state(
         self,
@@ -41,7 +48,8 @@ class AnalysisRepositoryPort(Protocol):
         status: AnalysisStatus,
         state: Mapping[str, object],
         degradation_flags: tuple[DegradationFlag, ...],
-    ) -> None: ...
+        event: AnalysisEvent | None = None,
+    ) -> bool: ...
 
     async def complete(
         self,
@@ -54,7 +62,9 @@ class AnalysisRepositoryPort(Protocol):
         degradation_flags: tuple[DegradationFlag, ...],
         state: Mapping[str, object],
         report_s3_key: str,
-    ) -> None: ...
+        event: AnalysisEvent | None = None,
+        notifications: tuple[Notification, ...] = (),
+    ) -> bool: ...
 
     async def fail(
         self,
@@ -62,7 +72,33 @@ class AnalysisRepositoryPort(Protocol):
         *,
         error_code: str,
         state: Mapping[str, object],
-    ) -> None: ...
+        event: AnalysisEvent | None = None,
+        notifications: tuple[Notification, ...] = (),
+    ) -> bool: ...
+
+    async def claim_for_processing(
+        self,
+        analysis_id: UUID,
+        *,
+        task_id: str,
+        lease_seconds: int,
+        event: AnalysisEvent | None = None,
+    ) -> AnalysisRecord | None: ...
+
+    async def get(self, analysis_id: UUID) -> AnalysisRecord | None: ...
+
+    async def find_by_idempotency(
+        self,
+        owner_id: UUID,
+        idempotency_key: str,
+    ) -> AnalysisRecord | None: ...
+
+    async def count_active_for_owner(self, owner_id: UUID) -> int: ...
+
+    async def list_stale_processing(
+        self,
+        before: datetime,
+    ) -> tuple[AnalysisRecord, ...]: ...
 
 
 class AnalysisEventPort(Protocol):

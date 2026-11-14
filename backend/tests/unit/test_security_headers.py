@@ -24,6 +24,8 @@ def _production_app() -> FastAPI:
             app_env="production",
             database_url="postgresql+asyncpg://user:pass@db:5432/app",
             redis_url="redis://cache:6379/0",
+            rabbitmq_url="amqp://user:pass@rabbitmq:5672//",
+            celery_result_backend="redis://cache:6379/1",
             security_hash_secret="production-secret",
             jwt_secret="x" * 64,
             google_client_id="test-client",

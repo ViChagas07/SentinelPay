@@ -6,8 +6,10 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
+    UniqueConstraint,
     Uuid,
     text,
 )
@@ -84,6 +86,18 @@ class DocumentModel(Base):
 
 class AnalysisModel(Base):
     __tablename__ = "analyses"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "idempotency_key",
+            name="uq_analyses_owner_idempotency",
+        ),
+        Index("ix_analyses_owner_created_at", "owner_id", "created_at"),
+        CheckConstraint(
+            "status IN ('queued', 'processing', 'completed', 'failed', 'degraded')",
+            name="ck_analyses_status",
+        ),
+    )
 
     owner_id: Mapped[UUID] = mapped_column(Uuid, index=True, nullable=False)
     document_id: Mapped[UUID] = mapped_column(
@@ -117,6 +131,13 @@ class AnalysisModel(Base):
     )
     report_s3_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    idempotency_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    task_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     events: Mapped[list["AnalysisEventModel"]] = relationship(
         back_populates="analysis",
         cascade="all, delete-orphan",
@@ -149,3 +170,45 @@ class AnalysisEventModel(Base):
         nullable=False,
     )
     analysis: Mapped[AnalysisModel] = relationship(back_populates="events")
+
+
+class NotificationModel(Base):
+    __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('analysis_completed')",
+            name="ck_notifications_type",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'dispatched', 'failed')",
+            name="ck_notifications_status",
+        ),
+        Index("ix_notifications_owner_created_at", "owner_id", "created_at"),
+    )
+
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    analysis_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("analyses.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[dict[str, str]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        default="pending",
+        server_default="pending",
+        nullable=False,
+        index=True,
+    )

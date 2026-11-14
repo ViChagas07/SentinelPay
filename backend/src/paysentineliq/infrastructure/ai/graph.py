@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, TypedDict
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from langgraph.graph import END, StateGraph
 
@@ -82,6 +82,7 @@ from paysentineliq.domain.boleto.bank_directory import (
 )
 from paysentineliq.domain.boleto.extraction import extract_boleto_fields
 from paysentineliq.domain.ingestion import VisualSignal
+from paysentineliq.domain.notification import Notification, NotificationType
 from paysentineliq.domain.payslip.analysis import PayslipAnalysis, analyze_payslip
 from paysentineliq.domain.payslip.extraction import extract_payslip_fields
 from paysentineliq.domain.payslip.regulatory import (
@@ -842,6 +843,21 @@ class LangGraphAnalysisOrchestrator:
             size=len(payload),
             metadata={"analysis_id": str(analysis_id)},
         )
+        terminal_status = AnalysisStatus.DEGRADED if flags else AnalysisStatus.COMPLETED
+        notification = Notification(
+            id=uuid4(),
+            owner_id=document.owner_id,
+            analysis_id=analysis_id,
+            type=NotificationType.ANALYSIS_COMPLETED,
+            payload={
+                "analysis_id": str(analysis_id),
+                "document_type": document_type.value,
+                "status": terminal_status.value,
+                "score": str(report.score),
+                "band": report.band.value,
+            },
+            created_at=self._clock(),
+        )
         await self._analyses.complete(
             analysis_id,
             score=report.score,
@@ -855,9 +871,7 @@ class LangGraphAnalysisOrchestrator:
                 "band": report.band.value,
             },
             report_s3_key=report_key,
-        )
-        await self._events.append(
-            AnalysisEvent(
+            event=AnalysisEvent(
                 analysis_id=analysis_id,
                 event_type=AnalysisEventType.COMPLETED,
                 rule_set_version=rule_set_version,
@@ -870,6 +884,7 @@ class LangGraphAnalysisOrchestrator:
                     rule_set_version,
                 ),
             ),
+            notifications=(notification,),
         )
         return {"report": report}
 
