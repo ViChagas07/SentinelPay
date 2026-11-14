@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
+    llm_judge_model: str = ""
     llm_temperature: float = 0.1
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 2
@@ -124,6 +125,7 @@ class Settings(BaseSettings):
     guardrail_classifier_enabled: bool = False
     guardrail_classifier_threshold: float = 0.5
     guardrail_classifier_model_dir: str = "models/artifacts"
+    guardrail_judge_enabled: bool = False
 
     @property
     def ocr_languages_list(self) -> list[str]:
@@ -255,6 +257,13 @@ class Settings(BaseSettings):
             raise ValueError("GUARDRAIL_CLASSIFIER_THRESHOLD must be between 0 and 1")
         if not self.guardrail_classifier_model_dir.strip():
             raise ValueError("GUARDRAIL_CLASSIFIER_MODEL_DIR must not be empty")
+        if self.guardrail_judge_enabled and not self.llm_judge_model.strip():
+            if self.llm_model.strip():
+                self.llm_judge_model = self.llm_model
+            else:
+                raise ValueError(
+                    "LLM_JUDGE_MODEL is required when GUARDRAIL_JUDGE_ENABLED=true",
+                )
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")
