@@ -7,7 +7,7 @@ from typing import Generic, TypeVar, cast
 from paysentineliq.domain.boleto.tax_id import Cnpj, Cpf, parse_tax_id
 from paysentineliq.domain.payslip.models import ItemCategory, ItemKind, YearMonth
 
-T = TypeVar("T")
+T = TypeVar("T", covariant=True)
 
 _AMOUNT_RE = re.compile(
     r"(?<![\d.,])(?:R\$\s*)?(?P<sign>-)?"

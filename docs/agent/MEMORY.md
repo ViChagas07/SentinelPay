@@ -35,6 +35,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P07: `make bandit` exige 0 achados e o Bandit B101 acusa `assert` em codigo de producao. Nao usar `assert` para narrowing no dominio; usar guarda explicita ou `typing.cast`.
 - P07: nesta sessao o Docker Desktop/daemon estava parado; `make test-docker` falha em `up` no npipe e a suite Docker fica NAO VALIDADA. Nao iniciar Docker Desktop automaticamente.
 - P07b: CQRS leve em `application/commands` (estado via UoW de escrita, retorno id/DTO minimo) e `application/queries` (somente leitura, sem commit, sem UoW de escrita, retorno DTO). Handlers pequenos, um por caso de uso; auth ainda e um servico de comandos com login/refresh/logout e sera dividido em fase propria.
+- P08: `docs/normas/` so tem LEIA-ME; `data/regulatory/*.yaml` ficam vazios e as regras de INSS/IRRF/minimo/horas extras retornam NOT_VERIFICABLE com peso 0. A tabela INSS 2024 do PDF de holerite nao e fonte oficial; nao copiar para os dados.
+- P08: CPF completo so existe na extracao interna; `PayslipAnalysis` expoe CPF mascarado. As fixtures de `tests/support/regulatory_factory.py` sao sinteticas e nao representam a lei.
+- P08: a suite Docker foi revalidada (20 passed, 1 skip) e `make test-docker` gera backup em `backups/` (ignorado) antes do `alembic upgrade head`.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
