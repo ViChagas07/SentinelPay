@@ -42,6 +42,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P09: modelos em `models/artifacts/` (fora do git) exigem SHA-256 e path confiavel antes de `joblib.load`; metricas do model card e `ml_synthetic` sao sempre sinteticas, nunca desempenho real.
 - P09: `make train` usa seed 42, 60 bases/240 linhas e artefato estavel entre execucoes; o servico sem modelo cai no deterministico/visual e marca `ml_unavailable`, com piso critico 80.
 - Bandit B311 no gerador sintetico: usar `# nosec B311` com justificativa; o PRNG deterministico nao e usado para seguranca.
+- P10: `make ingest-knowledge` le `.env.example`, usa o Postgres local (55432) e `RAG_FAKE_EMBEDDER=1` sem LM Studio; 21 PDFs geraram 56 chunks e a segunda execucao fica skipped=21. `EMBEDDING_DIM=8` e so o fake de desenvolvimento; modelo/dimensao reais exigem nova migration e reindexacao.
+- P10: citacoes `compiled`/`unknown` tem `authoritative=False` e nao podem embasar regra de fraude; so `official` e autoritativo. LM Studio e Pinecone reais continuam NAO VALIDADOS.
+- P10: a pasta vazia `knowledge/{febraban,bacen,fraud_patterns,layouts,entities,historical_cases,faq,glossary}` e estranha e deve ser ignorada/reportada, nunca apagada; `knowledge/` continua fora do git e intocado. Nao indexar documentos de usuario.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
