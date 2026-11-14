@@ -12,6 +12,8 @@ RUN python -m pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-root --no-ansi
 COPY src ./src
+COPY alembic.ini ./
+COPY migrations ./migrations
 RUN poetry install --only main --no-ansi
 
 FROM python:3.11.18-slim-bookworm AS runtime
@@ -25,6 +27,8 @@ RUN groupadd --system app && useradd --system --create-home --gid app app
 WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --from=builder --chown=app:app /app/src /app/src
+COPY --from=builder --chown=app:app /app/alembic.ini /app/alembic.ini
+COPY --from=builder --chown=app:app /app/migrations /app/migrations
 
 USER app
 EXPOSE 8000

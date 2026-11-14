@@ -1,4 +1,19 @@
+import os
+
 import pytest
+
+_TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://sentinel:CHANGE_ME@localhost:55432/paysentineliq",
+)
+_TEST_REDIS_URL = os.environ.get(
+    "TEST_REDIS_URL",
+    "redis://localhost:6379/0",
+)
+
+os.environ["APP_ENV"] = "local"
+os.environ["DATABASE_URL"] = _TEST_DATABASE_URL
+os.environ["REDIS_URL"] = _TEST_REDIS_URL
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
