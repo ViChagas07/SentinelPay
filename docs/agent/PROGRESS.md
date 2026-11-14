@@ -10,7 +10,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P02 concluida (fundacao transversal do backend). Proximo passo: P03, conforme instrucao do dono.
+- Fase atual: P03 em andamento (seguranca, rate limit e cache SWR). P02 concluida.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200 e migration `0001_initial` aplicada. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
 
 ## Historico
@@ -32,3 +32,4 @@
 - P02.6 Ready e rota de exemplo: `/ready` checa Postgres e Redis; rota removivel `/api/v1/example/{id}` executa SELECT via UoW, resolve locale/request_id e mapeia `document_not_found`. Access log do uvicorn desativado para nao vazar query string; 55 testes unitarios e 7 docker verdes. Mascara de telefone refinada para nao corromper UUIDs em logs.
 - P02.7 Backup/migration: `make backup` gerou dump de 974 bytes (nao vazio); `make migrate` executou backup e `alembic upgrade head` no container; `alembic_version=0001_initial` confirmado. `make check` e `make test-docker` verdes; stack no ar.
 - P02.8 Prova liveness/readiness: com Postgres e Redis parados, `/health` continuou 200 e `/ready` retornou 503 com ambos os checks falsos; apos `start` + `make up`, `/ready` voltou a 200. Nenhuma alteracao de codigo; stack restaurada.
+- P03.1 Spec e ADR: SPEC 0003 e ADR-0006 definem rate limit Token Bucket, SWR, headers/CORS/TrustedHost, CSRF, SSRF com pinagem, forca bruta, limites e auditoria. Sem codigo ainda.
