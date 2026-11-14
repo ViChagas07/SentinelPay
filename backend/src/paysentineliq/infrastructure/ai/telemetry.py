@@ -3,7 +3,6 @@ import os
 
 def configure_ai_telemetry() -> None:
     env = {
-        "OTEL_SDK_DISABLED": "true",
         "CREWAI_DISABLE_TELEMETRY": "true",
         "CREWAI_DISABLE_TRACKING": "true",
         "CREWAI_TRACING_ENABLED": "false",

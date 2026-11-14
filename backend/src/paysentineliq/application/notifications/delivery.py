@@ -10,6 +10,7 @@ from paysentineliq.application.ports.messaging import EmailPort, SmsPort, WhatsA
 from paysentineliq.application.ports.notifications import (
     DeliveryContext,
     NotificationDeliveryRepositoryPort,
+    NotificationMetricsPort,
 )
 from paysentineliq.domain.notification import (
     DeliveryChannel,
@@ -53,12 +54,14 @@ class NotificationDeliveryHandler:
         whatsapp: WhatsAppPort,
         *,
         clock: Callable[[], datetime] | None = None,
+        metrics: NotificationMetricsPort | None = None,
     ) -> None:
         self._repository = repository
         self._email = email
         self._sms = sms
         self._whatsapp = whatsapp
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._metrics = metrics
 
     async def execute(
         self,
@@ -87,12 +90,14 @@ class NotificationDeliveryHandler:
                     _SAFE_REASONS["cancelled"],
                     now,
                 )
+                self._record(channel, "skipped")
                 skipped.append(channel)
                 continue
             preference = context.preference_for(channel)
             reason = _skip_reason(channel, preference, context)
             if reason is not None:
                 await self._repository.mark_skipped(delivery.id, reason, now)
+                self._record(channel, "skipped")
                 skipped.append(channel)
                 continue
             template = render_notification(
@@ -105,6 +110,7 @@ class NotificationDeliveryHandler:
             except Exception:
                 safe_error = _SAFE_ERRORS[channel]
                 await self._repository.mark_failed(delivery.id, safe_error, now)
+                self._record(channel, "failed")
                 _logger.warning(
                     "notification_delivery_failed channel=%s error=%s",
                     channel.value,
@@ -113,6 +119,7 @@ class NotificationDeliveryHandler:
                 failed.append(channel)
             else:
                 await self._repository.mark_sent(delivery.id, now)
+                self._record(channel, "sent")
                 sent.append(channel)
         if context.notification.status is NotificationStatus.CANCELLED:
             return DeliveryOutcome(
@@ -148,6 +155,10 @@ class NotificationDeliveryHandler:
             sent=tuple(sent),
             skipped=tuple(skipped),
         )
+
+    def _record(self, channel: DeliveryChannel, status: str) -> None:
+        if self._metrics is not None:
+            self._metrics.record_notification(channel.value, status)
 
     async def _send(
         self,

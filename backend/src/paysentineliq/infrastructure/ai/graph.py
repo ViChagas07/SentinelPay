@@ -1,13 +1,17 @@
 import asyncio
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from functools import wraps
 from io import BytesIO
 from pathlib import Path
+from time import perf_counter
 from typing import Any, TypedDict
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, StateGraph
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 
 from paysentineliq.application.errors import (
     AnalysisTimeoutError,
@@ -114,6 +118,10 @@ from paysentineliq.infrastructure.guardrails.training import (
     load_injection_classifier_or_none,
 )
 from paysentineliq.infrastructure.metrics.guardrails import InMemoryGuardrailMetrics
+from paysentineliq.infrastructure.observability.metrics import (
+    PlatformMetrics,
+    get_platform_metrics,
+)
 
 
 class AnalysisGraphState(TypedDict, total=False):
@@ -165,6 +173,7 @@ class LangGraphAnalysisOrchestrator:
         judge: ReportJudgePort | None = None,
         classifier: InjectionClassifierPort | None = None,
         metrics: GuardrailMetricsPort | None = None,
+        platform_metrics: PlatformMetrics | None = None,
     ) -> None:
         self._ingestion = ingestion
         self._fraud_service = fraud_service
@@ -183,6 +192,10 @@ class LangGraphAnalysisOrchestrator:
             )
         self._input_classifier = classifier
         self._metrics = metrics if metrics is not None else InMemoryGuardrailMetrics()
+        self._platform_metrics = (
+            platform_metrics if platform_metrics is not None else get_platform_metrics()
+        )
+        self._tracer = trace.get_tracer("paysentineliq")
         self._input_guard = InputGuardrailService(
             max_chars=settings.guardrail_max_text_chars,
             classifier=classifier,
@@ -202,17 +215,17 @@ class LangGraphAnalysisOrchestrator:
 
     def _build_graph(self) -> Any:
         graph = StateGraph(AnalysisGraphState)
-        graph.add_node("load", self._load_node)
-        graph.add_node("ingest", self._ingest_node)
-        graph.add_node("guard", self._guard_node)
-        graph.add_node("classify", self._classify_node)
-        graph.add_node("boleto", self._boleto_node)
-        graph.add_node("payslip", self._payslip_node)
-        graph.add_node("receipt", self._receipt_node)
-        graph.add_node("fraud", self._fraud_node)
-        graph.add_node("rag", self._rag_node)
-        graph.add_node("interpret", self._interpret_node)
-        graph.add_node("persist", self._persist_node)
+        graph.add_node("load", self._observed("load", self._load_node))
+        graph.add_node("ingest", self._observed("ingest", self._ingest_node))
+        graph.add_node("guard", self._observed("guard", self._guard_node))
+        graph.add_node("classify", self._observed("classify", self._classify_node))
+        graph.add_node("boleto", self._observed("boleto", self._boleto_node))
+        graph.add_node("payslip", self._observed("payslip", self._payslip_node))
+        graph.add_node("receipt", self._observed("receipt", self._receipt_node))
+        graph.add_node("fraud", self._observed("fraud", self._fraud_node))
+        graph.add_node("rag", self._observed("rag", self._rag_node))
+        graph.add_node("interpret", self._observed("interpret", self._interpret_node))
+        graph.add_node("persist", self._observed("persist", self._persist_node))
         graph.set_entry_point("load")
         graph.add_edge("load", "ingest")
         graph.add_edge("ingest", "guard")
@@ -230,6 +243,41 @@ class LangGraphAnalysisOrchestrator:
         graph.add_edge("interpret", "persist")
         graph.add_edge("persist", END)
         return graph.compile()
+
+    def _observed(
+        self,
+        stage: str,
+        node: Callable[[AnalysisGraphState], Awaitable[AnalysisGraphState]],
+    ) -> Callable[[AnalysisGraphState], Awaitable[AnalysisGraphState]]:
+        @wraps(node)
+        async def wrapper(state: AnalysisGraphState) -> AnalysisGraphState:
+            started = perf_counter()
+            document_type = self._metric_document_type(state)
+            result: AnalysisGraphState = {}
+            with self._tracer.start_as_current_span(f"pipeline.{stage}") as span:
+                span.set_attribute("pipeline.stage", stage)
+                span.set_attribute("document.type", document_type)
+                try:
+                    result = await node(state)
+                except Exception:
+                    span.set_status(Status(StatusCode.ERROR))
+                    raise
+                finally:
+                    self._platform_metrics.record_pipeline_stage(
+                        stage,
+                        document_type,
+                        perf_counter() - started,
+                    )
+            return result
+
+        return wrapper
+
+    def _metric_document_type(self, state: AnalysisGraphState) -> str:
+        document = state.get("document")
+        if document is None:
+            return "other"
+        document_type = document_type_for(document.kind)
+        return document_type.value if document_type is not None else "other"
 
     async def run(
         self,
@@ -249,7 +297,9 @@ class LangGraphAnalysisOrchestrator:
             "guardrail_evidence": (),
             "input_guard_triggered": False,
         }
-        result: Any = await self._graph.ainvoke(initial)
+        with self._tracer.start_as_current_span("pipeline.run") as span:
+            span.set_attribute("document.type", self._metric_document_type(initial))
+            result: Any = await self._graph.ainvoke(initial)
         report = result.get("report") if isinstance(result, dict) else None
         if not isinstance(report, AnalysisReport):
             raise RuntimeError("analysis did not produce a report")
@@ -573,6 +623,9 @@ class LangGraphAnalysisOrchestrator:
                         GUARDRAIL_LAYER_OUTPUT,
                         "report_replaced_by_template",
                     )
+                    self._platform_metrics.record_guardrail_block(
+                        GUARDRAIL_LAYER_OUTPUT,
+                    )
                     interpretation = None
                 else:
                     interpretation = scanned
@@ -720,6 +773,8 @@ class LangGraphAnalysisOrchestrator:
             GUARDRAIL_LAYER_JUDGE,
             "approved" if verdict.approved else "rejected",
         )
+        if not verdict.approved:
+            self._platform_metrics.record_guardrail_block(GUARDRAIL_LAYER_JUDGE)
         if verdict.approved:
             return verdict, flags, evidence, True
         finding = GuardrailFinding(
@@ -987,6 +1042,8 @@ class LangGraphAnalysisOrchestrator:
             notifications=(notification,),
             payables=payables,
         )
+        self._platform_metrics.record_analysis(document_type.value, report.band.value)
+        self._platform_metrics.record_notification("in_app", "created")
         return {"report": report}
 
     async def _processing(
@@ -1042,6 +1099,7 @@ class LangGraphAnalysisOrchestrator:
     ) -> None:
         for finding in dedupe_findings(list(findings)):
             self._metrics.record(finding.layer, finding.code)
+            self._platform_metrics.record_guardrail_block(finding.layer)
             await self._events.append(
                 AnalysisEvent(
                     analysis_id=analysis_id,

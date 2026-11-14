@@ -199,11 +199,19 @@ class PlatformMetrics:
             document_type=_bounded(document_type, _DOCUMENT_TYPES),
         ).observe(max(0.0, duration_seconds))
 
-    def record_llm(self, model: str, outcome: str, duration_seconds: float) -> None:
+    def record_llm(
+        self,
+        model: str,
+        outcome: str,
+        duration_seconds: float | None = None,
+    ) -> None:
         safe_model = (model.strip() or "unknown")[:64]
         safe_outcome = _bounded(outcome, _LLM_OUTCOMES)
         self.llm_requests.labels(model=safe_model, outcome=safe_outcome).inc()
-        self.llm_latency.labels(model=safe_model).observe(max(0.0, duration_seconds))
+        if duration_seconds is not None:
+            self.llm_latency.labels(model=safe_model).observe(
+                max(0.0, duration_seconds),
+            )
 
     def record_guardrail_block(self, layer: str) -> None:
         self.guardrail_blocks.labels(layer=_bounded(layer, _GUARDRAIL_LAYERS)).inc()

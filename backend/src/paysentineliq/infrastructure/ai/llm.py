@@ -1,12 +1,19 @@
 import asyncio
 import json
+import time
 from collections.abc import Mapping
 from typing import Protocol
 
 import httpx
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 
 from paysentineliq.application.errors import LlmUnavailableError, SSRFBlockedError
 from paysentineliq.application.ports.llm import LlmMessage, LlmResponse
+from paysentineliq.infrastructure.observability.metrics import (
+    PlatformMetrics,
+    get_platform_metrics,
+)
 
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
@@ -35,6 +42,7 @@ class OpenAICompatibleLLM:
         backoff_seconds: float = 1.0,
         timeout_seconds: float = 30.0,
         client: JsonHttpClientPort,
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         if not base_url.strip():
             raise ValueError("base_url is required")
@@ -56,6 +64,7 @@ class OpenAICompatibleLLM:
         self._backoff_seconds = backoff_seconds
         self._timeout_seconds = timeout_seconds
         self._client = client
+        self._metrics = metrics if metrics is not None else get_platform_metrics()
 
     @property
     def model(self) -> str:
@@ -82,7 +91,35 @@ class OpenAICompatibleLLM:
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
         url = f"{self._base_url}/chat/completions"
+        started = time.perf_counter()
+        outcome = "error"
+        tracer = trace.get_tracer("paysentineliq")
+        with tracer.start_as_current_span("llm.complete") as span:
+            span.set_attribute("llm.model", self._model)
+            try:
+                response = await self._request_with_retries(url, headers, payload, span)
+                outcome = "success"
+                return response
+            except Exception:
+                span.set_status(Status(StatusCode.ERROR))
+                raise
+            finally:
+                self._metrics.record_llm(
+                    self._model,
+                    outcome,
+                    time.perf_counter() - started,
+                )
+                span.set_attribute("llm.outcome", outcome)
+
+    async def _request_with_retries(
+        self,
+        url: str,
+        headers: Mapping[str, str],
+        payload: Mapping[str, object],
+        span: trace.Span,
+    ) -> LlmResponse:
         for attempt in range(self._max_retries + 1):
+            span.set_attribute("llm.retries", attempt)
             try:
                 response = await self._client.request(
                     "POST",
@@ -92,6 +129,7 @@ class OpenAICompatibleLLM:
                     allow_internal=True,
                 )
                 if response.status_code in _RETRYABLE_STATUS and attempt < self._max_retries:
+                    self._metrics.record_llm(self._model, "retry")
                     await self._sleep(attempt)
                     continue
                 if response.status_code >= 400:
@@ -101,6 +139,7 @@ class OpenAICompatibleLLM:
             except (httpx.TransportError, SSRFBlockedError) as exc:
                 if attempt >= self._max_retries:
                     raise LlmUnavailableError("LLM endpoint is unavailable") from exc
+                self._metrics.record_llm(self._model, "retry")
                 await self._sleep(attempt)
         raise LlmUnavailableError("LLM endpoint is unavailable")
 

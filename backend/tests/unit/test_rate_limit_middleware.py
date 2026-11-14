@@ -72,6 +72,17 @@ async def test_rate_limit_returns_429_with_retry_after() -> None:
     assert limiter.identities and limiter.identities[0].startswith("ip:")
 
 
+async def test_rate_limit_records_429_metric() -> None:
+    limiter = FakeLimiter([RateLimitResult(allowed=False, remaining=0, retry_after_seconds=7)])
+    app = _app(limiter)
+
+    response = await _get(app, "/api/v1/ping")
+
+    assert response.status_code == 429
+    text = app.state.metrics.render().decode("utf-8")
+    assert 'paysentineliq_http_429_total{scope="ip"}' in text
+
+
 async def test_health_is_not_rate_limited() -> None:
     limiter = FakeLimiter([])
 

@@ -7,10 +7,13 @@ from paysentineliq.infrastructure.ai.telemetry import configure_ai_telemetry
 pytestmark = pytest.mark.unit
 
 
-def test_configure_ai_telemetry_disables_known_flags() -> None:
+def test_configure_ai_telemetry_disables_known_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
     configure_ai_telemetry()
 
-    assert os.environ["OTEL_SDK_DISABLED"] == "true"
+    assert "OTEL_SDK_DISABLED" not in os.environ
     assert os.environ["CREWAI_DISABLE_TELEMETRY"] == "true"
     assert os.environ["CREWAI_DISABLE_TRACKING"] == "true"
     assert os.environ["CREWAI_TRACING_ENABLED"] == "false"

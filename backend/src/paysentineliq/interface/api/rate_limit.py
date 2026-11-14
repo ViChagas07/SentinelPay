@@ -83,6 +83,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return None
 
         retry_after = max(1, result.retry_after_seconds)
+        metrics = getattr(request.app.state, "metrics", None)
+        if metrics is not None:
+            metrics.record_rate_limit(scope)
         _logger.warning(
             "rate_limited scope=%s retry_after=%s",
             scope,

@@ -4,10 +4,18 @@ from typing import Any
 
 import httpx
 import pytest
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from paysentineliq.application.errors import LlmUnavailableError
 from paysentineliq.application.ports.llm import LlmMessage
 from paysentineliq.infrastructure.ai.llm import OpenAICompatibleLLM
+from paysentineliq.infrastructure.observability.metrics import PlatformMetrics
+from paysentineliq.infrastructure.observability.tracing import (
+    PiiSanitizingSpanProcessor,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -50,7 +58,11 @@ def _response(content: str) -> httpx.Response:
     )
 
 
-def _llm(client: FakeHttpClient) -> OpenAICompatibleLLM:
+def _llm(
+    client: FakeHttpClient,
+    *,
+    metrics: PlatformMetrics | None = None,
+) -> OpenAICompatibleLLM:
     return OpenAICompatibleLLM(
         base_url="http://llm.test/v1",
         model="local-model",
@@ -58,6 +70,7 @@ def _llm(client: FakeHttpClient) -> OpenAICompatibleLLM:
         max_retries=1,
         backoff_seconds=0,
         client=client,
+        metrics=metrics,
     )
 
 
@@ -121,3 +134,59 @@ async def test_empty_content_raises() -> None:
 
     with pytest.raises(LlmUnavailableError):
         await llm.complete((LlmMessage(role="user", content="hi"),))
+
+
+async def test_llm_records_retry_and_success_metrics() -> None:
+    metrics = PlatformMetrics(multiprocess=False)
+    client = FakeHttpClient([httpx.Response(503), _response("ok")])
+    llm = _llm(client, metrics=metrics)
+
+    await llm.complete((LlmMessage(role="user", content="hi"),))
+
+    text = metrics.render().decode("utf-8")
+    assert "paysentineliq_llm_requests_total{" in text
+    assert 'outcome="retry"' in text
+    assert 'outcome="success"' in text
+    assert "paysentineliq_llm_request_duration_seconds_count{" in text
+
+
+async def test_llm_records_error_metrics() -> None:
+    metrics = PlatformMetrics(multiprocess=False)
+    client = FakeHttpClient([httpx.Response(503), httpx.Response(503)])
+    llm = _llm(client, metrics=metrics)
+
+    with pytest.raises(LlmUnavailableError):
+        await llm.complete((LlmMessage(role="user", content="hi"),))
+
+    text = metrics.render().decode("utf-8")
+    assert 'outcome="error"' in text
+
+
+async def test_llm_span_never_contains_prompt_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(
+        PiiSanitizingSpanProcessor(SimpleSpanProcessor(exporter)),
+    )
+    monkeypatch.setattr(trace, "get_tracer", provider.get_tracer)
+    client = FakeHttpClient([_response("ok")])
+    llm = _llm(client)
+
+    await llm.complete(
+        (
+            LlmMessage(
+                role="user",
+                content="CPF 529.982.247-25 e email user@example.com",
+            ),
+        ),
+    )
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    dumped = repr(dict(spans[0].attributes or {}))
+    assert "529.982.247-25" not in dumped
+    assert "user@example.com" not in dumped
+    assert "CPF" not in dumped
+    assert spans[0].name == "llm.complete"

@@ -16,6 +16,7 @@ from paysentineliq.infrastructure.notifications.console import (
     ConsoleWhatsAppAdapter,
 )
 from paysentineliq.infrastructure.notifications.email import SmtpEmailAdapter
+from paysentineliq.infrastructure.observability.metrics import get_platform_metrics
 from paysentineliq.infrastructure.observability.tracing import (
     instrument_sqlalchemy_engine,
 )
@@ -51,6 +52,7 @@ async def build_notification_runtime(
             ),
             ConsoleSmsAdapter(),
             ConsoleWhatsAppAdapter(),
+            metrics=get_platform_metrics(),
         )
         yield handler
     finally:

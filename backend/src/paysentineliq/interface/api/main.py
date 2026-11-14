@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from redis.asyncio import Redis
@@ -13,6 +14,10 @@ from paysentineliq.infrastructure.logging import configure_logging
 from paysentineliq.infrastructure.observability.metrics import (
     PlatformMetrics,
     set_platform_metrics,
+)
+from paysentineliq.infrastructure.observability.queue_depth import (
+    QueueDepthMonitor,
+    RabbitMqQueueDepthProvider,
 )
 from paysentineliq.infrastructure.observability.tracing import (
     configure_tracing,
@@ -83,6 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             jitter_ratio=resolved_settings.swr_jitter_ratio,
             lock_ttl_seconds=resolved_settings.swr_lock_ttl_seconds,
             wait_timeout_seconds=resolved_settings.swr_wait_timeout_seconds,
+            metrics=metrics,
         )
         application.state.brute_force = BruteForceService(
             redis,
@@ -123,9 +129,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allowed_hosts=set(resolved_settings.ssrf_allowed_hosts_list),
         )
         application.state.safe_http_client = SafeHttpClient(application.state.ssrf_guard)
+        rabbitmq_user, rabbitmq_password = resolved_settings.rabbitmq_management_credentials
+        queue_monitor = QueueDepthMonitor(
+            RabbitMqQueueDepthProvider(
+                base_url=resolved_settings.rabbitmq_management_endpoint,
+                username=rabbitmq_user,
+                password=rabbitmq_password,
+            ),
+            metrics,
+            interval_seconds=resolved_settings.queue_depth_refresh_seconds,
+        )
+        queue_monitor_task = asyncio.create_task(queue_monitor.run())
         try:
             yield
         finally:
+            queue_monitor_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await queue_monitor_task
             await redis.aclose()
             await engine.dispose()
 

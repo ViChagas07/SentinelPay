@@ -9,6 +9,11 @@ from typing import TypeVar
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from paysentineliq.infrastructure.observability.metrics import (
+    PlatformMetrics,
+    get_platform_metrics,
+)
+
 _logger = logging.getLogger("paysentineliq")
 
 T = TypeVar("T")
@@ -36,6 +41,7 @@ class SWRCache:
         lock_ttl_seconds: int = 10,
         wait_timeout_seconds: float = 2.0,
         key_prefix: str = "swr",
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         if soft_ttl_seconds <= 0:
             raise ValueError("soft_ttl_seconds must be positive")
@@ -56,6 +62,7 @@ class SWRCache:
         self._wait_timeout = wait_timeout_seconds
         self._prefix = key_prefix
         self._rng = random.SystemRandom()
+        self._metrics = metrics if metrics is not None else get_platform_metrics()
 
     def redis_keys(self, key: str) -> tuple[str, str, str]:
         digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
@@ -70,29 +77,53 @@ class SWRCache:
         encoder: Callable[[T], str],
         decoder: Callable[[str], T],
     ) -> T:
+        try:
+            return await self._get_or_compute(
+                key,
+                factory,
+                encoder=encoder,
+                decoder=decoder,
+            )
+        except RedisError:
+            self._metrics.record_cache("error")
+            raise
+
+    async def _get_or_compute(
+        self,
+        key: str,
+        factory: Callable[[], Awaitable[T]],
+        *,
+        encoder: Callable[[T], str],
+        decoder: Callable[[str], T],
+    ) -> T:
         value_key, soft_key, lock_key = self.redis_keys(key)
         cached = await self._redis.get(value_key)
 
         if cached is not None:
             soft_exists = await self._redis.exists(soft_key)
             if soft_exists:
+                self._metrics.record_cache("hit")
                 return decoder(_as_text(cached))
 
             token = secrets.token_urlsafe(16)
             acquired = await self._redis.set(lock_key, token, nx=True, ex=self._lock_ttl)
             if not acquired:
+                self._metrics.record_cache("stale")
                 return decoder(_as_text(cached))
 
             try:
                 refreshed = await self._redis.get(value_key)
                 if refreshed is not None and await self._redis.exists(soft_key):
+                    self._metrics.record_cache("hit")
                     return decoder(_as_text(refreshed))
                 value = await factory()
                 await self._store(value_key, soft_key, encoder(value))
+                self._metrics.record_cache("refresh")
                 return value
             finally:
                 await self._release(lock_key, token)
 
+        self._metrics.record_cache("miss")
         token = secrets.token_urlsafe(16)
         acquired = await self._redis.set(lock_key, token, nx=True, ex=self._lock_ttl)
         if acquired:

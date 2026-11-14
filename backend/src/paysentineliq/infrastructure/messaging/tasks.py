@@ -29,6 +29,7 @@ from paysentineliq.infrastructure.messaging.celery_app import (
     celery_app,
 )
 from paysentineliq.infrastructure.messaging.dispatcher import CeleryTaskDispatcher
+from paysentineliq.infrastructure.observability.metrics import get_platform_metrics
 
 _logger = logging.getLogger("paysentineliq")
 
@@ -198,6 +199,7 @@ async def _dispatch_payable_reminders() -> int:
             datetime.now(UTC),
             lookback_days=settings.payables_reminder_lookback_days,
         )
+        get_platform_metrics().record_notification("in_app", "created", result.created)
         _dispatch_notifications(result.notification_ids)
         return result.created
     finally:
@@ -220,6 +222,7 @@ async def _mark_overdue_payables() -> int:
     try:
         repository = SqlAlchemyPayableReminderRepository(session_factory)
         result = await repository.mark_overdue(datetime.now(UTC))
+        get_platform_metrics().record_notification("in_app", "created", result.created)
         _dispatch_notifications(result.notification_ids)
         return result.created
     finally:

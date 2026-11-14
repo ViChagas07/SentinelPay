@@ -6,12 +6,14 @@ import pytest
 from redis.asyncio import Redis
 
 from paysentineliq.infrastructure.cache.swr import SWRCache
+from paysentineliq.infrastructure.observability.metrics import PlatformMetrics
 
 pytestmark = [pytest.mark.integration, pytest.mark.docker]
 
 
 async def test_stale_while_revalidate_recomputes_once() -> None:
     redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+    metrics = PlatformMetrics(multiprocess=False)
     cache = SWRCache(
         redis,
         soft_ttl_seconds=1,
@@ -19,6 +21,7 @@ async def test_stale_while_revalidate_recomputes_once() -> None:
         jitter_ratio=0.0,
         lock_ttl_seconds=5,
         wait_timeout_seconds=1.0,
+        metrics=metrics,
     )
     logical_key = f"test:{uuid4()}"
     calls = 0
@@ -40,6 +43,13 @@ async def test_stale_while_revalidate_recomputes_once() -> None:
         assert first == "value-1"
         assert calls == 1
 
+        hit = await cache.get_or_compute(logical_key, factory, encoder=encode, decoder=decode)
+        assert hit == "value-1"
+        assert calls == 1
+        rendered = metrics.render().decode("utf-8")
+        assert 'result="miss"' in rendered
+        assert 'result="hit"' in rendered
+
         await asyncio.sleep(1.1)
 
         results = await asyncio.gather(
@@ -51,6 +61,8 @@ async def test_stale_while_revalidate_recomputes_once() -> None:
 
         assert calls == 2
         assert all(result in {"value-1", "value-2"} for result in results)
+        rendered = metrics.render().decode("utf-8")
+        assert 'result="refresh"' in rendered
     finally:
         await redis.delete(*cache.redis_keys(logical_key))
         await redis.aclose()

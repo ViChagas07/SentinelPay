@@ -48,6 +48,19 @@ async def test_metrics_accepts_bearer_and_header_token() -> None:
     assert header.status_code == 200
 
 
+async def test_request_middleware_records_http_metrics() -> None:
+    app = create_app(Settings(app_env="local", metrics_token="metrics-secret"))
+
+    response = await _request(app, "/health")
+
+    assert response.status_code == 200
+    text = app.state.metrics.render().decode("utf-8")
+    assert "paysentineliq_http_requests_total" in text
+    assert 'route="/health"' in text
+    assert 'status="200"' in text
+    assert "paysentineliq_http_request_duration_seconds_count" in text
+
+
 async def test_metrics_never_contains_pii_labels() -> None:
     app = create_app(Settings(app_env="local", metrics_token="metrics-secret"))
     app.state.metrics.record_analysis("boleto", "low")

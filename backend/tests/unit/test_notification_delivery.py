@@ -17,6 +17,7 @@ from paysentineliq.domain.notification import (
     NotificationStatus,
     NotificationType,
 )
+from paysentineliq.infrastructure.observability.metrics import PlatformMetrics
 
 pytestmark = pytest.mark.unit
 
@@ -188,6 +189,7 @@ def _handler(
     email_error: Exception | None = None,
     sms_error: Exception | None = None,
     whatsapp_error: Exception | None = None,
+    metrics: PlatformMetrics | None = None,
 ) -> tuple[
     NotificationDeliveryHandler,
     FakeDeliveryRepository,
@@ -205,6 +207,7 @@ def _handler(
         sms,
         whatsapp,
         clock=lambda: _NOW,
+        metrics=metrics,
     )
     return handler, repository, email, sms, whatsapp
 
@@ -314,6 +317,21 @@ async def test_cancelled_notification_is_not_sent() -> None:
     assert all(
         delivery.status is DeliveryStatus.SKIPPED for delivery in repository.deliveries.values()
     )
+
+
+async def test_delivery_records_channel_status_metrics() -> None:
+    context = _context(sms_enabled=True)
+    metrics = PlatformMetrics(multiprocess=False)
+    handler, _, _, _, _ = _handler(context, metrics=metrics)
+
+    await handler.execute(context.notification.id)
+
+    text = metrics.render().decode("utf-8")
+    assert 'channel="email"' in text
+    assert 'channel="sms"' in text
+    assert 'channel="whatsapp"' in text
+    assert 'status="sent"' in text
+    assert 'status="skipped"' in text
 
 
 async def test_missing_notification_returns_not_found() -> None:

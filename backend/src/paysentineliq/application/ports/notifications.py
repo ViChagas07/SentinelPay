@@ -28,6 +28,15 @@ class DeliveryContext:
         return NotificationPreference(channel=channel)
 
 
+class NotificationMetricsPort(Protocol):
+    def record_notification(
+        self,
+        channel: str,
+        status: str,
+        amount: int = 1,
+    ) -> None: ...
+
+
 class NotificationCenterRepositoryPort(Protocol):
     async def list_for_owner(
         self,

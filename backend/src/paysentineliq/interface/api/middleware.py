@@ -25,17 +25,36 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         request.state.request_id = request_id
         token = set_request_id(request_id)
         started = time.perf_counter()
+        metrics = getattr(request.app.state, "metrics", None)
         try:
             response = await call_next(request)
             response.headers[REQUEST_ID_HEADER] = request_id
-            elapsed_ms = (time.perf_counter() - started) * 1000
+            elapsed = time.perf_counter() - started
+            if metrics is not None:
+                route = request.scope.get("route")
+                metrics.record_http_request(
+                    request.method,
+                    getattr(route, "path", "unmatched"),
+                    response.status_code,
+                    elapsed,
+                )
             _logger.info(
                 "request_completed method=%s path=%s status=%d duration_ms=%.2f",
                 request.method,
                 request.url.path,
                 response.status_code,
-                elapsed_ms,
+                elapsed * 1000,
             )
             return response
+        except Exception:
+            if metrics is not None:
+                route = request.scope.get("route")
+                metrics.record_http_request(
+                    request.method,
+                    getattr(route, "path", "unmatched"),
+                    500,
+                    time.perf_counter() - started,
+                )
+            raise
         finally:
             reset_request_id(token)
