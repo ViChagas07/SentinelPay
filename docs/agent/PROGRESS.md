@@ -11,7 +11,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P04 concluida (Google OIDC, JWT e RBAC). Proximo passo: P05, conforme instrucao do dono.
+- Fase atual: P05 em andamento (storage S3 e upload seguro). P04 concluida.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migration `0002_auth` aplicada e rotas de auth ativas. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -50,3 +50,4 @@
 - P04.5 AuthService: upsert por `google_sub`, refresh opaco com apenas hash no banco, familia, rotacao, deteccao de reuso revogando a familia e logout revogando familia/jti; 6 testes unitarios verdes. O repositorio usa `FOR UPDATE` para serializar refresh concorrente.
 - P04.6 Rotas/RBAC: login/callback/refresh/logout/`users/me` e rotas protegidas; cookies refresh HttpOnly/Secure/SameSite, CSRF e forca bruta nas rotas de auth, `get_current_user`/`require_role` com role do banco. 146 unitarios e 16 docker verdes; manual: anonimo 401, login 302 com state/nonce/PKCE, refresh sem CSRF 403, callback invalido 400.
 - P04.7 OWASP/fechamento: A01/A02/A07 atualizados com evidencias e pendencias; `make check` 146 unitarios + `make test-docker` 16 verdes; `make bandit` 0 achados (aviso de nosec) e `make audit` sem vulnerabilidades conhecidas. Fluxo real Google, MFA e IDOR de recursos de negocio permanecem NAO VALIDADOS; stack no ar.
+- P05.1 Spec/ADR: SPEC 0005 e ADR-0008 definem StoragePort, S3 via boto3 em threadpool/MinIO, bucket privado com SSE, chave por dono/tipo/analise, validacao por magic bytes/paginas/JS/embeds e porta de antivirus sem implementacao. Dependencias boto3 1.44.3, pypdf 7.1.0 e python-multipart 0.0.33 adicionadas; ainda sem codigo de produto.
