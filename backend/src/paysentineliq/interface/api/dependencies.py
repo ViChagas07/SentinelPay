@@ -22,6 +22,9 @@ from paysentineliq.application.errors import (
 )
 from paysentineliq.application.locale import resolve_locale
 from paysentineliq.application.ports.analysis import AnalysisLookupPort
+from paysentineliq.application.ports.analysis_read_repository import (
+    AnalysisReadRepositoryPort,
+)
 from paysentineliq.application.ports.analysis_unit_of_work import AnalysisUnitOfWork
 from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
 from paysentineliq.application.ports.document_inspector import DocumentInspector
@@ -38,12 +41,19 @@ from paysentineliq.application.ports.token_service import (
     AccessTokenClaims,
     AccessTokenService,
 )
+from paysentineliq.application.queries.analyses import (
+    GetAnalysisHandler,
+    ListAnalysesHandler,
+)
 from paysentineliq.application.queries.documents import GetDocumentDownloadUrlHandler
 from paysentineliq.application.queries.example import GetExampleHandler
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.db.repositories.analyses import (
     SqlAlchemyAnalysisRepository,
+)
+from paysentineliq.infrastructure.db.repositories.analysis_read import (
+    SqlAlchemyAnalysisReadRepository,
 )
 from paysentineliq.infrastructure.db.repositories.documents import (
     SqlAlchemyDocumentReadRepository,
@@ -210,6 +220,32 @@ def get_document_read_repository(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DocumentReadRepository:
     return SqlAlchemyDocumentReadRepository(session)
+
+
+def get_analysis_read_repository(
+    request: Request,
+) -> AnalysisReadRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return SqlAlchemyAnalysisReadRepository(session_factory)
+
+
+def get_analysis_detail_query(
+    repository: Annotated[
+        AnalysisReadRepositoryPort,
+        Depends(get_analysis_read_repository),
+    ],
+    storage: Annotated[StoragePort, Depends(get_storage)],
+) -> GetAnalysisHandler:
+    return GetAnalysisHandler(repository, storage)
+
+
+def get_analysis_list_query(
+    repository: Annotated[
+        AnalysisReadRepositoryPort,
+        Depends(get_analysis_read_repository),
+    ],
+) -> ListAnalysesHandler:
+    return ListAnalysesHandler(repository)
 
 
 def get_document_download_query(
