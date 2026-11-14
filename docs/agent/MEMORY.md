@@ -49,6 +49,12 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P11: relatorio em `users/{owner}/analyses/{id}/report.json`; `analysis_events` e append-only e nao leva PII/texto; score reproduzivel pelos eventos/versoes. `RunAnalysisUseCase` e on-demand (sem fila).
 - P11: `crewai.llm` chama `load_dotenv()` no import; importar CrewAI apenas lazy/depois da configuracao para nao carregar `.env` de producao em testes.
 - P11: CrewAI 1.15.41 exige `chromadb 1.5.9` com 4 CVEs de servidor sem fix; nao usamos Chroma (PGVector), `make audit` ignora esses IDs com justificativa e isso deve ser revisitado.
+- P12: a extracao deterministica usa o texto OCR original; a copia sanitizada (NFKC/controle/invisivel/homoglifos/limite) serve so para deteccao, evidencias e prompt. Injecao detectada suprime o LLM e usa template; nunca altera o score.
+- P12: achados viram evidencia `guardrail.*` com peso 0 e evento `guardrail_triggered`; payloads e metricas levam apenas camada/codigo/severidade, nunca texto do documento ou PII.
+- P12: `make train-guardrails` grava `models/artifacts/guardrail-injection-v1.{joblib,json}` (fora do git, SHA-256 validado, `coverage=limited`). Default do limiar e 0.5; com 0.8 o recall sintetico caiu para 0.17. Metricas sinteticas nao representam producao.
+- P12: `LLM_JUDGE_MODEL` configura o judge (fallback `LLM_MODEL` se vazio e judge ligado); o judge ve apenas relatorio/evidencias, nao o texto do documento. Reprovacao zera o ajuste do LLM e aciona template.
+- P12: `tests/guardrails/` e a suite de red team; ataques reais/adaptativos e o judge no LM Studio real seguem NAO VALIDADOS. Nao afirmar imunidade.
+- P12: Bandit B105 acusa o rotulo `Bearer [REDACTED_TOKEN]` e B311 o PRNG sintetico; usar `# nosec B105`/`# nosec B311` na mesma linha e a justificativa em linha separada.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
