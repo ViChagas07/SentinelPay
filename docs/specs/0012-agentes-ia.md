@@ -26,7 +26,7 @@ Cada no registra um evento (`processing`, `rule_triggered`, `degraded`, `complet
 - Temperatura baixa (0.1), prompts curtos e esquema simples (`justification` + no maximo 5 `inconsistencies`).
 - Pedir JSON, validar com Pydantic, tentar reparo uma vez e repetir com limite. JSON invalido/timeout viram `llm_unavailable`.
 - Prompts versionados em `infrastructure/ai/prompts/{pt,es,en}.md`; a versao e o hash do arquivo.
-- Nenhum prompt/evento contem nome, CPF/CNPJ, salario, endereco, e-mail, telefone ou texto do documento. A redacao envia apenas codigos de regra, severidade, score, trechos publicos do RAG e flags.
+- Nenhum prompt/evento contem nome, CPF/CNPJ, salario, endereco, e-mail, telefone ou texto do documento. A redacao envia apenas codigos de regra, severidade, score, trechos publicos do RAG e flags. A partir da P12, o prompt recebe tambem um excerto sanitizado, mascarado e truncado do documento, delimitado como dado nao confiavel (SPEC 0013/ADR-0016).
 - Telemetria/tracing de CrewAI, LangChain/LangSmith e Chroma desligados por ambiente; a CrewAI e criada com `tracing=False`.
 
 ## Score e autonomia

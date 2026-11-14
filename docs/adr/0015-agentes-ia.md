@@ -33,6 +33,6 @@ A P11 precisa unir ingestao, agentes de boleto/contracheque, motor de fraude, RA
 - O caminho CrewAI/LM Studio real nao foi executado sem modelo local; fica NÃO VALIDADO. Testes usam LLM/crew falsos.
 - O reparo de JSON e o timeout limitam falhas de modelos pequenos.
 - O ajuste do LLM e conservador (<=5) e o piso critico permanece.
-- A P12 podera adicionar guardrails de entrada/saida e a P13 o endpoint; a P14, recibos.
+- A P12 adiciona guardrails de entrada/saida (ADR-0016) e passa um excerto sanitizado, mascarado e truncado do documento, delimitado como dado; a P13 fara o endpoint e a P14, recibos.
 - CrewAI 1.15.41 exige `chromadb 1.5.9`, que tem quatro CVEs de servidor Chroma sem versao corrigida. O projeto usa PGVector e nao expoe Chroma; `make audit` ignora esses IDs com justificativa e a decisao deve ser revisitada quando CrewAI/chromadb corrigir.
 - Importar CrewAI carrega `.env` via `load_dotenv`; por isso o import e lazy, depois da configuracao/validacao, para nao carregar credenciais de producao em testes.
