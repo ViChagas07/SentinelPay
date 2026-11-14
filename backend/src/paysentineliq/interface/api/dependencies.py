@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, Header, Request
@@ -9,13 +9,25 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
+from paysentineliq.application.errors import ForbiddenError, InvalidAccessTokenError
 from paysentineliq.application.locale import resolve_locale
 from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
+from paysentineliq.application.ports.oidc import OIDCClient
+from paysentineliq.application.ports.oidc_state import OIDCStateStore
 from paysentineliq.application.ports.readiness import ReadinessChecker
+from paysentineliq.application.ports.revoked_tokens import RevokedTokenStore
+from paysentineliq.application.ports.token_service import (
+    AccessTokenClaims,
+    AccessTokenService,
+)
 from paysentineliq.application.ports.unit_of_work import UnitOfWork
+from paysentineliq.application.use_cases.auth import AuthService
 from paysentineliq.application.use_cases.example import ExampleService
+from paysentineliq.domain.user import Role, User
+from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from paysentineliq.infrastructure.readiness import SqlAlchemyRedisReadinessChecker
+from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -52,3 +64,110 @@ def get_locale(
     accept_language: Annotated[str | None, Header(alias="Accept-Language")] = None,
 ) -> str:
     return resolve_locale(accept_language)
+
+
+def get_app_settings(request: Request) -> Settings:
+    settings: Settings = request.app.state.settings
+    return settings
+
+
+def get_token_service(request: Request) -> AccessTokenService:
+    service: AccessTokenService = request.app.state.token_service
+    return service
+
+
+def get_revoked_token_store(request: Request) -> RevokedTokenStore:
+    store: RevokedTokenStore = request.app.state.revoked_tokens
+    return store
+
+
+def get_oidc_client(request: Request) -> OIDCClient:
+    client: OIDCClient = request.app.state.oidc_client
+    return client
+
+
+def get_oidc_state_store(request: Request) -> OIDCStateStore:
+    store: OIDCStateStore = request.app.state.oidc_state_store
+    return store
+
+
+def get_brute_force(request: Request) -> BruteForceService:
+    service: BruteForceService = request.app.state.brute_force
+    return service
+
+
+def get_auth_service(
+    uow: Annotated[AuthUnitOfWork, Depends(get_auth_unit_of_work)],
+    token_service: Annotated[AccessTokenService, Depends(get_token_service)],
+    revoked: Annotated[RevokedTokenStore, Depends(get_revoked_token_store)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> AuthService:
+    return AuthService(
+        uow,
+        token_service,
+        revoked,
+        refresh_ttl_days=settings.refresh_token_ttl_days,
+    )
+
+
+def get_bearer_token(
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
+    if not authorization:
+        raise InvalidAccessTokenError()
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise InvalidAccessTokenError()
+    return token.strip()
+
+
+async def get_current_user(
+    request: Request,
+    token: Annotated[str, Depends(get_bearer_token)],
+    token_service: Annotated[AccessTokenService, Depends(get_token_service)],
+    revoked: Annotated[RevokedTokenStore, Depends(get_revoked_token_store)],
+    uow: Annotated[AuthUnitOfWork, Depends(get_auth_unit_of_work)],
+) -> User:
+    claims = token_service.decode(token)
+    if await revoked.is_revoked(claims.jti):
+        raise InvalidAccessTokenError()
+
+    async with uow:
+        user = await uow.users.get_by_id(claims.sub)
+
+    if user is None:
+        raise InvalidAccessTokenError()
+
+    request.state.user_id = str(user.id)
+    request.state.role = user.role.value
+    return user
+
+
+def get_optional_access_claims(
+    token_service: Annotated[AccessTokenService, Depends(get_token_service)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> AccessTokenClaims | None:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    try:
+        return token_service.decode(token.strip())
+    except InvalidAccessTokenError:
+        return None
+
+
+def require_role(
+    *allowed: Role,
+) -> Callable[[User], Awaitable[User]]:
+    allowed_roles = frozenset(allowed)
+
+    async def dependency(
+        user: Annotated[User, Depends(get_current_user)],
+    ) -> User:
+        if user.role not in allowed_roles:
+            raise ForbiddenError()
+        return user
+
+    return dependency

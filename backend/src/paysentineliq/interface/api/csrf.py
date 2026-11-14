@@ -14,7 +14,13 @@ def generate_csrf_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def set_csrf_cookie(response: Response, token: str, *, secure: bool) -> None:
+def set_csrf_cookie(
+    response: Response,
+    token: str,
+    *,
+    secure: bool,
+    domain: str | None = None,
+) -> None:
     response.set_cookie(
         key=CSRF_COOKIE_NAME,
         value=token,
@@ -22,6 +28,15 @@ def set_csrf_cookie(response: Response, token: str, *, secure: bool) -> None:
         secure=secure,
         samesite="lax",
         path="/",
+        domain=domain or None,
+    )
+
+
+def clear_csrf_cookie(response: Response, *, domain: str | None = None) -> None:
+    response.delete_cookie(
+        CSRF_COOKIE_NAME,
+        path="/",
+        domain=domain or None,
     )
 
 
