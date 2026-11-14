@@ -14,7 +14,7 @@ from paysentineliq.application.ports.interpretation import (
 )
 from paysentineliq.application.ports.llm import LlmMessage, LlmPort
 from paysentineliq.application.security.guardrails import ToolAllowlist
-from paysentineliq.application.security.redaction import mask_pii
+from paysentineliq.application.security.redaction import escape_delimiters, mask_pii
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.schemas import InterpretationOutput
 
@@ -29,7 +29,7 @@ class StructuredInterpreter:
         timeout_seconds: float = 30.0,
         temperature: float = 0.1,
         max_tokens: int = 800,
-        max_document_chars: int = 6000,
+        max_document_chars: int = 20_000,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be positive")
@@ -62,7 +62,9 @@ class StructuredInterpreter:
             }
             for item in request.evidence
         ]
-        rag_text = "\n\n".join(snippet[:1500] for snippet in request.rag_snippets[:5])
+        rag_text = escape_delimiters(
+            "\n\n".join(snippet[:1500] for snippet in request.rag_snippets[:5]),
+        )
         messages = self._prompts.render(
             prompt,
             language=request.language,
@@ -73,7 +75,9 @@ class StructuredInterpreter:
             evidence_json=json.dumps(evidence, ensure_ascii=False),
             rag_text=rag_text or "sem trechos disponiveis",
             format_instructions=self._parser.get_format_instructions(),
-            document_excerpt=mask_pii(request.document_excerpt)[: self._max_document_chars],
+            document_excerpt=escape_delimiters(mask_pii(request.document_excerpt))[
+                : self._max_document_chars
+            ],
         )
 
         for attempt in range(self._max_attempts):

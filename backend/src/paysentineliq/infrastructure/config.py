@@ -275,6 +275,10 @@ class Settings(BaseSettings):
             raise ValueError("GUARDRAIL_MAX_TEXT_CHARS must be positive")
         if self.guardrail_llm_excerpt_chars <= 0:
             raise ValueError("GUARDRAIL_LLM_EXCERPT_CHARS must be positive")
+        if self.guardrail_llm_excerpt_chars > self.guardrail_max_text_chars:
+            raise ValueError(
+                "GUARDRAIL_LLM_EXCERPT_CHARS must not exceed GUARDRAIL_MAX_TEXT_CHARS",
+            )
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")

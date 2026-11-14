@@ -178,6 +178,12 @@ _PATTERNS: tuple[tuple[str, SeverityLevel, re.Pattern[str], str], ...] = (
         re.compile(r"<system>|</system>|\[inst\]|###\s*instruction\b|\bsystem\s*prompt\s*:"),
         "guardrail.fake_system",
     ),
+    (
+        "delimiter_escape",
+        SeverityLevel.HIGH,
+        re.compile(r"</?(?:document_text|reference_text|report_text)>", re.IGNORECASE),
+        "guardrail.delimiter_escape",
+    ),
 )
 
 _URL_RE = re.compile(r"(?:https?://|www\.)[^\s<>\"']+", re.IGNORECASE)

@@ -10,6 +10,7 @@ from paysentineliq.application.ports.guardrails import (
     JudgeVerdict,
 )
 from paysentineliq.application.ports.llm import LlmPort
+from paysentineliq.application.security.redaction import escape_delimiters
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.schemas import JudgeOutput
 
@@ -55,10 +56,12 @@ class LlmReportJudge:
             score=request.score,
             band=request.band,
             evidence_json=json.dumps(evidence, ensure_ascii=False),
-            justification=request.justification,
-            inconsistencies_json=json.dumps(
-                list(request.inconsistencies),
-                ensure_ascii=False,
+            justification=escape_delimiters(request.justification),
+            inconsistencies_json=escape_delimiters(
+                json.dumps(
+                    list(request.inconsistencies),
+                    ensure_ascii=False,
+                ),
             ),
             format_instructions=self._parser.get_format_instructions(),
         )

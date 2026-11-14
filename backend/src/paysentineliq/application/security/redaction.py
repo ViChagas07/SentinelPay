@@ -15,6 +15,11 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("phone", re.compile(r"(?<!\w)(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?\d{4,5}[\s.-]?\d{4}(?!\w)")),
 )
 
+_DELIMITER_RE = re.compile(
+    r"</?(?:document_text|reference_text|report_text)>",
+    re.IGNORECASE,
+)
+
 _MASK_LABELS = {
     "jwt": "[REDACTED_JWT]",
     # Masking label, not a credential.
@@ -49,6 +54,10 @@ def find_sensitive_patterns(value: str) -> tuple[str, ...]:
 def contains_sensitive_term(value: str, terms: tuple[str, ...]) -> bool:
     folded = value.casefold()
     return any(len(term.strip()) >= 4 and term.strip().casefold() in folded for term in terms)
+
+
+def escape_delimiters(value: str) -> str:
+    return _DELIMITER_RE.sub("[ESCAPED_DELIMITER]", value)
 
 
 def mask_terms(value: str, terms: tuple[str, ...]) -> str:

@@ -58,7 +58,11 @@ from paysentineliq.application.security.guardrails import (
     dedupe_findings,
     findings_to_evidence,
 )
-from paysentineliq.application.security.redaction import mask_pii, mask_terms
+from paysentineliq.application.security.redaction import (
+    escape_delimiters,
+    mask_pii,
+    mask_terms,
+)
 from paysentineliq.application.security.storage_keys import (
     build_analysis_report_key,
 )
@@ -766,7 +770,7 @@ class LangGraphAnalysisOrchestrator:
 
     def _document_excerpt(self, state: AnalysisGraphState) -> str:
         text = state.get("sanitized_text", "")
-        masked = mask_terms(mask_pii(text), self._sensitive_terms(state))
+        masked = escape_delimiters(mask_terms(mask_pii(text), self._sensitive_terms(state)))
         return masked[: self._settings.guardrail_llm_excerpt_chars]
 
     async def _persist_node(self, state: AnalysisGraphState) -> AnalysisGraphState:

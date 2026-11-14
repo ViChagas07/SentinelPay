@@ -30,10 +30,11 @@ Reduzir o risco de jailbreak e prompt injection, com foco na injecao indireta: i
 - Texto do documento e trechos do RAG sempre entre delimitadores explicitos (`<document_text>` e `<reference_text>`).
 - Regra explicita: conteudo delimitado e DADO, nunca instrucao; instrucoes dentro dele devem ser ignoradas.
 - Proibicao de revelar prompt/instrucoes, mudar de papel, usar ferramentas ou sair do JSON.
+- Tags de delimitador vindas do dado (documento, RAG ou relatorio) sao escapadas antes de entrar no prompt, para impedir fuga do bloco.
 
 ### Camada 2 - Codigo (obrigatoria)
 - Sanitizacao do texto de entrada para analise: NFKC, remocao de caracteres de controle e Unicode invisivel, mapeamento de homoglifos basicos e limite de tamanho. O texto original do OCR continua alimentando a extracao deterministica (o score nao muda).
-- Deteccao de padroes conhecidos de injecao (pt/en/es/fr/de/it): override de instrucoes, mudanca de papel, revelacao de prompt, exfiltracao e alteracao de politica/score.
+- Deteccao de padroes conhecidos de injecao (pt/en/es/fr/de/it): override de instrucoes, mudanca de papel, revelacao de prompt, exfiltracao, alteracao de politica/score e tentativa de fechar/abrir delimitadores.
 - Allowlist de ferramentas vazia por padrao; chamadas desconhecidas sao rejeitadas.
 - Validacao rigida da saida contra o esquema Pydantic (`extra="forbid"`, limites de tamanho) e `AnalysisReport`.
 - Varredura da saida por PII (CPF, CNPJ, e-mail, telefone, termos sensiveis do proprio documento) e padroes de segredo (JWT, Bearer, AWS key, chave privada, `api_key=`); vazamento bloqueia a saida.
@@ -61,15 +62,15 @@ Reduzir o risco de jailbreak e prompt injection, com foco na injecao indireta: i
 
 ## Contrato e configuracao
 - `InterpretationRequest.document_excerpt` (sanitizado, mascarado e truncado) e delimitadores no prompt.
-- `LLM_JUDGE_MODEL`, `GUARDRAIL_JUDGE_ENABLED`, `GUARDRAIL_CLASSIFIER_ENABLED`, `GUARDRAIL_CLASSIFIER_THRESHOLD`, `GUARDRAIL_CLASSIFIER_MODEL_PATH`, `GUARDRAIL_MAX_TEXT_CHARS`, `GUARDRAIL_LLM_EXCERPT_CHARS`, `GUARDRAIL_ALLOWED_OUTPUT_URLS`.
-- Evidencias: `guardrail.prompt_injection`, `guardrail.role_change`, `guardrail.prompt_disclosure`, `guardrail.exfiltration`, `guardrail.policy_override`, `guardrail.invisible_unicode`, `guardrail.homoglyph`, `guardrail.input_truncated`, `guardrail.classifier_injection`, `guardrail.output_pii`, `guardrail.output_secret`, `guardrail.output_url`, `guardrail.judge_rejected`.
+- `LLM_JUDGE_MODEL`, `GUARDRAIL_JUDGE_ENABLED`, `GUARDRAIL_CLASSIFIER_ENABLED`, `GUARDRAIL_CLASSIFIER_THRESHOLD`, `GUARDRAIL_CLASSIFIER_MODEL_DIR`, `GUARDRAIL_MAX_TEXT_CHARS`, `GUARDRAIL_LLM_EXCERPT_CHARS` (<= `GUARDRAIL_MAX_TEXT_CHARS`), `GUARDRAIL_ALLOWED_OUTPUT_URLS`.
+- Evidencias: `guardrail.prompt_injection`, `guardrail.role_change`, `guardrail.prompt_disclosure`, `guardrail.exfiltration`, `guardrail.policy_override`, `guardrail.fake_system`, `guardrail.delimiter_escape`, `guardrail.invisible_unicode`, `guardrail.homoglyph`, `guardrail.input_truncated`, `guardrail.classifier_injection`, `guardrail.output_pii`, `guardrail.output_secret`, `guardrail.output_url`, `guardrail.judge_rejected`.
 - Flags: `prompt_injection_detected`, `guardrail_classifier_unavailable`, `llm_output_rejected`, `llm_judge_rejected`, `llm_judge_unavailable`.
 - Evento `guardrail_triggered` com `rule_code`, `layer`, `severity`, `code`.
 - Metricas: contador `(layer, code)` sem PII, exposto por porta para a P16.
 
 ## Criterios de aceite (viram testes)
 1. Sanitizacao remove controle/Unicode invisivel, mapeia homoglifos basicos e aplica limite de tamanho sem tocar no texto usado pela extracao.
-2. Padroes de injecao (pt/en/es e outros idiomas) geram evidencias com severidade.
+2. Padroes de injecao (pt/en/es e outros idiomas) e tentativa de fuga de delimitador geram evidencias com severidade.
 3. Tool allowlist rejeita ferramenta nao permitida.
 4. Saida com CPF/CNPJ/e-mail/telefone, JWT/segredo ou termo sensivel do documento e bloqueada; URL nao permitida e removida.
 5. Prompt de sistema contem delimitadores e regras de dado-nao-instrucao, nao revelar prompt e nao mudar de papel.

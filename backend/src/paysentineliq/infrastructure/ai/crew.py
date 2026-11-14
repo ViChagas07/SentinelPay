@@ -14,7 +14,7 @@ from paysentineliq.application.ports.interpretation import (
     InterpretationResult,
 )
 from paysentineliq.application.security.guardrails import ToolAllowlist
-from paysentineliq.application.security.redaction import mask_pii
+from paysentineliq.application.security.redaction import escape_delimiters, mask_pii
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.schemas import InterpretationOutput
 from paysentineliq.infrastructure.config import Settings
@@ -40,7 +40,7 @@ class CrewAIInterpreter:
         crew_runner: CrewRunner | None = None,
         guard: SSRFGuard | None = None,
         timeout_seconds: float = 60.0,
-        max_document_chars: int = 6000,
+        max_document_chars: int = 20_000,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
@@ -70,7 +70,9 @@ class CrewAIInterpreter:
             }
             for item in request.evidence
         ]
-        rag_text = "\n\n".join(snippet[:1500] for snippet in request.rag_snippets[:5])
+        rag_text = escape_delimiters(
+            "\n\n".join(snippet[:1500] for snippet in request.rag_snippets[:5]),
+        )
         messages = self._prompts.render(
             prompt,
             language=request.language,
@@ -81,7 +83,9 @@ class CrewAIInterpreter:
             evidence_json=json.dumps(evidence, ensure_ascii=False),
             rag_text=rag_text or "sem trechos disponiveis",
             format_instructions=self._parser.get_format_instructions(),
-            document_excerpt=mask_pii(request.document_excerpt)[: self._max_document_chars],
+            document_excerpt=escape_delimiters(mask_pii(request.document_excerpt))[
+                : self._max_document_chars
+            ],
         )
         system = messages[0].content
         user = messages[1].content
