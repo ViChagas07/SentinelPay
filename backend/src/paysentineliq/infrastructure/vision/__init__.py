@@ -1,0 +1,1 @@
+"""Heuristic visual anomaly signals."""

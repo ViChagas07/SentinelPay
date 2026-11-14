@@ -28,6 +28,7 @@ models/artifacts/
 *.joblib
 *.pkl
 backups/
+backend/tests/fixtures/generated/
 
 # Docker / infra local
 infra/**/data/
