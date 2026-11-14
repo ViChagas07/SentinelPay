@@ -135,6 +135,7 @@ def _create_paddle_engine(model_language: str) -> Any:
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
+        enable_mkldnn=False,
     )
 
 
@@ -182,3 +183,4 @@ def _to_bbox(box: Any) -> BBox | None:
 
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
+

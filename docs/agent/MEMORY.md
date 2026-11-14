@@ -23,6 +23,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - Storage: boto3 sincrono via `asyncio.to_thread`; chaves geradas pelo sistema e nome original apenas sanitizado como metadado. Bucket privado com `AES256` e presign curto; MinIO local usa `MINIO_KMS_SECRET_KEY` (chave de desenvolvimento no `.env.example`).
 - Upload: o path `/api/v1/documents/upload` e ignorado pelo `MaxBodySizeMiddleware` e tem `UploadSizeLimitMiddleware` proprio; nao remover os dois limites.
 - Antivirus e lifecycle/versionamento do bucket sao portas/pendencias, nao implementacoes; nao declarar malware scanning como validado.
+- OCR: PaddleOCR 3.7/PaddlePaddle 3.3.1 no Windows CPU precisa de `enable_mkldnn=False`; com PP-OCRv6 o oneDNN falha com `NotImplemented`. Modelos ficam em `~/.paddlex/official_models`, fora do repositorio.
+- OpenCV GUI e headless nao devem coexistir: o PaddleOCR declara `opencv-contrib-python`; instalar headless junto deixa o pacote `cv2` quebrado. Use `pip install --force-reinstall --no-deps opencv-contrib-python==4.10.0.84` para reparar.
+- Texto de OCR e dado nao confiavel e nunca deve virar instrucao; nao logar o texto completo.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
