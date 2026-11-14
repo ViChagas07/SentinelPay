@@ -16,6 +16,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - Fora de local, `SECURITY_HASH_SECRET` e obrigatorio para pseudonimizar chaves de rate limit/forca bruta; o `.env` de producao atual ainda precisa receber esse valor.
 - O `instance` do problem+json usa o template da rota quando existe, para nao refletir payload/PII do path.
 - Docs Swagger/Redoc/OpenAPI ficam desativados fora de `APP_ENV=local`.
+- Auth: Google OIDC com PKCE/state/nonce; access JWT HS256; refresh opaco rotativo com apenas hash no banco e familia revogada em reuso; `require_role` usa a role do banco, nao apenas a claim.
+- Authlib 1.9.5: `authlib.jose` esta depreciado; use joserfc. A integracao `httpx` do Authlib ainda funciona, mas avisa que sera trocada por `httpx2`.
+- `JWT_SECRET` e `JWT_SECRET_KEY` sao aceitos como alias; fora de local tambem sao obrigatorios `SECURITY_HASH_SECRET`, `FRONTEND_URL` e as credenciais Google.
+- Cookies: refresh `Path=/api/v1/auth`, CSRF `Path=/`, state OIDC `Path=/api/v1/auth/google`; `COOKIE_DOMAIN` e necessario se frontend e API estiverem em subdominios diferentes.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
@@ -31,5 +35,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - `pip-audit --local` avisa que o venv pode nao ser auditado integralmente; para cobertura total, definir `PIPAPI_PYTHON_LOCATION` para o Python do `.venv`.
 - Bandit B105 da falso positivo em nomes de variavel com `token`/`secret`; o segredo local e gerado em runtime e o script Lua foi renomeado para evitar o alerta.
 - O transporte pinado da guarda SSRF substitui o pool privado `_pool` do httpx/httpcore; revalidar em upgrade dessas libs.
+- O `GOOGLE_REDIRECT_URI` do `.env` de producao atual aponta para `/api/auth/google/callback`; a P04 usa `/api/v1/auth/google/callback` e o valor precisa ser corrigido antes de um deploy real.
+- O fluxo real com Google nao foi executado (sem credenciais); testes usam token/JWKS mockados. Nao declarar login Google validado em producao.
 - PowerShell 5.1 nao aceita `&&`; encadear comandos com `;` ou `if ($?)`.
 - O Graphify ignora `.env` por seguranca e por `.gitignore`; o caminho aparece como ignorado na saida, o que e esperado.

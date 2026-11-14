@@ -11,9 +11,9 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P04 em andamento (Google OIDC, JWT e RBAC). P03 concluida.
-- Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200 e migration `0001_initial` aplicada. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
-- Pendencias conhecidas: DDoS de borda, metricas/alertas e cobertura integral do pip-audit seguem NAO VALIDADOS.
+- Fase atual: P04 concluida (Google OIDC, JWT e RBAC). Proximo passo: P05, conforme instrucao do dono.
+- Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migration `0002_auth` aplicada e rotas de auth ativas. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
+- Pendencias conhecidas: fluxo real Google, MFA/recuperacao, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
 ## Historico
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
@@ -49,3 +49,4 @@
 - P04.4 OIDC Google: Authlib monta authorization URL com PKCE/state/nonce e troca o code; joserfc valida ID token RS256, `iss`, `aud`, `exp`, `nonce` e `email_verified`. State/nonce ficam no Redis com uso unico; 12 testes unitarios e teste de state no Redis verdes. Confirmado `authlib.jose` depreciado; Authlib 1.9.5 ainda avisa que a integracao httpx sera trocada por httpx2.
 - P04.5 AuthService: upsert por `google_sub`, refresh opaco com apenas hash no banco, familia, rotacao, deteccao de reuso revogando a familia e logout revogando familia/jti; 6 testes unitarios verdes. O repositorio usa `FOR UPDATE` para serializar refresh concorrente.
 - P04.6 Rotas/RBAC: login/callback/refresh/logout/`users/me` e rotas protegidas; cookies refresh HttpOnly/Secure/SameSite, CSRF e forca bruta nas rotas de auth, `get_current_user`/`require_role` com role do banco. 146 unitarios e 16 docker verdes; manual: anonimo 401, login 302 com state/nonce/PKCE, refresh sem CSRF 403, callback invalido 400.
+- P04.7 OWASP/fechamento: A01/A02/A07 atualizados com evidencias e pendencias; `make check` 146 unitarios + `make test-docker` 16 verdes; `make bandit` 0 achados (aviso de nosec) e `make audit` sem vulnerabilidades conhecidas. Fluxo real Google, MFA e IDOR de recursos de negocio permanecem NAO VALIDADOS; stack no ar.

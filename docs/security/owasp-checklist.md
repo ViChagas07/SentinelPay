@@ -4,18 +4,19 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 
 ## A01:2021 - Broken Access Control
 
-- **Status: NAO VALIDADO nesta fase.** Nao ha autenticacao/autorizacao nem rotas com dados de usuario; a P04 deve implementar JWT, ownership e RBAC.
-- Rate limit e CSRF sao defesas auxiliares, nao substituem autorizacao.
-- Evidencia: `docs/adr/0006-camadas-de-protecao.md`; testes de rate limit/CSRF em `backend/tests/unit/`.
-- Pendencia: testes de IDOR e RBAC por rota.
+- **Status: PARCIALMENTE VALIDADO.** Login Google OIDC/JWT, `get_current_user` por `sub` do token, `require_role` (`user`/`admin`) e rotas protegidas implementados. O `user_id` nunca vem de body/URL.
+- A role de autorizacao vem do usuario carregado do banco; uma claim `role` divergente nao eleva privilegio.
+- Testes: `backend/tests/unit/test_auth_routes.py` (anonimo 401, user 200, user em admin 403, token com role admin e banco user 403), `backend/tests/unit/test_jwt.py`.
+- **Pendencia:** testes de IDOR por recurso de negocio e gestao administrativa de papeis ainda **NAO VALIDADOS** (fases futuras).
 
 ## A02:2021 - Cryptographic Failures
 
 - HSTS habilitado fora de `APP_ENV=local`; TLS/terminacao na borda continua **NAO VALIDADO**.
-- Segredos ficam em `.env` ignorado; `.env.example` contem apenas placeholders. `SECURITY_HASH_SECRET` e obrigatorio fora de local.
+- Segredos ficam em `.env` ignorado; `.env.example` contem apenas placeholders. `SECURITY_HASH_SECRET`, `JWT_SECRET` e credenciais Google sao obrigatorios fora de local.
+- Access JWT HS256 com algoritmo fixo; refresh e opaco e somente o hash SHA-256 e persistido; cookies de refresh sao `HttpOnly`, `Secure` fora de local e `SameSite=Lax`.
 - Chaves de rate limit/forca bruta sao pseudonimizadas com HMAC-SHA-256 no Redis; o valor bruto de IP/identificador nao e gravado.
-- Evidencia: `backend/tests/unit/test_security_headers.py`, `backend/tests/unit/test_config.py`.
-- Pendencia: politica de rotacao de segredos e TLS na CDN/proxy.
+- Evidencia: `backend/tests/unit/test_security_headers.py`, `backend/tests/unit/test_config.py`, `backend/tests/unit/test_jwt.py`, `backend/tests/unit/test_auth_routes.py`, `backend/tests/integration/test_auth_service_db.py`.
+- Pendencia: rotacao de segredos, TLS na CDN/proxy e `COOKIE_DOMAIN` por ambiente.
 
 ## A03:2021 - Injection
 
@@ -48,10 +49,11 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 
 ## A07:2021 - Identification and Authentication Failures
 
-- Servico de forca bruta pronto: contadores por IP e identificador, janela, backoff exponencial e bloqueio temporario; falha do Redis e fail-closed.
-- Rate limit em `/api/v1/auth/*` e fail-closed quando o Redis esta indisponivel.
-- **Auth em si: NAO VALIDADO** (P04). Ainda nao ha login/JWT/refresh token.
-- Evidencia: `backend/tests/unit/test_bruteforce_unit.py`, `backend/tests/integration/test_bruteforce.py`, `backend/tests/unit/test_rate_limit_middleware.py`.
+- Login exclusivamente Google OIDC com authorization code + PKCE S256, state e nonce de uso unico, validacao de `iss`, `aud`, `exp` e `email_verified`.
+- Access JWT curto HS256 com `jti` revogavel no Redis; refresh opaco rotativo por familia, com deteccao de reuso revogando a familia e apenas hash no banco.
+- Rate limit e forca bruta cobrem as rotas de auth; falha do Redis em auth e fail-closed. CSRF double-submit protege refresh/logout por cookie.
+- Evidencia: `backend/tests/unit/test_google_oidc.py`, `backend/tests/unit/test_jwt.py`, `backend/tests/unit/test_auth_service.py`, `backend/tests/unit/test_auth_routes.py`, `backend/tests/integration/test_auth_service_db.py`, `backend/tests/integration/test_revoked_tokens.py`.
+- **NAO VALIDADO:** fluxo real com o Google (sem credenciais reais; JWKS/token mockados), MFA e recuperacao de conta. Nao ha cadastro por senha.
 
 ## A08:2021 - Software and Data Integrity Failures
 
