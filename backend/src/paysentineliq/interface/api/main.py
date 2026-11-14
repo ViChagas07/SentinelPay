@@ -12,6 +12,7 @@ from paysentineliq.infrastructure.db.engine import build_engine, build_session_f
 from paysentineliq.infrastructure.logging import configure_logging
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.rate_limit import TokenBucketRateLimiter
+from paysentineliq.infrastructure.security.ssrf import SafeHttpClient, SSRFGuard
 from paysentineliq.interface.api.constants import API_V1_PREFIX, REQUEST_ID_HEADER
 from paysentineliq.interface.api.limits import MaxBodySizeMiddleware, TimeoutMiddleware
 from paysentineliq.interface.api.middleware import RequestIdMiddleware
@@ -58,6 +59,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             max_block_seconds=resolved_settings.bruteforce_max_block_seconds,
             hash_secret=resolved_settings.security_hash_secret,
         )
+        application.state.ssrf_guard = SSRFGuard(
+            require_https=resolved_settings.app_env != "local",
+            allowed_hosts=set(resolved_settings.ssrf_allowed_hosts_list),
+        )
+        application.state.safe_http_client = SafeHttpClient(application.state.ssrf_guard)
         try:
             yield
         finally:

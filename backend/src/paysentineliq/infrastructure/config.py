@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     bruteforce_window_seconds: int = 900
     bruteforce_base_block_seconds: int = 30
     bruteforce_max_block_seconds: int = 3600
+    ssrf_allowed_hosts: str = "localhost,127.0.0.1"
 
     @property
     def allowed_hosts_list(self) -> list[str]:
@@ -43,6 +44,10 @@ class Settings(BaseSettings):
     @property
     def cors_allowed_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def ssrf_allowed_hosts_list(self) -> list[str]:
+        return [host.strip() for host in self.ssrf_allowed_hosts.split(",") if host.strip()]
 
     @model_validator(mode="after")
     def _apply_local_defaults_or_fail(self) -> Self:
@@ -99,6 +104,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "BRUTEFORCE_MAX_BLOCK_SECONDS must be >= BRUTEFORCE_BASE_BLOCK_SECONDS"
             )
+        if "*" in self.ssrf_allowed_hosts_list:
+            raise ValueError("SSRF_ALLOWED_HOSTS must not contain a wildcard")
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")

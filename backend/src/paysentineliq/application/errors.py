@@ -36,3 +36,13 @@ class SecurityServiceUnavailableError(ApplicationError):
             status_code=503,
             title="Service unavailable",
         )
+
+
+class SSRFBlockedError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="ssrf_blocked",
+            message="URL is not allowed.",
+            status_code=400,
+            title="Bad request",
+        )

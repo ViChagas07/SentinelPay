@@ -38,3 +38,4 @@
 - P03.4 Headers/TrustedHost/CORS: headers de seguranca e CSP em todas as respostas, HSTS fora de local, allowlists explicitas de Host/Origin sem wildcard e CORS com credenciais apenas para origem configurada; 70 testes unitarios verdes.
 - P03.5 Limites/sanitizacao: corpo maximo retorna 413, timeout retorna 504, `PlainText` rejeita HTML/controle e limita 10k, respostas JSON com Content-Type correto; 77 testes unitarios verdes.
 - P03.6 CSRF/forca bruta: double-submit com comparacao em tempo constante e cookie legivel/Secure; `BruteForceService` com contadores por IP/identificador, janela, backoff e fail-closed; testes unitarios e integracao Redis verdes. Suite unitaria 82 verdes.
+- P03.7 SSRF: guarda com HTTPS obrigatorio em producao, bloqueio de IPs nao globais/metadados, portas, DNS e redirects revalidados; conexao pinada no IP validado via httpcore; allowlist separada para infraestrutura. 17 testes verdes; suite unitaria 99 verdes.
