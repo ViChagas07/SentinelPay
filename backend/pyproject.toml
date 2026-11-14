@@ -64,7 +64,7 @@ plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "cv2", "paddleocr", "paddleocr.*", "paddle", "paddle.*", "paddlex", "paddlex.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -119,3 +119,4 @@ forbidden_modules = [
     "uvicorn",
     "pydantic_settings",
 ]
+

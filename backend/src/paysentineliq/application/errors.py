@@ -236,3 +236,53 @@ class DocumentNotFoundError(NotFoundError):
             code="document_not_found",
             message="Document not found.",
         )
+
+
+class UnsupportedDocumentError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="unsupported_document",
+            message="Document format is not supported for ingestion.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class OcrUnavailableError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="ocr_unavailable",
+            message="OCR engine is unavailable.",
+            status_code=503,
+            title="Service unavailable",
+        )
+
+
+class OcrTimeoutError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="ocr_timeout",
+            message="OCR processing timed out.",
+            status_code=504,
+            title="Gateway timeout",
+        )
+
+
+class OcrPageLimitError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="ocr_page_limit_exceeded",
+            message="Document exceeds the OCR page limit.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class OcrImageTooLargeError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="ocr_image_too_large",
+            message="Rendered page exceeds the image size limit.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
