@@ -74,12 +74,17 @@ async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse
         return await unexpected_exception_handler(request, exc)
 
     _logger.warning("domain_error code=%s", exc.code)
+    retry_after = getattr(exc, "retry_after_seconds", None)
+    extra_headers: dict[str, str] | None = None
+    if isinstance(retry_after, int) and retry_after > 0:
+        extra_headers = {"Retry-After": str(retry_after)}
     return build_problem_response(
         request,
         status_code=exc.status_code,
         code=exc.code,
         title=exc.title,
         detail=exc.message,
+        extra_headers=extra_headers,
     )
 
 
