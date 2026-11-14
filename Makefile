@@ -2,7 +2,7 @@ POETRY ?= poetry
 COMPOSE ?= docker compose --env-file .env.example
 DB_REVISION_ID := $(shell python scripts/next_migration_id.py)
 
-.PHONY: install lint format format-check typecheck arch test test-docker train train-guardrails backup migrate db-migrate db-revision db-check ingest-knowledge compose-config up stop check audit bandit security
+.PHONY: install lint format format-check typecheck arch test test-docker build train train-guardrails backup migrate db-migrate db-revision db-check ingest-knowledge compose-config up stop check audit bandit security
 
 install:
 	$(POETRY) -C backend install
@@ -67,6 +67,9 @@ db-check:
 
 compose-config:
 	$(COMPOSE) config --quiet
+
+build:
+	$(COMPOSE) build
 
 up:
 	$(COMPOSE) up -d --wait

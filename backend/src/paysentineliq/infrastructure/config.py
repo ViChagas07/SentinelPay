@@ -20,6 +20,23 @@ class Settings(BaseSettings):
     app_env: str = "local"
     database_url: str = ""
     redis_url: str = ""
+    rabbitmq_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("RABBITMQ_URL", "CELERY_BROKER_URL"),
+    )
+    celery_result_backend: str = Field(
+        default="",
+        validation_alias="CELERY_RESULT_BACKEND",
+    )
+    celery_task_always_eager: bool = False
+    celery_task_soft_time_limit_seconds: int = 900
+    celery_task_time_limit_seconds: int = 960
+    analysis_task_max_retries: int = 3
+    analysis_max_concurrent_per_user: int = 2
+    analysis_lease_seconds: int = 900
+    analysis_stale_sweep_seconds: int = 300
+    fraud_model_dir: str = "models/artifacts"
+    llm_interpreter: Literal["structured", "crewai"] = "structured"
     log_level: str = "INFO"
     rate_limit_capacity: int = 60
     rate_limit_refill_per_sec: float = 1.0
@@ -178,6 +195,18 @@ class Settings(BaseSettings):
             else:
                 missing.append("REDIS_URL")
 
+        if not self.rabbitmq_url:
+            if self.app_env == "local":
+                self.rabbitmq_url = "amqp://guest:guest@localhost:5672//"
+            else:
+                missing.append("RABBITMQ_URL")
+
+        if not self.celery_result_backend:
+            if self.app_env == "local":
+                self.celery_result_backend = "redis://localhost:6379/1"
+            else:
+                missing.append("CELERY_RESULT_BACKEND")
+
         if not self.security_hash_secret:
             if self.app_env == "local":
                 self.security_hash_secret = secrets.token_urlsafe(32)
@@ -279,6 +308,24 @@ class Settings(BaseSettings):
             raise ValueError(
                 "GUARDRAIL_LLM_EXCERPT_CHARS must not exceed GUARDRAIL_MAX_TEXT_CHARS",
             )
+
+        if self.celery_task_soft_time_limit_seconds <= 0:
+            raise ValueError("CELERY_TASK_SOFT_TIME_LIMIT_SECONDS must be positive")
+        if self.celery_task_time_limit_seconds <= self.celery_task_soft_time_limit_seconds:
+            raise ValueError(
+                "CELERY_TASK_TIME_LIMIT_SECONDS must be greater than "
+                "CELERY_TASK_SOFT_TIME_LIMIT_SECONDS",
+            )
+        if self.analysis_task_max_retries < 0:
+            raise ValueError("ANALYSIS_TASK_MAX_RETRIES must be non-negative")
+        if self.analysis_max_concurrent_per_user <= 0:
+            raise ValueError("ANALYSIS_MAX_CONCURRENT_PER_USER must be positive")
+        if self.analysis_lease_seconds <= 0:
+            raise ValueError("ANALYSIS_LEASE_SECONDS must be positive")
+        if self.analysis_stale_sweep_seconds <= 0:
+            raise ValueError("ANALYSIS_STALE_SWEEP_SECONDS must be positive")
+        if not self.fraud_model_dir.strip():
+            raise ValueError("FRAUD_MODEL_DIR must not be empty")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")

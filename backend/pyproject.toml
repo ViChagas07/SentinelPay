@@ -76,7 +76,7 @@ plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["boto3", "boto3.*", "botocore", "botocore.*", "crewai", "crewai.*", "cv2", "joblib", "joblib.*", "langchain", "langchain.*", "langchain_core", "langchain_core.*", "langgraph", "langgraph.*", "paddleocr", "paddleocr.*", "paddle", "paddle.*", "paddlex", "paddlex.*", "pymupdf", "pymupdf.*", "fitz", "sklearn", "sklearn.*"]
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "celery", "celery.*", "kombu", "kombu.*", "crewai", "crewai.*", "cv2", "joblib", "joblib.*", "langchain", "langchain.*", "langchain_core", "langchain_core.*", "langgraph", "langgraph.*", "paddleocr", "paddleocr.*", "paddle", "paddle.*", "paddlex", "paddlex.*", "pymupdf", "pymupdf.*", "fitz", "sklearn", "sklearn.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
