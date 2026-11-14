@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P09 concluida (ML antifraude). P10 nao iniciada.
+- Fase atual: P10 em andamento (RAG). P10.1 (auditoria/spec/ADR) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -85,3 +85,4 @@
 - P09.3 Dataset: gerador sintetico deterministico `infrastructure/ml/synthetic.py` com semente, documentos boleto/contracheque, mutacoes rotuladas, sinais visuais sinteticos e hash canonico; split por `base_id` sem vazamento. 9 testes verdes; Ruff, format e mypy verdes.
 - P09.4 Treino/artefato: pipeline `StandardScaler + LogisticRegression` calibrado com sigmoid/CV, `IsolationForest` treinado nos validos, metricas sinteticas (precision/recall/F1/ROC-AUC/PR-AUC/Brier/calibracao), registro com SHA-256 e loader com path confiavel. `make train` gerou 240 linhas e artefato estavel; 10 testes de treino/artefato verdes.
 - P09.5 Servico/fechamento: `FraudScoringService` combina deterministico + ML + visual, fallback `ml_unavailable`, piso critico 80 e metadados do modelo; 8 testes. Model card atualizado com metricas sinteticas do treino (seed 42, 240 linhas, hash do dataset e SHA-256 do artefato); `make check` com 420 testes, `make test-docker` 21 passed + 1 skip, Bandit 0 e pip-audit sem vulnerabilidades.
+- P10.1 Auditoria/spec/ADR: 21 PDFs em 8 categorias; pasta vazia `{febraban,...}` ignorada e reportada; nenhum PII real (apenas placeholders `000.000.000-00`/`usuario@dominio.com`); sem `knowledge/MANIFEST.yaml`, metadados default unknown; LM Studio indisponivel, embedding real NAO VALIDADO. SPEC 0011/ADR-0014 definem chunking, embedding configuravel, PGVector/Pinecone, idempotencia, citacoes e privacidade. `pgvector 0.5.1` e `pinecone 10.3.0` adicionados.

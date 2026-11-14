@@ -26,6 +26,8 @@ opencv-contrib-python = "4.10.0.84"
 pyyaml = "^6.0.2"
 scikit-learn = "^1.9.1"
 joblib = "^1.6.0"
+pgvector = "^0.5.1"
+pinecone = "^10.3.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
