@@ -172,6 +172,7 @@ class FakeAnalysisRepository:
         report_s3_key: str,
         event: AnalysisEvent | None = None,
         notifications: tuple[Any, ...] = (),
+        payables: tuple[Any, ...] = (),
     ) -> bool:
         self.completed = {
             "analysis_id": analysis_id,
@@ -195,6 +196,7 @@ class FakeAnalysisRepository:
         state: Mapping[str, object],
         event: AnalysisEvent | None = None,
         notifications: tuple[Any, ...] = (),
+        payables: tuple[Any, ...] = (),
     ) -> bool:
         self.failed = {"analysis_id": analysis_id, "error_code": error_code}
         return True

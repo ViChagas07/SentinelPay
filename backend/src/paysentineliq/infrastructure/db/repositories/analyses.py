@@ -13,12 +13,18 @@ from paysentineliq.domain.analysis import (
     AnalysisStatus,
     DegradationFlag,
 )
-from paysentineliq.domain.notification import Notification, NotificationStatus, NotificationType
+from paysentineliq.domain.notification import (
+    Notification,
+    NotificationStatus,
+    NotificationType,
+)
+from paysentineliq.domain.payables import NotificationChannel, Payable
 from paysentineliq.domain.scoring import RiskBand
 from paysentineliq.infrastructure.db.models import (
     AnalysisEventModel,
     AnalysisModel,
     NotificationModel,
+    PayableModel,
 )
 
 _TERMINAL = (
@@ -52,6 +58,24 @@ def _notification_model(notification: Notification) -> NotificationModel:
         type=notification.type.value,
         payload=dict(notification.payload),
         status=notification.status.value,
+        channel=notification.channel.value,
+        payable_id=notification.payable_id,
+        reminder_due_date=notification.reminder_due_date,
+        reminder_offset_days=notification.reminder_offset_days,
+    )
+
+
+def _payable_model(payable: Payable) -> PayableModel:
+    return PayableModel(
+        id=payable.id,
+        owner_id=payable.owner_id,
+        analysis_id=payable.analysis_id,
+        description=payable.description,
+        amount_cents=payable.amount_cents,
+        due_date=payable.due_date,
+        status=payable.status.value,
+        created_at=payable.created_at,
+        updated_at=payable.updated_at,
     )
 
 
@@ -143,6 +167,7 @@ class SqlAlchemyAnalysisRepository:
         report_s3_key: str,
         event: AnalysisEvent | None = None,
         notifications: tuple[Notification, ...] = (),
+        payables: tuple[Payable, ...] = (),
     ) -> bool:
         target = (
             AnalysisStatus.DEGRADED.value if degradation_flags else AnalysisStatus.COMPLETED.value
@@ -174,6 +199,8 @@ class SqlAlchemyAnalysisRepository:
                 session.add(_event_model(event))
             for notification in notifications:
                 session.add(_notification_model(notification))
+            for payable in payables:
+                session.add(_payable_model(payable))
             return True
 
     async def fail(
@@ -437,6 +464,10 @@ def _to_notification(model: NotificationModel) -> Notification:
         payload=dict(model.payload or {}),
         status=NotificationStatus(model.status),
         created_at=model.created_at,
+        channel=NotificationChannel(model.channel),
+        payable_id=model.payable_id,
+        reminder_due_date=model.reminder_due_date,
+        reminder_offset_days=model.reminder_offset_days,
     )
 
 

@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -142,6 +143,7 @@ class FakeAnalysisRepository:
         report_s3_key: str,
         event: AnalysisEvent | None = None,
         notifications: tuple[Notification, ...] = (),
+        payables: tuple[Any, ...] = (),
     ) -> bool:
         self.completed = {
             "analysis_id": analysis_id,
@@ -159,6 +161,7 @@ class FakeAnalysisRepository:
         state: Mapping[str, object],
         event: AnalysisEvent | None = None,
         notifications: tuple[Notification, ...] = (),
+        payables: tuple[Any, ...] = (),
     ) -> bool:
         self.failed = {"analysis_id": analysis_id, "error_code": error_code}
         self.failed_event = event

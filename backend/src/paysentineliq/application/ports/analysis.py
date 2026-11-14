@@ -14,6 +14,7 @@ from paysentineliq.domain.analysis import (
 )
 from paysentineliq.domain.document import DocumentKind
 from paysentineliq.domain.notification import Notification
+from paysentineliq.domain.payables import Payable
 from paysentineliq.domain.scoring import RiskBand
 
 
@@ -74,6 +75,7 @@ class AnalysisRepositoryPort(AnalysisLookupPort, Protocol):
         report_s3_key: str,
         event: AnalysisEvent | None = None,
         notifications: tuple[Notification, ...] = (),
+        payables: tuple[Payable, ...] = (),
     ) -> bool: ...
 
     async def fail(

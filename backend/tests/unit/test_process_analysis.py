@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -142,6 +143,7 @@ class FakeAnalyses:
         state: Mapping[str, object],
         event: AnalysisEvent | None = None,
         notifications: tuple[Notification, ...] = (),
+        payables: tuple[Any, ...] = (),
     ) -> bool:
         self.failed.append({"error_code": error_code, "event": event})
         return True
@@ -178,6 +180,7 @@ class FakeAnalyses:
         report_s3_key: str,
         event: AnalysisEvent | None = None,
         notifications: tuple[Notification, ...] = (),
+        payables: tuple[Any, ...] = (),
     ) -> bool:
         return True
 

@@ -288,6 +288,24 @@ class TaskDispatchError(ApplicationError):
         )
 
 
+class PayableNotFoundError(NotFoundError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="payable_not_found",
+            message="Payable not found.",
+        )
+
+
+class PayableStateError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="payable_invalid_state",
+            message="Payable cannot transition from its current state.",
+            status_code=409,
+            title="Conflict",
+        )
+
+
 class AnalysisNotFoundError(NotFoundError):
     def __init__(self) -> None:
         super().__init__(

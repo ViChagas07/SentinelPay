@@ -1,14 +1,16 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
+    Time,
     UniqueConstraint,
     Uuid,
     text,
@@ -176,14 +178,21 @@ class NotificationModel(Base):
     __tablename__ = "notifications"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('analysis_completed')",
+            "type IN ('analysis_completed', 'payable_due_reminder')",
             name="ck_notifications_type",
         ),
         CheckConstraint(
-            "status IN ('pending', 'dispatched', 'failed')",
+            "status IN ('pending', 'dispatched', 'failed', 'cancelled')",
             name="ck_notifications_status",
         ),
         Index("ix_notifications_owner_created_at", "owner_id", "created_at"),
+        UniqueConstraint(
+            "payable_id",
+            "reminder_due_date",
+            "reminder_offset_days",
+            "channel",
+            name="uq_notifications_payable_reminder",
+        ),
     )
 
     owner_id: Mapped[UUID] = mapped_column(
@@ -211,4 +220,78 @@ class NotificationModel(Base):
         server_default="pending",
         nullable=False,
         index=True,
+    )
+    channel: Mapped[str] = mapped_column(
+        String(16),
+        default="in_app",
+        server_default="in_app",
+        nullable=False,
+    )
+    payable_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("payables.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    reminder_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reminder_offset_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class PayableModel(Base):
+    __tablename__ = "payables"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending_confirmation', 'pending', 'paid', 'overdue', 'dismissed')",
+            name="ck_payables_status",
+        ),
+        UniqueConstraint("analysis_id", name="uq_payables_analysis_id"),
+        Index("ix_payables_owner_due_date", "owner_id", "due_date"),
+        Index("ix_payables_owner_status_due", "owner_id", "status", "due_date"),
+    )
+
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    analysis_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("analyses.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    description: Mapped[str] = mapped_column(String(200), nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+
+
+class ReminderPreferenceModel(Base):
+    __tablename__ = "reminder_preferences"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_reminder_preferences_user_id"),)
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    offsets_days: Mapped[list[int]] = mapped_column(
+        JSONB,
+        default=lambda: [3, 1, 0],
+        server_default=text("'[3, 1, 0]'::jsonb"),
+        nullable=False,
+    )
+    local_time: Mapped[time] = mapped_column(
+        Time(),
+        default=lambda: time(9, 0),
+        server_default="09:00:00",
+        nullable=False,
+    )
+    channels: Mapped[list[str]] = mapped_column(
+        JSONB,
+        default=lambda: ["in_app"],
+        server_default=text("'[\"in_app\"]'::jsonb"),
+        nullable=False,
     )
