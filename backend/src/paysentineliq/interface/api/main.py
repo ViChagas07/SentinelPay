@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
+from paysentineliq.infrastructure.cache.swr import SWRCache
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.db.engine import build_engine, build_session_factory
 from paysentineliq.infrastructure.logging import configure_logging
@@ -35,6 +36,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             capacity=resolved_settings.rate_limit_capacity,
             refill_per_second=resolved_settings.rate_limit_refill_per_sec,
             hash_secret=resolved_settings.security_hash_secret,
+        )
+        application.state.swr_cache = SWRCache(
+            redis,
+            soft_ttl_seconds=resolved_settings.swr_soft_ttl_seconds,
+            hard_ttl_seconds=resolved_settings.swr_hard_ttl_seconds,
+            jitter_ratio=resolved_settings.swr_jitter_ratio,
+            lock_ttl_seconds=resolved_settings.swr_lock_ttl_seconds,
+            wait_timeout_seconds=resolved_settings.swr_wait_timeout_seconds,
         )
         try:
             yield

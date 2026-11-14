@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     rate_limit_capacity: int = 60
     rate_limit_refill_per_sec: float = 1.0
     security_hash_secret: str = ""
+    swr_soft_ttl_seconds: int = 30
+    swr_hard_ttl_seconds: int = 300
+    swr_jitter_ratio: float = 0.2
+    swr_lock_ttl_seconds: int = 10
+    swr_wait_timeout_seconds: float = 2.0
 
     @model_validator(mode="after")
     def _apply_local_defaults_or_fail(self) -> Self:
@@ -49,6 +54,14 @@ class Settings(BaseSettings):
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")
         if self.rate_limit_refill_per_sec <= 0:
             raise ValueError("RATE_LIMIT_REFILL_PER_SEC must be positive")
+        if self.swr_hard_ttl_seconds <= self.swr_soft_ttl_seconds:
+            raise ValueError("SWR_HARD_TTL_SECONDS must be greater than SWR_SOFT_TTL_SECONDS")
+        if not 0.0 <= self.swr_jitter_ratio <= 1.0:
+            raise ValueError("SWR_JITTER_RATIO must be between 0 and 1")
+        if self.swr_lock_ttl_seconds <= 0:
+            raise ValueError("SWR_LOCK_TTL_SECONDS must be positive")
+        if self.swr_wait_timeout_seconds <= 0:
+            raise ValueError("SWR_WAIT_TIMEOUT_SECONDS must be positive")
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")
