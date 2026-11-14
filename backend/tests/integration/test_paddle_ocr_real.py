@@ -35,8 +35,4 @@ async def test_real_paddleocr_reads_synthetic_text() -> None:
         f"blocks={len(result.blocks)}"
     )
     assert result.blocks
-    assert any(
-        token in text
-        for token in ("PAYSENTINELIQ", "SYNTHETIC", "ACCOUNT")
-    )
-
+    assert any(token in text for token in ("PAYSENTINELIQ", "SYNTHETIC", "ACCOUNT"))

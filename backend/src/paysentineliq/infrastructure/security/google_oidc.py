@@ -30,6 +30,7 @@ class GoogleOIDCClient:
         jwks_uri: str,
         issuer: str,
         transport: httpx.AsyncBaseTransport | None = None,
+        oauth_transport: Any | None = None,
         clock: Callable[[], datetime] | None = None,
         jwks_ttl_seconds: int = 3600,
     ) -> None:
@@ -41,6 +42,7 @@ class GoogleOIDCClient:
         self._jwks_uri = jwks_uri
         self._issuer = issuer
         self._transport = transport
+        self._oauth_transport = oauth_transport if oauth_transport is not None else transport
         self._clock = clock or (lambda: datetime.now(UTC))
         self._jwks_ttl_seconds = jwks_ttl_seconds
         self._keys: KeySet | None = None
@@ -60,7 +62,7 @@ class GoogleOIDCClient:
                 redirect_uri=self._redirect_uri,
                 scope="openid email profile",
                 code_challenge_method="S256",
-                transport=self._transport,
+                transport=self._oauth_transport,
                 timeout=5.0,
             ) as client:
                 uri, _ = client.create_authorization_url(
@@ -88,7 +90,7 @@ class GoogleOIDCClient:
                 redirect_uri=self._redirect_uri,
                 scope="openid email profile",
                 code_challenge_method="S256",
-                transport=self._transport,
+                transport=self._oauth_transport,
                 timeout=5.0,
             ) as client:
                 token = await client.fetch_token(

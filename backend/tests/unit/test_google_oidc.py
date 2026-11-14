@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
+import httpx2
 import pytest
 from joserfc import jwt
 from joserfc.jwk import OctKey, RSAKey
@@ -55,11 +56,20 @@ def _rs256_token(claims: dict[str, object]) -> str:
 def _client(id_token: str | None = None) -> GoogleOIDCClient:
     jwks = {"keys": [_RSA_KEY.as_dict(private=False)]}
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def jwks_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/certs":
+            return httpx.Response(200, json=jwks)
+        return httpx.Response(404)
+
+    def oauth_handler(request: httpx2.Request) -> httpx2.Response:
         if request.url.path == "/token":
             if id_token is None:
-                return httpx.Response(400, json={"error": "invalid_grant"})
-            return httpx.Response(
+                return httpx2.Response(
+                    400,
+                    json={"error": "invalid_grant"},
+                    request=request,
+                )
+            return httpx2.Response(
                 200,
                 json={
                     "access_token": "google-access",
@@ -67,10 +77,9 @@ def _client(id_token: str | None = None) -> GoogleOIDCClient:
                     "expires_in": 3600,
                     "id_token": id_token,
                 },
+                request=request,
             )
-        if request.url.path == "/certs":
-            return httpx.Response(200, json=jwks)
-        return httpx.Response(404)
+        return httpx2.Response(404, request=request)
 
     return GoogleOIDCClient(
         client_id=_CLIENT_ID,
@@ -80,7 +89,8 @@ def _client(id_token: str | None = None) -> GoogleOIDCClient:
         token_endpoint="https://google.test/token",
         jwks_uri="https://google.test/certs",
         issuer=_ISSUER,
-        transport=httpx.MockTransport(handler),
+        transport=httpx.MockTransport(jwks_handler),
+        oauth_transport=httpx2.MockTransport(oauth_handler),
         clock=lambda: _BASE_TIME,
     )
 

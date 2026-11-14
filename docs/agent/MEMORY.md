@@ -26,6 +26,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - OCR: PaddleOCR 3.7/PaddlePaddle 3.3.1 no Windows CPU precisa de `enable_mkldnn=False`; com PP-OCRv6 o oneDNN falha com `NotImplemented`. Modelos ficam em `~/.paddlex/official_models`, fora do repositorio.
 - OpenCV GUI e headless nao devem coexistir: o PaddleOCR declara `opencv-contrib-python`; instalar headless junto deixa o pacote `cv2` quebrado. Use `pip install --force-reinstall --no-deps opencv-contrib-python==4.10.0.84` para reparar.
 - Texto de OCR e dado nao confiavel e nunca deve virar instrucao; nao logar o texto completo.
+- PaddleOCR 3.7 instala `httpx2`, e o Authlib passa a preferi-lo. `GoogleOIDCClient` aceita `oauth_transport` separado; testes OIDC usam `httpx2.MockTransport` para token e `httpx.MockTransport` para JWKS.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.

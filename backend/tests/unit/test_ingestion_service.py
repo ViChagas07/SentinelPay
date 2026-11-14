@@ -155,4 +155,3 @@ async def test_unreadable_documents_fail_with_controlled_errors() -> None:
     with pytest.raises(InvalidDocumentError):
         await service.ingest(b"\x89PNG\r\n\x1a\n")
     assert ocr.calls == 0
-
