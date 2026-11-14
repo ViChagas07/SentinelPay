@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     swr_jitter_ratio: float = 0.2
     swr_lock_ttl_seconds: int = 10
     swr_wait_timeout_seconds: float = 2.0
+    allowed_hosts: str = "localhost,127.0.0.1,test,testserver,api"
+    cors_allowed_origins: str = "http://localhost:3000"
+
+    @property
+    def allowed_hosts_list(self) -> list[str]:
+        return [host.strip() for host in self.allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
     @model_validator(mode="after")
     def _apply_local_defaults_or_fail(self) -> Self:
@@ -62,6 +72,13 @@ class Settings(BaseSettings):
             raise ValueError("SWR_LOCK_TTL_SECONDS must be positive")
         if self.swr_wait_timeout_seconds <= 0:
             raise ValueError("SWR_WAIT_TIMEOUT_SECONDS must be positive")
+
+        if not self.allowed_hosts_list:
+            raise ValueError("ALLOWED_HOSTS must not be empty")
+        if "*" in self.allowed_hosts_list:
+            raise ValueError("ALLOWED_HOSTS must not contain a wildcard")
+        if "*" in self.cors_allowed_origins_list:
+            raise ValueError("CORS_ALLOWED_ORIGINS must not contain a wildcard")
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")

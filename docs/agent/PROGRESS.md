@@ -35,3 +35,4 @@
 - P03.1 Spec e ADR: SPEC 0003 e ADR-0006 definem rate limit Token Bucket, SWR, headers/CORS/TrustedHost, CSRF, SSRF com pinagem, forca bruta, limites e auditoria. Sem codigo ainda.
 - P03.2 Rate limit: Token Bucket Lua atomico por IP/usuario com chaves pseudonimizadas, 429 com `Retry-After`, fail-open fora de auth e 503 em `/api/v1/auth/*`; 11 testes unitarios e teste de concorrencia Redis (20 chamadas, 5 permitidas) verdes. Suite unitaria 61 verdes.
 - P03.3 Cache SWR: utilitario generico com TTL macio/duro, jitter, lock `SET NX EX` e entrega de valor velho; teste Redis com 20 chamadas concorrentes apos expiracao gerou 1 recomputacao. Config validada; suite unitaria 61 verdes.
+- P03.4 Headers/TrustedHost/CORS: headers de seguranca e CSP em todas as respostas, HSTS fora de local, allowlists explicitas de Host/Origin sem wildcard e CORS com credenciais apenas para origem configurada; 70 testes unitarios verdes.

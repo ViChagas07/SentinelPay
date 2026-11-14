@@ -69,3 +69,27 @@ def test_does_not_read_dotenv_file(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     assert "from-file" not in settings.database_url
     assert "from-file" not in settings.redis_url
+
+
+def test_security_lists_are_parsed() -> None:
+    settings = Settings(
+        app_env="local",
+        allowed_hosts="localhost, 127.0.0.1,api",
+        cors_allowed_origins="http://localhost:3000, https://app.example",
+    )
+
+    assert settings.allowed_hosts_list == ["localhost", "127.0.0.1", "api"]
+    assert settings.cors_allowed_origins_list == [
+        "http://localhost:3000",
+        "https://app.example",
+    ]
+
+
+def test_cors_wildcard_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", cors_allowed_origins="*")
+
+
+def test_allowed_hosts_wildcard_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", allowed_hosts="*")
