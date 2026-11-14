@@ -2,7 +2,7 @@ POETRY ?= poetry
 COMPOSE ?= docker compose --env-file .env.example
 DB_REVISION_ID := $(shell python scripts/next_migration_id.py)
 
-.PHONY: install lint format format-check typecheck arch test test-docker train backup migrate db-migrate db-revision db-check ingest-knowledge compose-config up stop check audit bandit security
+.PHONY: install lint format format-check typecheck arch test test-docker train train-guardrails backup migrate db-migrate db-revision db-check ingest-knowledge compose-config up stop check audit bandit security
 
 install:
 	$(POETRY) -C backend install
@@ -39,6 +39,9 @@ test-docker: up migrate
 
 train:
 	$(POETRY) -C backend run python -m paysentineliq.infrastructure.ml.train --output-dir ../models/artifacts
+
+train-guardrails:
+	$(POETRY) -C backend run python -m paysentineliq.infrastructure.guardrails.train --output-dir ../models/artifacts
 
 ingest-knowledge:
 	$(POETRY) -C backend run python -m paysentineliq.infrastructure.rag.ingest --env-file ../.env.example --knowledge-root ../knowledge

@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     llm_max_score_adjustment: int = 5
     llm_language: str = "pt"
     ai_node_timeout_seconds: float = 60.0
+    guardrail_classifier_enabled: bool = False
+    guardrail_classifier_threshold: float = 0.5
+    guardrail_classifier_model_dir: str = "models/artifacts"
 
     @property
     def ocr_languages_list(self) -> list[str]:
@@ -248,6 +251,10 @@ class Settings(BaseSettings):
             raise ValueError("LLM_LANGUAGE must be pt, es or en")
         if self.ai_node_timeout_seconds <= 0:
             raise ValueError("AI_NODE_TIMEOUT_SECONDS must be positive")
+        if not 0.0 <= self.guardrail_classifier_threshold <= 1.0:
+            raise ValueError("GUARDRAIL_CLASSIFIER_THRESHOLD must be between 0 and 1")
+        if not self.guardrail_classifier_model_dir.strip():
+            raise ValueError("GUARDRAIL_CLASSIFIER_MODEL_DIR must not be empty")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")
