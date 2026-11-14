@@ -31,6 +31,14 @@ from paysentineliq.infrastructure.logging import (
         ("api_key=supersecret123", "api_key=[REDACTED]"),
         ("credencial AKIAIOSFODNN7EXAMPLE", "credencial [REDACTED_AWS_KEY]"),
         ("request_id=abc-123 status=200", "request_id=abc-123 status=200"),
+        (
+            "550e8400-e29b-41d4-a716-446655440000",
+            "550e8400-e29b-41d4-a716-446655440000",
+        ),
+        (
+            "00000000-0000-0000-0000-000000000000",
+            "00000000-0000-0000-0000-000000000000",
+        ),
     ],
 )
 def test_mask_pii(raw: str, expected: str) -> None:

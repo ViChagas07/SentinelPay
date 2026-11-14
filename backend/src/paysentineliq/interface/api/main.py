@@ -1,19 +1,17 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Literal
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from redis.asyncio import Redis
 
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.db.engine import build_engine, build_session_factory
 from paysentineliq.infrastructure.logging import configure_logging
+from paysentineliq.interface.api.constants import API_V1_PREFIX
 from paysentineliq.interface.api.middleware import RequestIdMiddleware
 from paysentineliq.interface.api.problems import register_exception_handlers
-
-
-class HealthResponse(BaseModel):
-    status: Literal["ok"]
+from paysentineliq.interface.api.routes.example import router as example_router
+from paysentineliq.interface.api.routes.ops import router as ops_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -23,22 +21,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         engine = build_engine(resolved_settings)
+        redis = Redis.from_url(
+            resolved_settings.redis_url,
+            decode_responses=True,
+        )
         application.state.engine = engine
         application.state.session_factory = build_session_factory(engine)
+        application.state.redis = redis
         try:
             yield
         finally:
+            await redis.aclose()
             await engine.dispose()
 
     app = FastAPI(title="PaySentinelIQ", version="0.1.0", lifespan=lifespan)
     app.state.settings = resolved_settings
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
-
-    @app.get("/health", response_model=HealthResponse, tags=["health"])
-    async def health() -> HealthResponse:
-        return HealthResponse(status="ok")
-
+    app.include_router(ops_router)
+    app.include_router(example_router, prefix=API_V1_PREFIX)
     return app
 
 
