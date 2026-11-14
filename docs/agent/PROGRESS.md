@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P07b concluida (CQRS leve). P08 nao iniciada.
+- Fase atual: P08 em andamento (contracheques). P08.1 (spec/ADR e dados regulatorios) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -74,3 +74,4 @@
 - P07b.1 Auditoria/ADR: camada de aplicacao auditada; `DocumentService` misturava escrita/leitura, `ExampleService` era leitura com `commit`, `AuthService` so tinha escritas e a analise de boleto era leitura sem banco. SPEC 0008 e ADR-0011 definem CQRS leve, fonte unica PostgreSQL, commands/queries, contratos do import-linter e `analysis_events` append-only para a P11, sem PII. Auth fica como servico de comandos; divisao em handlers menores fica para fase de auth.
 - P07b.2 Migracao: `application/commands/` (upload de documento e auth) e `application/queries/` (download, exemplo e analise de boleto); `use_cases/` removido. Upload retorna DTO minimo; download usa `DocumentReadRepository` que seleciona apenas `s3_key` e filtra dono; exemplo e boleto nao usam UoW/commit. Rotas e testes migrados; 321 testes sem Docker, Ruff, format e mypy strict verdes.
 - P07b.3 Contratos/fechamento: import-linter com 6 contratos ativos (queries x commands, queries sem UoW de escrita, domain sem application) e MEMORY com a convencao CQRS. `make check` verde (Ruff, format, mypy, import-linter, 321 testes sem Docker e compose config); `make bandit` 0 achados; cobertura dos novos commands/queries 95%. Docker nao exigido nesta fase.
+- P08.1 Spec/ADR/dados: SPEC 0009 e ADR-0012 aceitos. `docs/normas/` so tem LEIA-ME, entao `inss.yaml`, `irrf.yaml`, `salario_minimo.yaml` e `clt.yaml` ficam vazios com `fonte` NAO VERIFICAVEL; a tabela INSS do PDF de padroes de fraude nao foi usada como fonte legal. Loader PyYAML valida esquema, datas, Decimal e faixas; 8 testes verdes. PyYAML e types-pyyaml adicionados ao backend.

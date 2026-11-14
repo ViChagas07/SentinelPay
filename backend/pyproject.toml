@@ -23,6 +23,7 @@ pillow = "^13.0.0"
 paddlepaddle = "^3.3.1"
 paddleocr = "^3.7.0"
 opencv-contrib-python = "4.10.0.84"
+pyyaml = "^6.0.2"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
@@ -40,7 +41,8 @@ dev = [
     "bandit (>=1.9.4,<2.0.0)",
     "types-authlib (>=1.8.0.20261106,<2.0.0.0)",
     "types-psutil (>=7.2.2.20261111,<8.0.0.0)",
-    "httpx2 (>=2.16.0,<3.0.0)"
+    "httpx2 (>=2.16.0,<3.0.0)",
+    "types-pyyaml (>=6.0.12.20261113,<7.0.0.0)"
 ]
 
 [tool.ruff]
