@@ -11,9 +11,9 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P03 concluida (seguranca, rate limit e cache SWR). Proximo passo: P04, conforme instrucao do dono.
+- Fase atual: P04 em andamento (Google OIDC, JWT e RBAC). P03 concluida.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200 e migration `0001_initial` aplicada. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
-- Pendencias conhecidas: auth/A01/A07, DDoS de borda, metricas/alertas e cobertura integral do pip-audit seguem NAO VALIDADOS.
+- Pendencias conhecidas: DDoS de borda, metricas/alertas e cobertura integral do pip-audit seguem NAO VALIDADOS.
 
 ## Historico
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
@@ -43,3 +43,4 @@
 - P03.7 SSRF: guarda com HTTPS obrigatorio em producao, bloqueio de IPs nao globais/metadados, portas, DNS e redirects revalidados; conexao pinada no IP validado via httpcore; allowlist separada para infraestrutura. 17 testes verdes; suite unitaria 99 verdes.
 - P03.8 SQLi/XSS/auditoria: payloads classicos e XSS retornam 422 sem reflexo (`instance` usa o template da rota) e sem alterar o schema; docs desativados fora de local; `make bandit` 0 achados e `make audit` sem vulnerabilidades conhecidas (cobertura parcial do venv); checklist OWASP preenchido.
 - P03.9 Fechamento: `make check` com 101 testes unitarios verdes e `make test-docker` com 11 verdes; headers/CORS/TrustedHost validados por curl; stack no ar. Auth, DDoS de borda e metricas/alertas permanecem NAO VALIDADOS.
+- P04.1 Spec e ADR: SPEC 0004 e ADR-0007 definem OIDC Google com PKCE/state/nonce, access JWT HS256, refresh opaco rotativo com deteccao de reuso, CSRF, RBAC e cookies. Confirmado Authlib 1.9.5 com `authlib.jose` depreciado; joserfc 1.8.0 sera usado.
