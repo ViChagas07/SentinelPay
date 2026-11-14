@@ -20,9 +20,15 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - Authlib 1.9.5: `authlib.jose` esta depreciado; use joserfc. A integracao `httpx` do Authlib ainda funciona, mas avisa que sera trocada por `httpx2`.
 - `JWT_SECRET` e `JWT_SECRET_KEY` sao aceitos como alias; fora de local tambem sao obrigatorios `SECURITY_HASH_SECRET`, `FRONTEND_URL` e as credenciais Google.
 - Cookies: refresh `Path=/api/v1/auth`, CSRF `Path=/`, state OIDC `Path=/api/v1/auth/google`; `COOKIE_DOMAIN` e necessario se frontend e API estiverem em subdominios diferentes.
+- Storage: boto3 sincrono via `asyncio.to_thread`; chaves geradas pelo sistema e nome original apenas sanitizado como metadado. Bucket privado com `AES256` e presign curto; MinIO local usa `MINIO_KMS_SECRET_KEY` (chave de desenvolvimento no `.env.example`).
+- Upload: o path `/api/v1/documents/upload` e ignorado pelo `MaxBodySizeMiddleware` e tem `UploadSizeLimitMiddleware` proprio; nao remover os dois limites.
+- Antivirus e lifecycle/versionamento do bucket sao portas/pendencias, nao implementacoes; nao declarar malware scanning como validado.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
+- MinIO sem KMS responde `NotImplemented` ao `ServerSideEncryption=AES256`; configurar `MINIO_KMS_SECRET_KEY` e recriar o container.
+- `test_document_api` le `JWT_SECRET` do `.env.example` para assinar tokens aceitos pela API do Compose; se o segredo mudar, container e teste precisam ser atualizados juntos.
+- AWS S3/IAM/SSE-KMS real, lifecycle/versionamento e antivirus continuam NAO VALIDADOS; o teste cobre MinIO local.
 - A porta 5432 do host esta ocupada por um PostgreSQL local; o Compose mapeia o Postgres em `${POSTGRES_PORT}` (55432 no exemplo).
 - Healthcheck do Mailpit: usar `/mailpit readyz`, pois o binario nao esta no PATH (senao falha com "executable file not found").
 - `make test-docker` usa `API_BASE_URL` com default `http://localhost:8000`; se `API_PORT` mudar, exporte `API_BASE_URL` antes do alvo.

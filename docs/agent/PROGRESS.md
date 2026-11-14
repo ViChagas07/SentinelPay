@@ -11,9 +11,9 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P05 em andamento (storage S3 e upload seguro). P04 concluida.
-- Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migration `0002_auth` aplicada e rotas de auth ativas. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
-- Pendencias conhecidas: fluxo real Google, MFA/recuperacao, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
+- Fase atual: P05 concluida (storage S3 e upload seguro). Proximo passo: P06, conforme instrucao do dono.
+- Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
+- Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
 ## Historico
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
@@ -54,3 +54,4 @@
 - P05.2 Storage/S3: `StoragePort`, adaptador boto3 em threadpool com path-style/MinIO, bucket privado e `AES256`, URLs pre-assinadas curtas, chaves geradas pelo sistema e sanitizacao de nome. Inspector por magic bytes, SHA-256, limite streaming, paginas PDF, PDF criptografado e evidencias de JavaScript/embeds. Testes de chaves/inspector e roundtrip real no MinIO com KMS local verdes.
 - P05.3 Documentos/migration: tabela `documents` com owner, kind, s3_key, sha256, size, content_type, nome sanitizado e created_at; repositorio com filtro obrigatorio por dono; migration `0003_documents` aplicada apos backup (4677 bytes) e teste de IDOR no repositorio verde.
 - P05.4 Upload/rotas: `POST /api/v1/documents/upload` e `GET /api/v1/documents/{id}/url`; owner vem do JWT, chaves e extensao determinadas pelo sistema, limite streaming 413, compensacao de falha do banco e problem+json com `evidence` para PDF ativo. 182 unitarios e 19 docker verdes, incluindo roundtrip real no MinIO/Postgres.
+- P05.5 OWASP/fechamento: checklist atualizado com upload/storage/antivirus pendente; teste real da API grava no prefixo do dono, confirma SSE no MinIO e nega IDOR (404). `make check` 182 unitarios + `make test-docker` 20 verdes; `bandit` 0 achados e `pip-audit` sem vulnerabilidades conhecidas. Antivirus, AWS real e lifecycle permanecem NAO VALIDADOS; stack no ar.
