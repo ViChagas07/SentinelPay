@@ -40,7 +40,7 @@ class PromptRepository:
         match = _SECTION_RE.search(text)
         if match is None:
             raise ValueError(f"prompt file {path.name} has no SYSTEM/USER sections")
-        version = f"p11-{hashlib.sha256(raw).hexdigest()[:16]}"
+        version = f"p12-{hashlib.sha256(raw).hexdigest()[:16]}"
         return PromptTemplate(
             system=match.group(1).strip(),
             user=match.group(2).strip(),
@@ -59,6 +59,7 @@ class PromptRepository:
         evidence_json: str,
         rag_text: str,
         format_instructions: str,
+        document_excerpt: str = "",
     ) -> tuple[LlmMessage, ...]:
         template = ChatPromptTemplate.from_messages(
             [("system", prompt.system), ("human", prompt.user)],
@@ -72,6 +73,7 @@ class PromptRepository:
             evidence_json=evidence_json,
             rag_text=rag_text,
             format_instructions=format_instructions,
+            document_excerpt=document_excerpt,
         )
         return tuple(
             LlmMessage(

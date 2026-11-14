@@ -41,7 +41,7 @@ async def test_valid_json_is_parsed() -> None:
     assert result.justification == "Explicacao objetiva."
     assert result.inconsistencies == ("sugestao",)
     assert result.model_version == "fake-llm"
-    assert result.prompt_version.startswith("p11-")
+    assert result.prompt_version.startswith("p12-")
     assert llm.calls == 1
 
 

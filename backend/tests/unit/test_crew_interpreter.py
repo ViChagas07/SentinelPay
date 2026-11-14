@@ -87,7 +87,7 @@ async def test_crew_interpreter_returns_structured_result() -> None:
     assert result.justification == "Justificativa da crew."
     assert result.inconsistencies == ("Inconsistencia sugerida.",)
     assert result.model_version == "fake-model"
-    assert result.prompt_version.startswith("p11-")
+    assert result.prompt_version.startswith("p12-")
     assert len(runner.calls) == 1
     assert "dv_invalid" in runner.calls[0]["user"]
     assert "Trecho de conhecimento." in runner.calls[0]["user"]

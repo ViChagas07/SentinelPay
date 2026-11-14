@@ -19,6 +19,8 @@ class InterpretationRequest:
     rag_snippets: tuple[str, ...]
     language: str = "pt"
     degradation_flags: tuple[str, ...] = ()
+    document_excerpt: str = ""
+    tools: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.document_type.strip():

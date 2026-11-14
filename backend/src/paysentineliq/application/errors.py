@@ -308,3 +308,13 @@ class AnalysisTimeoutError(RuntimeError):
 
 class LlmUnavailableError(RuntimeError):
     pass
+
+
+class GuardrailViolationError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="guardrail_violation",
+            message="The request violates a guardrail policy.",
+            status_code=422,
+            title="Unprocessable entity",
+        )

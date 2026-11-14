@@ -5,6 +5,7 @@ from typing import Protocol, cast
 from langchain_core.output_parsers import PydanticOutputParser
 
 from paysentineliq.application.errors import (
+    GuardrailViolationError,
     LlmUnavailableError,
     SSRFBlockedError,
 )
@@ -12,6 +13,8 @@ from paysentineliq.application.ports.interpretation import (
     InterpretationRequest,
     InterpretationResult,
 )
+from paysentineliq.application.security.guardrails import ToolAllowlist
+from paysentineliq.application.security.redaction import mask_pii
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.schemas import InterpretationOutput
 from paysentineliq.infrastructure.config import Settings
@@ -37,20 +40,26 @@ class CrewAIInterpreter:
         crew_runner: CrewRunner | None = None,
         guard: SSRFGuard | None = None,
         timeout_seconds: float = 60.0,
+        max_document_chars: int = 6000,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if max_document_chars <= 0:
+            raise ValueError("max_document_chars must be positive")
         self._settings = settings
         self._prompts = prompts
         self._crew_runner = crew_runner
         self._guard = guard
         self._timeout = timeout_seconds
+        self._max_document_chars = max_document_chars
         self._parser = PydanticOutputParser(pydantic_object=InterpretationOutput)
 
     async def interpret(
         self,
         request: InterpretationRequest,
     ) -> InterpretationResult:
+        if ToolAllowlist().denied(request.tools):
+            raise GuardrailViolationError()
         prompt = self._prompts.load(request.language)
         evidence = [
             {
@@ -72,6 +81,7 @@ class CrewAIInterpreter:
             evidence_json=json.dumps(evidence, ensure_ascii=False),
             rag_text=rag_text or "sem trechos disponiveis",
             format_instructions=self._parser.get_format_instructions(),
+            document_excerpt=mask_pii(request.document_excerpt)[: self._max_document_chars],
         )
         system = messages[0].content
         user = messages[1].content

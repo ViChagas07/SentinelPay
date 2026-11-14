@@ -11,7 +11,7 @@ def test_prompts_load_and_are_versioned(locale: str) -> None:
 
     assert prompt.system
     assert prompt.user
-    assert prompt.version.startswith("p11-")
+    assert prompt.version.startswith("p12-")
     assert "{evidence_json}" in prompt.user
     assert "{rag_text}" in prompt.user
 

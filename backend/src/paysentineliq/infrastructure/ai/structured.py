@@ -4,12 +4,17 @@ from typing import cast
 
 from langchain_core.output_parsers import PydanticOutputParser
 
-from paysentineliq.application.errors import LlmUnavailableError
+from paysentineliq.application.errors import (
+    GuardrailViolationError,
+    LlmUnavailableError,
+)
 from paysentineliq.application.ports.interpretation import (
     InterpretationRequest,
     InterpretationResult,
 )
 from paysentineliq.application.ports.llm import LlmMessage, LlmPort
+from paysentineliq.application.security.guardrails import ToolAllowlist
+from paysentineliq.application.security.redaction import mask_pii
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.schemas import InterpretationOutput
 
@@ -24,23 +29,29 @@ class StructuredInterpreter:
         timeout_seconds: float = 30.0,
         temperature: float = 0.1,
         max_tokens: int = 800,
+        max_document_chars: int = 6000,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be positive")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        if max_document_chars <= 0:
+            raise ValueError("max_document_chars must be positive")
         self._llm = llm
         self._prompts = prompts
         self._max_attempts = max_attempts
         self._timeout = timeout_seconds
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._max_document_chars = max_document_chars
         self._parser = PydanticOutputParser(pydantic_object=InterpretationOutput)
 
     async def interpret(
         self,
         request: InterpretationRequest,
     ) -> InterpretationResult:
+        if ToolAllowlist().denied(request.tools):
+            raise GuardrailViolationError()
         prompt = self._prompts.load(request.language)
         evidence = [
             {
@@ -62,6 +73,7 @@ class StructuredInterpreter:
             evidence_json=json.dumps(evidence, ensure_ascii=False),
             rag_text=rag_text or "sem trechos disponiveis",
             format_instructions=self._parser.get_format_instructions(),
+            document_excerpt=mask_pii(request.document_excerpt)[: self._max_document_chars],
         )
 
         for attempt in range(self._max_attempts):

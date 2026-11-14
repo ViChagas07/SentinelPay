@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class InterpretationOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     justification: str = Field(min_length=1, max_length=2000)
     inconsistencies: list[str] = Field(default_factory=list)
 
