@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P09 em andamento (ML antifraude). P09.2 (features e fusao) concluido.
+- Fase atual: P09 em andamento (ML antifraude). P09.3 (dataset sintetico) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -82,3 +82,4 @@
 - Reforco migrations: auditoria confirmou `migrations/env.py` async (`async_engine_from_config`/`asyncio.run`), 3 revisions rastreadas (`git ls-files`) e nenhuma ignorada (`git check-ignore` vazio); RULES sec.3 atualizada. Makefile: `db-migrate` (backup + upgrade), `db-revision m=...` (autogenerate com mount e `--rev-id 000N` via `scripts/next_migration_id.py`), `db-check`. `make db-check` -> "No new upgrade operations detected"; `test_migration.py` Docker 4 passed (roundtrip downgrade/upgrade/check). Revisao temporaria `0004_temp_check` gerada e removida; nenhuma migration nova commitada.
 - P09.1 Spec/ADR/model card: SPEC 0010, ADR-0013 e `docs/ml/MODEL_CARD.md` definem dataset sintetico com semente fixa, split por `base_id`, features sem texto/PII, IsolationForest + LogisticRegression calibrada, fusao 0..100 com pesos/cortes a calibrar e piso critico, fallback `ml_unavailable`, artefato com SHA-256 e metricas marcadas como sinteticas. Dependencias `scikit-learn 1.9.1` e `joblib 1.6.0` adicionadas.
 - P09.2 Features/fusao: `DeterministicSummary`/`EvidenceSummary`/`ScoringConfig`/`fuse_risk` com fallback e piso 80; `FEATURE_NAMES` fixas (subscore, evidencias por regra, confiancas, razoes, visuais) e factories de `BoletoAnalysis`/`PayslipAnalysis` sem texto bruto/PII. 21 testes verdes; Ruff, format e mypy verdes.
+- P09.3 Dataset: gerador sintetico deterministico `infrastructure/ml/synthetic.py` com semente, documentos boleto/contracheque, mutacoes rotuladas, sinais visuais sinteticos e hash canonico; split por `base_id` sem vazamento. 9 testes verdes; Ruff, format e mypy verdes.
