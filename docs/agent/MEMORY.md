@@ -11,6 +11,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - O Makefile usa `poetry -C backend`; rode os alvos a partir da raiz.
 - `make migrate` sempre executa `make backup` antes de `alembic upgrade head`; nao rode migration direto no ambiente de desenvolvimento.
 - Os testes forcam `APP_ENV=local` e URLs locais no `backend/conftest.py`, mesmo que exista configuracao de producao no ambiente.
+- `httpx` e dependencia de runtime (usada pela guarda SSRF), nao apenas de teste; nao mover para o grupo dev.
+- Fora de local, `SECURITY_HASH_SECRET` e obrigatorio para pseudonimizar chaves de rate limit/forca bruta; o `.env` de producao atual ainda precisa receber esse valor.
+- O `instance` do problem+json usa o template da rota quando existe, para nao refletir payload/PII do path.
+- Docs Swagger/Redoc/OpenAPI ficam desativados fora de `APP_ENV=local`.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.
@@ -23,5 +27,8 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - Ao adicionar migration, rebuild da imagem da API (`docker compose --env-file .env.example build api` + `make up`) antes de `make migrate`; o comando roda dentro do container.
 - Graphify: use `graphify update .` para mudancas de codigo; a extracao semantica de docs pode recusar shrink e manter nos antigos, sem bloquear o grafo de codigo.
 - Graphify com backend Gemini exige o extra `graphifyy[gemini]` (pacote `openai`); sem ele o chunk semantico falha com "the 'openai' package is required".
+- `pip-audit --local` avisa que o venv pode nao ser auditado integralmente; para cobertura total, definir `PIPAPI_PYTHON_LOCATION` para o Python do `.venv`.
+- Bandit B105 da falso positivo em nomes de variavel com `token`/`secret`; o segredo local e gerado em runtime e o script Lua foi renomeado para evitar o alerta.
+- O transporte pinado da guarda SSRF substitui o pool privado `_pool` do httpx/httpcore; revalidar em upgrade dessas libs.
 - PowerShell 5.1 nao aceita `&&`; encadear comandos com `;` ou `if ($?)`.
 - O Graphify ignora `.env` por seguranca e por `.gitignore`; o caminho aparece como ignorado na saida, o que e esperado.

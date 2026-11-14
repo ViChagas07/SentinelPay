@@ -3,6 +3,7 @@
 ## Comandos de checagem
 - Segredo fora do git: `git check-ignore -v .env` (deve retornar `.gitignore:2:.env	.env`) e `git ls-files | Select-String -Pattern '^\.env$'` (deve ser vazio).
 - Backend (na raiz): `make lint`, `make format-check`, `make format`, `make typecheck`, `make arch`, `make test`, `make test-docker`, `make check`.
+- Auditoria: `make bandit` (0 achados) e `make audit` (`pip-audit --local`; sem vulnerabilidades conhecidas, com aviso de cobertura parcial do venv).
 - Backup/migration: `make backup` (grava `backups/*.sql`), `make migrate` (backup + `alembic upgrade head` no container da API).
 - Equivalentes: `poetry -C backend run ruff check .`, `poetry -C backend run ruff format --check .`, `poetry -C backend run mypy src tests`, `poetry -C backend run lint-imports`, `poetry -C backend run pytest -m "not docker"`.
 - Compose (na raiz): `make compose-config` (= `docker compose --env-file .env.example config --quiet`), `make up`, `make stop`.
@@ -10,8 +11,9 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P03 em andamento (seguranca, rate limit e cache SWR). P02 concluida.
+- Fase atual: P03 concluida (seguranca, rate limit e cache SWR). Proximo passo: P04, conforme instrucao do dono.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200 e migration `0001_initial` aplicada. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
+- Pendencias conhecidas: auth/A01/A07, DDoS de borda, metricas/alertas e cobertura integral do pip-audit seguem NAO VALIDADOS.
 
 ## Historico
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
@@ -39,3 +41,5 @@
 - P03.5 Limites/sanitizacao: corpo maximo retorna 413, timeout retorna 504, `PlainText` rejeita HTML/controle e limita 10k, respostas JSON com Content-Type correto; 77 testes unitarios verdes.
 - P03.6 CSRF/forca bruta: double-submit com comparacao em tempo constante e cookie legivel/Secure; `BruteForceService` com contadores por IP/identificador, janela, backoff e fail-closed; testes unitarios e integracao Redis verdes. Suite unitaria 82 verdes.
 - P03.7 SSRF: guarda com HTTPS obrigatorio em producao, bloqueio de IPs nao globais/metadados, portas, DNS e redirects revalidados; conexao pinada no IP validado via httpcore; allowlist separada para infraestrutura. 17 testes verdes; suite unitaria 99 verdes.
+- P03.8 SQLi/XSS/auditoria: payloads classicos e XSS retornam 422 sem reflexo (`instance` usa o template da rota) e sem alterar o schema; docs desativados fora de local; `make bandit` 0 achados e `make audit` sem vulnerabilidades conhecidas (cobertura parcial do venv); checklist OWASP preenchido.
+- P03.9 Fechamento: `make check` com 101 testes unitarios verdes e `make test-docker` com 11 verdes; headers/CORS/TrustedHost validados por curl; stack no ar. Auth, DDoS de borda e metricas/alertas permanecem NAO VALIDADOS.

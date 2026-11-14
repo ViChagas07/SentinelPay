@@ -70,7 +70,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await redis.aclose()
             await engine.dispose()
 
-    app = FastAPI(title="PaySentinelIQ", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="PaySentinelIQ",
+        version="0.1.0",
+        lifespan=lifespan,
+        debug=False,
+        docs_url="/docs" if resolved_settings.app_env == "local" else None,
+        redoc_url="/redoc" if resolved_settings.app_env == "local" else None,
+        openapi_url=("/openapi.json" if resolved_settings.app_env == "local" else None),
+    )
     app.state.settings = resolved_settings
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(

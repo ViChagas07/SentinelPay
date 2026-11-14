@@ -1,3 +1,4 @@
+import secrets
 from functools import lru_cache
 from typing import Self
 
@@ -67,7 +68,7 @@ class Settings(BaseSettings):
 
         if not self.security_hash_secret:
             if self.app_env == "local":
-                self.security_hash_secret = "local-security-hash-secret"
+                self.security_hash_secret = secrets.token_urlsafe(32)
             else:
                 missing.append("SECURITY_HASH_SECRET")
 

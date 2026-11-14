@@ -29,6 +29,14 @@ def _request_id(request: Request) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _instance(request: Request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if isinstance(route_path, str) and route_path:
+        return route_path
+    return request.url.path
+
+
 def build_problem_response(
     request: Request,
     *,
@@ -44,7 +52,7 @@ def build_problem_response(
         "title": title,
         "status": status_code,
         "detail": detail,
-        "instance": request.url.path,
+        "instance": _instance(request),
         "code": code,
         "request_id": request_id,
     }

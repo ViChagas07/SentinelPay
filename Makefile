@@ -1,7 +1,7 @@
 POETRY ?= poetry
 COMPOSE ?= docker compose --env-file .env.example
 
-.PHONY: install lint format format-check typecheck arch test test-docker backup migrate compose-config up stop check
+.PHONY: install lint format format-check typecheck arch test test-docker backup migrate compose-config up stop check audit bandit security
 
 install:
 	$(POETRY) -C backend install
@@ -20,6 +20,14 @@ typecheck:
 
 arch:
 	$(POETRY) -C backend run lint-imports
+
+audit:
+	$(POETRY) -C backend run pip-audit --local
+
+bandit:
+	$(POETRY) -C backend run bandit -q -r src
+
+security: audit bandit
 
 test:
 	$(POETRY) -C backend run pytest -m "not docker"

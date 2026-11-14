@@ -57,6 +57,12 @@ async def test_hsts_is_added_outside_local() -> None:
     assert "max-age=31536000" in response.headers["Strict-Transport-Security"]
 
 
+async def test_docs_are_disabled_outside_local() -> None:
+    response = await _get(_production_app(), "/docs")
+
+    assert response.status_code == 404
+
+
 async def test_cors_allows_configured_origin() -> None:
     response = await _get(_local_app(), headers={"Origin": "http://localhost:3000"})
 

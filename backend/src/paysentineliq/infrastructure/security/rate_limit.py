@@ -10,7 +10,7 @@ from redis.exceptions import RedisError
 
 _logger = logging.getLogger("paysentineliq")
 
-_TOKEN_BUCKET_SCRIPT = """
+_BUCKET_LUA = """
 local key = KEYS[1]
 local capacity = tonumber(ARGV[1])
 local refill = tonumber(ARGV[2])
@@ -84,7 +84,7 @@ class TokenBucketRateLimiter:
     async def consume(self, identity: str) -> RateLimitResult:
         try:
             raw = await self._redis.eval(
-                _TOKEN_BUCKET_SCRIPT,
+                _BUCKET_LUA,
                 1,
                 self.redis_key(identity),
                 self._capacity,

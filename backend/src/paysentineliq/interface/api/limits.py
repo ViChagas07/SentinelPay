@@ -9,10 +9,6 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from paysentineliq.interface.api.problems import build_problem_response
 
 
-class RequestBodyTooLargeError(Exception):
-    pass
-
-
 class MaxBodySizeMiddleware:
     def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
         if max_bytes <= 0:
@@ -25,40 +21,47 @@ class MaxBodySizeMiddleware:
             await self.app(scope, receive, send)
             return
 
-        content_length = Headers(scope=scope).get("content-length")
-        if content_length is not None:
-            try:
-                declared_length = int(content_length)
-            except ValueError:
-                declared_length = 0
-            if declared_length > self._max_bytes:
+        headers = Headers(scope=scope)
+        declared_length = _declared_length(headers)
+        if declared_length is not None and declared_length > self._max_bytes:
+            await self._reject(scope, receive, send)
+            return
+
+        method = str(scope.get("method", "GET")).upper()
+        chunked = "chunked" in (headers.get("transfer-encoding") or "").lower()
+        if method not in {"POST", "PUT", "PATCH"} and not chunked:
+            await self.app(scope, receive, send)
+            return
+
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+
+            body.extend(message.get("body", b""))
+            if len(body) > self._max_bytes:
                 await self._reject(scope, receive, send)
                 return
+            if not message.get("more_body", False):
+                break
 
-        received = 0
-        response_started = False
+        sent = False
 
-        async def limited_receive() -> Message:
-            nonlocal received
-            message = await receive()
-            if message["type"] == "http.request":
-                received += len(message.get("body", b""))
-                if received > self._max_bytes:
-                    raise RequestBodyTooLargeError
-            return message
+        async def replay() -> Message:
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {
+                    "type": "http.request",
+                    "body": bytes(body),
+                    "more_body": False,
+                }
+            return {"type": "http.disconnect"}
 
-        async def tracked_send(message: Message) -> None:
-            nonlocal response_started
-            if message["type"] == "http.response.start":
-                response_started = True
-            await send(message)
-
-        try:
-            await self.app(scope, limited_receive, tracked_send)
-        except RequestBodyTooLargeError:
-            if response_started:
-                raise
-            await self._reject(scope, receive, send)
+        await self.app(scope, replay, send)
 
     async def _reject(self, scope: Scope, receive: Receive, send: Send) -> None:
         request = Request(scope)
@@ -70,6 +73,16 @@ class MaxBodySizeMiddleware:
             detail="Request body is too large.",
         )
         await response(scope, receive, send)
+
+
+def _declared_length(headers: Headers) -> int | None:
+    value = headers.get("content-length")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 class TimeoutMiddleware(BaseHTTPMiddleware):
