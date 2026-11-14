@@ -8,7 +8,10 @@ from pypdf import PdfWriter
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from paysentineliq.application.use_cases.documents import DocumentService
+from paysentineliq.application.commands.documents import (
+    UploadDocumentCommand,
+    UploadDocumentHandler,
+)
 from paysentineliq.domain.document import DocumentKind
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.db.models import DocumentModel, UserModel
@@ -64,33 +67,33 @@ async def test_upload_writes_owner_prefix_to_minio_and_database() -> None:
                 user_id = user.id
                 await uow.commit()
 
-            service = DocumentService(
+            handler = UploadDocumentHandler(
                 uow,
                 storage,
                 PdfImageDocumentInspector(),
                 max_bytes=1024 * 1024,
                 max_pdf_pages=5,
-                presigned_ttl_seconds=60,
                 clock=lambda: datetime.now(UTC),
             )
-            uploaded = await service.upload(
-                owner_id=user.id,
-                kind=DocumentKind.BANK_SLIP,
-                original_name="../../boleto.pdf",
-                stream=io.BytesIO(_pdf_bytes()),
+            result = await handler.handle(
+                UploadDocumentCommand(
+                    owner_id=user.id,
+                    kind=DocumentKind.BANK_SLIP,
+                    original_name="../../boleto.pdf",
+                    stream=io.BytesIO(_pdf_bytes()),
+                ),
             )
-            key = uploaded.document.s3_key
-
-            assert key.startswith(f"users/{user.id}/bank_slip/{uploaded.analysis_id}/")
-            assert key.endswith("/original.pdf")
-            assert uploaded.document.original_name_sanitized == "boleto.pdf"
 
             found = await uow.documents.get_by_id_for_owner(
-                uploaded.document.id,
+                result.document_id,
                 user.id,
             )
             assert found is not None
-            assert found.sha256 == uploaded.document.sha256
+            key = found.s3_key
+            assert key.startswith(f"users/{user.id}/bank_slip/{result.analysis_id}/")
+            assert key.endswith("/original.pdf")
+            assert result.original_name_sanitized == "boleto.pdf"
+            assert found.sha256 == result.sha256
 
         import boto3
         from botocore.config import Config

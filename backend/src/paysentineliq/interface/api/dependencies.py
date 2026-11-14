@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
+from paysentineliq.application.commands.auth import AuthService
+from paysentineliq.application.commands.documents import UploadDocumentHandler
 from paysentineliq.application.errors import (
     ForbiddenError,
     InvalidAccessTokenError,
@@ -17,22 +19,28 @@ from paysentineliq.application.errors import (
 from paysentineliq.application.locale import resolve_locale
 from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
 from paysentineliq.application.ports.document_inspector import DocumentInspector
+from paysentineliq.application.ports.document_read_repository import DocumentReadRepository
 from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
 from paysentineliq.application.ports.oidc import OIDCClient
 from paysentineliq.application.ports.oidc_state import OIDCStateStore
 from paysentineliq.application.ports.readiness import ReadinessChecker
+from paysentineliq.application.ports.repository import ExampleRepository
 from paysentineliq.application.ports.revoked_tokens import RevokedTokenStore
 from paysentineliq.application.ports.storage import StoragePort
 from paysentineliq.application.ports.token_service import (
     AccessTokenClaims,
     AccessTokenService,
 )
-from paysentineliq.application.ports.unit_of_work import UnitOfWork
-from paysentineliq.application.use_cases.auth import AuthService
-from paysentineliq.application.use_cases.documents import DocumentService
-from paysentineliq.application.use_cases.example import ExampleService
+from paysentineliq.application.queries.documents import GetDocumentDownloadUrlHandler
+from paysentineliq.application.queries.example import GetExampleHandler
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
+from paysentineliq.infrastructure.db.repositories.documents import (
+    SqlAlchemyDocumentReadRepository,
+)
+from paysentineliq.infrastructure.db.repositories.example import (
+    SqlAlchemyExampleRepository,
+)
 from paysentineliq.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from paysentineliq.infrastructure.readiness import SqlAlchemyRedisReadinessChecker
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
@@ -42,12 +50,6 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
     async with session_factory() as session:
         yield session
-
-
-def get_unit_of_work(
-    session: Annotated[AsyncSession, Depends(get_session)],
-) -> UnitOfWork:
-    return SqlAlchemyUnitOfWork(session)
 
 
 def get_auth_unit_of_work(
@@ -62,10 +64,16 @@ def get_document_unit_of_work(
     return SqlAlchemyUnitOfWork(session)
 
 
-def get_example_service(
-    uow: Annotated[UnitOfWork, Depends(get_unit_of_work)],
-) -> ExampleService:
-    return ExampleService(uow)
+def get_example_read_repository(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ExampleRepository:
+    return SqlAlchemyExampleRepository(session)
+
+
+def get_example_query(
+    repository: Annotated[ExampleRepository, Depends(get_example_read_repository)],
+) -> GetExampleHandler:
+    return GetExampleHandler(repository)
 
 
 def get_readiness_checker(request: Request) -> ReadinessChecker:
@@ -122,7 +130,7 @@ def get_document_inspector(request: Request) -> DocumentInspector:
     return inspector
 
 
-def get_document_service(
+def get_upload_document_handler(
     uow: Annotated[
         DocumentUnitOfWork,
         Depends(get_document_unit_of_work),
@@ -130,13 +138,33 @@ def get_document_service(
     storage: Annotated[StoragePort, Depends(get_storage)],
     inspector: Annotated[DocumentInspector, Depends(get_document_inspector)],
     settings: Annotated[Settings, Depends(get_app_settings)],
-) -> DocumentService:
-    return DocumentService(
+) -> UploadDocumentHandler:
+    return UploadDocumentHandler(
         uow,
         storage,
         inspector,
         max_bytes=settings.upload_max_mb * 1024 * 1024,
         max_pdf_pages=settings.pdf_max_pages,
+    )
+
+
+def get_document_read_repository(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> DocumentReadRepository:
+    return SqlAlchemyDocumentReadRepository(session)
+
+
+def get_document_download_query(
+    repository: Annotated[
+        DocumentReadRepository,
+        Depends(get_document_read_repository),
+    ],
+    storage: Annotated[StoragePort, Depends(get_storage)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> GetDocumentDownloadUrlHandler:
+    return GetDocumentDownloadUrlHandler(
+        repository,
+        storage,
         presigned_ttl_seconds=settings.s3_presigned_url_ttl_seconds,
     )
 

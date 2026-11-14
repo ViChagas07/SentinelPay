@@ -4,6 +4,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paysentineliq.application.ports.document_read_repository import (
+    DocumentDownloadLocation,
+)
 from paysentineliq.domain.document import Document, DocumentKind
 from paysentineliq.infrastructure.db.models import DocumentModel
 
@@ -42,6 +45,26 @@ class SqlAlchemyDocumentRepository:
             )
         )
         return _to_domain(model) if model is not None else None
+
+
+class SqlAlchemyDocumentReadRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_download_location(
+        self,
+        document_id: UUID,
+        owner_id: UUID,
+    ) -> DocumentDownloadLocation | None:
+        s3_key = await self._session.scalar(
+            select(DocumentModel.s3_key).where(
+                DocumentModel.id == document_id,
+                DocumentModel.owner_id == owner_id,
+            ),
+        )
+        if s3_key is None:
+            return None
+        return DocumentDownloadLocation(s3_key=s3_key)
 
 
 def _to_domain(model: DocumentModel) -> Document:

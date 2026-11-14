@@ -5,9 +5,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from paysentineliq.application.use_cases.example import ExampleService
+from paysentineliq.application.queries.example import GetExampleHandler, GetExampleQuery
 from paysentineliq.infrastructure.logging import get_request_id
-from paysentineliq.interface.api.dependencies import get_example_service, get_locale
+from paysentineliq.interface.api.dependencies import get_example_query, get_locale
 
 router = APIRouter(prefix="/example", tags=["example"])
 _logger = logging.getLogger("paysentineliq")
@@ -23,7 +23,7 @@ class ExampleResponse(BaseModel):
 @router.get("/{item_id}", response_model=ExampleResponse)
 async def example(
     item_id: UUID,
-    service: Annotated[ExampleService, Depends(get_example_service)],
+    handler: Annotated[GetExampleHandler, Depends(get_example_query)],
     locale: Annotated[str, Depends(get_locale)],
     emit_log: bool = False,
 ) -> ExampleResponse:
@@ -34,7 +34,7 @@ async def example(
             "123.456.789-00",
         )
 
-    await service.check(item_id)
+    await handler.handle(GetExampleQuery(item_id=item_id))
     return ExampleResponse(
         item_id=item_id,
         status="ok",

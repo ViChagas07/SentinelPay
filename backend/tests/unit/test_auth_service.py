@@ -5,13 +5,13 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from paysentineliq.application.commands.auth import AuthService
 from paysentineliq.application.errors import (
     InvalidRefreshTokenError,
     RefreshTokenReuseError,
 )
 from paysentineliq.application.ports.oidc import GoogleIdentity
 from paysentineliq.application.security.refresh_tokens import hash_refresh_token
-from paysentineliq.application.use_cases.auth import AuthService
 from paysentineliq.domain.refresh_token import RefreshTokenRecord
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService

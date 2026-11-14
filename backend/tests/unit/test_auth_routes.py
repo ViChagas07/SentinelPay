@@ -8,13 +8,13 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from paysentineliq.application.commands.auth import AuthResult
 from paysentineliq.application.errors import (
     InvalidRefreshTokenError,
     OAuthAuthenticationError,
 )
 from paysentineliq.application.ports.oidc import GoogleIdentity
 from paysentineliq.application.ports.oidc_state import OIDCState
-from paysentineliq.application.use_cases.auth import AuthResult
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.security.bruteforce import BruteForceStatus

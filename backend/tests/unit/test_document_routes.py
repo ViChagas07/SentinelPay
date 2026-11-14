@@ -1,26 +1,33 @@
 from datetime import UTC, datetime
 from types import TracebackType
-from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from fastapi import FastAPI
 
+from paysentineliq.application.commands.documents import (
+    UploadDocumentCommand,
+    UploadedDocumentResult,
+)
 from paysentineliq.application.errors import (
     DangerousPdfError,
     DocumentNotFoundError,
     UnsupportedDocumentTypeError,
     UploadTooLargeError,
 )
-from paysentineliq.application.use_cases.documents import UploadedDocument
+from paysentineliq.application.queries.documents import (
+    DocumentDownloadUrlDTO,
+    GetDocumentDownloadUrlQuery,
+)
 from paysentineliq.domain.document import Document, DocumentKind
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService
 from paysentineliq.interface.api.dependencies import (
     get_auth_unit_of_work,
-    get_document_service,
+    get_document_download_query,
+    get_upload_document_handler,
 )
 from paysentineliq.interface.api.main import create_app
 
@@ -84,55 +91,45 @@ class FakeRevokedStore:
         return False
 
 
-class FakeDocumentService:
+class FakeUploadHandler:
     def __init__(self) -> None:
         self.upload_error: Exception | None = None
-        self.download_error: Exception | None = None
-        self.uploaded: UploadedDocument | None = None
-        self.url = "https://storage.example/short-url"
+        self.result: UploadedDocumentResult | None = None
 
-    async def upload(
-        self,
-        *,
-        owner_id: UUID,
-        kind: DocumentKind,
-        original_name: str | None,
-        stream: Any,
-    ) -> UploadedDocument:
+    async def handle(self, command: UploadDocumentCommand) -> UploadedDocumentResult:
         if self.upload_error is not None:
             raise self.upload_error
-        analysis_id = uuid4()
-        document = Document(
-            id=_DOCUMENT.id,
-            owner_id=owner_id,
-            kind=kind,
-            s3_key=(f"users/{owner_id}/{kind.value}/{analysis_id}/original.pdf"),
+        self.result = UploadedDocumentResult(
+            document_id=_DOCUMENT.id,
+            analysis_id=uuid4(),
+            kind=command.kind,
             sha256=_DOCUMENT.sha256,
             size=_DOCUMENT.size,
             content_type=_DOCUMENT.content_type,
             original_name_sanitized="boleto.pdf",
             created_at=_NOW,
         )
-        self.uploaded = UploadedDocument(
-            document=document,
-            analysis_id=analysis_id,
-        )
-        return self.uploaded
+        return self.result
 
-    async def get_download_url(
+
+class FakeDownloadHandler:
+    def __init__(self) -> None:
+        self.download_error: Exception | None = None
+        self.url = "https://storage.example/short-url"
+
+    async def handle(
         self,
-        *,
-        owner_id: UUID,
-        document_id: UUID,
-    ) -> tuple[str, int]:
+        query: GetDocumentDownloadUrlQuery,
+    ) -> DocumentDownloadUrlDTO:
         if self.download_error is not None:
             raise self.download_error
-        return self.url, 60
+        return DocumentDownloadUrlDTO(url=self.url, expires_in=60)
 
 
 def _app(
-    service: FakeDocumentService | None = None,
-) -> tuple[FastAPI, str, FakeDocumentService]:
+    upload_handler: FakeUploadHandler | None = None,
+    download_handler: FakeDownloadHandler | None = None,
+) -> tuple[FastAPI, str, FakeUploadHandler, FakeDownloadHandler]:
     settings = Settings(
         app_env="local",
         jwt_secret="s" * 64,
@@ -145,11 +142,13 @@ def _app(
     )
     app.state.token_service = token_service
     app.state.revoked_tokens = FakeRevokedStore()
-    fake_service = service or FakeDocumentService()
+    fake_upload = upload_handler or FakeUploadHandler()
+    fake_download = download_handler or FakeDownloadHandler()
     app.dependency_overrides[get_auth_unit_of_work] = FakeAuthUow
-    app.dependency_overrides[get_document_service] = lambda: fake_service
+    app.dependency_overrides[get_upload_document_handler] = lambda: fake_upload
+    app.dependency_overrides[get_document_download_query] = lambda: fake_download
     token = token_service.issue(_USER).token
-    return app, token, fake_service
+    return app, token, fake_upload, fake_download
 
 
 async def _upload(
@@ -175,7 +174,7 @@ async def _upload(
 
 
 async def test_upload_requires_authentication() -> None:
-    app, _, _ = _app()
+    app, _, _, _ = _app()
 
     response = await _upload(app, None)
 
@@ -184,7 +183,7 @@ async def test_upload_requires_authentication() -> None:
 
 
 async def test_valid_upload_returns_created_document() -> None:
-    app, token, service = _app()
+    app, token, upload, _ = _app()
 
     response = await _upload(
         app,
@@ -193,16 +192,16 @@ async def test_valid_upload_returns_created_document() -> None:
     )
 
     assert response.status_code == 201
-    assert service.uploaded is not None
+    assert upload.result is not None
     body = response.json()
     assert body["kind"] == "bank_slip"
-    assert body["analysis_id"] == str(service.uploaded.analysis_id)
+    assert body["analysis_id"] == str(upload.result.analysis_id)
     assert body["original_name_sanitized"] == "boleto.pdf"
 
 
 async def test_upload_too_large_returns_problem_json() -> None:
-    app, token, service = _app()
-    service.upload_error = UploadTooLargeError()
+    app, token, upload, _ = _app()
+    upload.upload_error = UploadTooLargeError()
 
     response = await _upload(app, token)
 
@@ -211,8 +210,8 @@ async def test_upload_too_large_returns_problem_json() -> None:
 
 
 async def test_unsupported_document_returns_problem_json() -> None:
-    app, token, service = _app()
-    service.upload_error = UnsupportedDocumentTypeError()
+    app, token, upload, _ = _app()
+    upload.upload_error = UnsupportedDocumentTypeError()
 
     response = await _upload(app, token, data=b"not a document")
 
@@ -221,8 +220,8 @@ async def test_unsupported_document_returns_problem_json() -> None:
 
 
 async def test_dangerous_pdf_returns_evidence() -> None:
-    app, token, service = _app()
-    service.upload_error = DangerousPdfError(("javascript",))
+    app, token, upload, _ = _app()
+    upload.upload_error = DangerousPdfError(("javascript",))
 
     response = await _upload(app, token)
 
@@ -233,7 +232,7 @@ async def test_dangerous_pdf_returns_evidence() -> None:
 
 
 async def test_download_url_is_short_and_scoped() -> None:
-    app, token, _ = _app()
+    app, token, _, _ = _app()
 
     response = await _request(
         app,
@@ -250,8 +249,8 @@ async def test_download_url_is_short_and_scoped() -> None:
 
 
 async def test_download_url_of_other_owner_is_not_found() -> None:
-    app, token, service = _app()
-    service.download_error = DocumentNotFoundError()
+    app, token, _, download = _app()
+    download.download_error = DocumentNotFoundError()
 
     response = await _request(
         app,

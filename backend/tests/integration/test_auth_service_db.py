@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from paysentineliq.application.commands.auth import AuthService
 from paysentineliq.application.errors import RefreshTokenReuseError
 from paysentineliq.application.ports.oidc import GoogleIdentity
-from paysentineliq.application.use_cases.auth import AuthService
 from paysentineliq.domain.user import Role
 from paysentineliq.infrastructure.db.models import RefreshTokenModel, UserModel
 from paysentineliq.infrastructure.db.uow import SqlAlchemyUnitOfWork

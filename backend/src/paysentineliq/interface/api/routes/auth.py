@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
+from paysentineliq.application.commands.auth import AuthService
 from paysentineliq.application.errors import (
     AuthNotConfiguredError,
     EmailNotVerifiedError,
@@ -19,7 +20,6 @@ from paysentineliq.application.ports.oidc import OIDCClient
 from paysentineliq.application.ports.oidc_state import OIDCState, OIDCStateStore
 from paysentineliq.application.ports.token_service import AccessTokenClaims
 from paysentineliq.application.security.refresh_tokens import hash_refresh_token
-from paysentineliq.application.use_cases.auth import AuthService
 from paysentineliq.domain.user import User
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService

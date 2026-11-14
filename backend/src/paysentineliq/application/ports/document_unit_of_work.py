@@ -1,12 +1,14 @@
 from types import TracebackType
 from typing import Protocol, Self
 
-from paysentineliq.application.ports.document_repository import DocumentRepository
+from paysentineliq.application.ports.document_write_repository import (
+    DocumentWriteRepository,
+)
 
 
 class DocumentUnitOfWork(Protocol):
     @property
-    def documents(self) -> DocumentRepository: ...
+    def documents(self) -> DocumentWriteRepository: ...
 
     async def __aenter__(self) -> Self: ...
 

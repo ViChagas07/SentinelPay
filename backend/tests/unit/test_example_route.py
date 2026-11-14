@@ -7,31 +7,35 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from paysentineliq.application.queries.example import (
+    ExampleStatusDTO,
+    GetExampleQuery,
+)
 from paysentineliq.domain.errors import NotFoundError
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.logging import JsonFormatter, PIIMaskingFilter
-from paysentineliq.interface.api.dependencies import get_example_service
+from paysentineliq.interface.api.dependencies import get_example_query
 from paysentineliq.interface.api.main import create_app
 
 pytestmark = pytest.mark.unit
 
 
-class StubService:
+class StubQueryHandler:
     def __init__(self, found: bool) -> None:
         self._found = found
 
-    async def check(self, item_id: UUID) -> bool:
+    async def handle(self, query: GetExampleQuery) -> ExampleStatusDTO:
         if not self._found:
             raise NotFoundError(
                 code="document_not_found",
                 message="Document not found.",
             )
-        return True
+        return ExampleStatusDTO(item_id=query.item_id, status="ok")
 
 
 def _app(found: bool = True) -> FastAPI:
     app = create_app(Settings(app_env="local"))
-    app.dependency_overrides[get_example_service] = lambda: StubService(found)
+    app.dependency_overrides[get_example_query] = lambda: StubQueryHandler(found)
     return app
 
 

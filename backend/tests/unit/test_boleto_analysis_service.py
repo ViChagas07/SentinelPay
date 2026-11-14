@@ -1,5 +1,8 @@
 from paysentineliq.application.ports.barcode import BarcodeReaderPort
-from paysentineliq.application.use_cases.boleto_analysis import BoletoAnalysisService
+from paysentineliq.application.queries.boleto_analysis import (
+    AnalyzeBoletoHandler,
+    AnalyzeBoletoQuery,
+)
 from paysentineliq.domain.boleto.analysis import BarcodeRead
 from tests.support.boleto_factory import build_boleto
 
@@ -16,16 +19,18 @@ class FakeBarcodeReader:
         return self.result
 
 
-def _service(reader: BarcodeReaderPort | None) -> BoletoAnalysisService:
-    return BoletoAnalysisService(barcode_reader=reader)
+def _handler(reader: BarcodeReaderPort | None) -> AnalyzeBoletoHandler:
+    return AnalyzeBoletoHandler(barcode_reader=reader)
 
 
-async def test_service_uses_barcode_reader_when_image_is_provided() -> None:
+async def test_query_uses_barcode_reader_when_image_is_provided() -> None:
     boleto = build_boleto()
     reader = FakeBarcodeReader(BarcodeRead(status="read", digits=boleto.barcode))
-    service = _service(reader)
+    handler = _handler(reader)
 
-    analysis = await service.analyze(boleto.ocr_text(), barcode_image=b"image")
+    analysis = await handler.handle(
+        AnalyzeBoletoQuery(text=boleto.ocr_text(), barcode_image=b"image"),
+    )
 
     assert reader.calls == 1
     assert analysis.barcode_read.status == "read"
@@ -33,12 +38,12 @@ async def test_service_uses_barcode_reader_when_image_is_provided() -> None:
     assert analysis.decoded is not None
 
 
-async def test_service_skips_reader_without_image() -> None:
+async def test_query_skips_reader_without_image() -> None:
     boleto = build_boleto()
     reader = FakeBarcodeReader(BarcodeRead(status="read", digits=boleto.barcode))
-    service = _service(reader)
+    handler = _handler(reader)
 
-    analysis = await service.analyze(boleto.ocr_text())
+    analysis = await handler.handle(AnalyzeBoletoQuery(text=boleto.ocr_text()))
 
     assert reader.calls == 0
     assert analysis.barcode_read.status == "not_validated"
@@ -46,23 +51,27 @@ async def test_service_skips_reader_without_image() -> None:
     assert analysis.subscore == 0
 
 
-async def test_service_handles_missing_reader() -> None:
+async def test_query_handles_missing_reader() -> None:
     boleto = build_boleto()
-    service = _service(None)
+    handler = _handler(None)
 
-    analysis = await service.analyze(boleto.ocr_text(), barcode_image=b"image")
+    analysis = await handler.handle(
+        AnalyzeBoletoQuery(text=boleto.ocr_text(), barcode_image=b"image"),
+    )
 
     assert analysis.barcode_read.status == "not_validated"
     assert analysis.barcode_read.reason == "reader_unavailable"
     assert analysis.subscore == 0
 
 
-async def test_service_degrades_when_reader_fails() -> None:
+async def test_query_degrades_when_reader_fails() -> None:
     boleto = build_boleto()
     reader = FakeBarcodeReader(RuntimeError("boom"))
-    service = _service(reader)
+    handler = _handler(reader)
 
-    analysis = await service.analyze(boleto.ocr_text(), barcode_image=b"image")
+    analysis = await handler.handle(
+        AnalyzeBoletoQuery(text=boleto.ocr_text(), barcode_image=b"image"),
+    )
 
     assert analysis.barcode_read.status == "error"
     assert analysis.barcode_read.reason == "reader_failed"
