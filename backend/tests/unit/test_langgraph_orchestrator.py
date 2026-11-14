@@ -373,7 +373,7 @@ async def _run(
 
 async def test_boleto_runs_end_to_end_with_fake_llm() -> None:
     boleto = build_boleto()
-    orchestrator, analyses, events, storage, _, rag_client, interpreter = _orchestrator(
+    orchestrator, analyses, _events, storage, _, rag_client, interpreter = _orchestrator(
         boleto.ocr_text(),
         model=FakeModel(),
     )

@@ -248,6 +248,64 @@ class UnsupportedDocumentError(ApplicationError):
         )
 
 
+class InvalidIdempotencyKeyError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_idempotency_key",
+            message="Idempotency-Key must have 8 to 128 safe characters.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
+class IdempotencyConflictError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="idempotency_conflict",
+            message="Idempotency-Key was already used with another request.",
+            status_code=409,
+            title="Conflict",
+        )
+
+
+class AnalysisQuotaExceededError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="analysis_quota_exceeded",
+            message="Too many concurrent analyses for this user.",
+            status_code=429,
+            title="Too many requests",
+        )
+
+
+class TaskDispatchError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="task_dispatch_failed",
+            message="Analysis queue is unavailable.",
+            status_code=503,
+            title="Service unavailable",
+        )
+
+
+class AnalysisNotFoundError(NotFoundError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="analysis_not_found",
+            message="Analysis not found.",
+        )
+
+
+class InvalidCursorError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_cursor",
+            message="Cursor is invalid.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+
+
 class OcrUnavailableError(ApplicationError):
     def __init__(self) -> None:
         super().__init__(

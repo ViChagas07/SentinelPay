@@ -10,17 +10,21 @@ class UploadSizeLimitMiddleware:
         self,
         app: ASGIApp,
         *,
-        path: str,
+        path: str | None = None,
+        paths: frozenset[str] | None = None,
         max_bytes: int,
     ) -> None:
         if max_bytes <= 0:
             raise ValueError("max_bytes must be positive")
+        selected = paths if paths is not None else frozenset({path} if path else set())
+        if not selected:
+            raise ValueError("at least one path is required")
         self.app = app
-        self._path = path
+        self._paths = selected
         self._max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or str(scope.get("path", "")) != self._path:
+        if scope["type"] != "http" or str(scope.get("path", "")) not in self._paths:
             await self.app(scope, receive, send)
             return
 

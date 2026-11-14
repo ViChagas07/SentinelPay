@@ -6,7 +6,10 @@ from typing import BinaryIO
 from uuid import UUID, uuid4
 
 from paysentineliq.application.errors import InvalidDocumentError
-from paysentineliq.application.ports.document_inspector import DocumentInspector
+from paysentineliq.application.ports.document_inspector import (
+    DocumentInspector,
+    InspectedDocument,
+)
 from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
 from paysentineliq.application.ports.storage import StoragePort
 from paysentineliq.application.security.storage_keys import (
@@ -38,10 +41,9 @@ class UploadedDocumentResult:
     created_at: datetime
 
 
-class UploadDocumentHandler:
+class DocumentPreparer:
     def __init__(
         self,
-        unit_of_work: DocumentUnitOfWork,
         storage: StoragePort,
         inspector: DocumentInspector,
         *,
@@ -53,32 +55,61 @@ class UploadDocumentHandler:
             raise ValueError("max_bytes must be positive")
         if max_pdf_pages <= 0:
             raise ValueError("max_pdf_pages must be positive")
-        self._unit_of_work = unit_of_work
         self._storage = storage
         self._inspector = inspector
         self._max_bytes = max_bytes
         self._max_pdf_pages = max_pdf_pages
         self._clock = clock or (lambda: datetime.now(UTC))
 
-    async def handle(self, command: UploadDocumentCommand) -> UploadedDocumentResult:
-        inspected = await self._inspector.inspect(
-            command.stream,
+    async def inspect(self, stream: BinaryIO) -> InspectedDocument:
+        return await self._inspector.inspect(
+            stream,
             max_bytes=self._max_bytes,
             max_pdf_pages=self._max_pdf_pages,
         )
 
-        analysis_id = uuid4()
+    async def discard(self, s3_key: str) -> None:
+        await self._storage.delete(s3_key)
+
+    async def prepare(
+        self,
+        *,
+        owner_id: UUID,
+        kind: DocumentKind,
+        original_name: str | None,
+        stream: BinaryIO,
+        analysis_id: UUID,
+        inspected: InspectedDocument | None = None,
+    ) -> Document:
+        if inspected is None:
+            inspected = await self.inspect(stream)
         key = build_original_key(
-            owner_id=command.owner_id,
-            kind=command.kind,
+            owner_id=owner_id,
+            kind=kind,
             analysis_id=analysis_id,
             extension=inspected.extension,
         )
-        sanitized_name = sanitize_filename(command.original_name)
-        document = Document(
+        sanitized_name = sanitize_filename(original_name)
+        try:
+            stream.seek(0)
+        except OSError as exc:
+            raise InvalidDocumentError() from exc
+        await self._storage.put(
+            key,
+            stream,
+            content_type=inspected.content_type,
+            size=inspected.size,
+            metadata={
+                "sha256": inspected.sha256,
+                "kind": kind.value,
+                "analysis_id": str(analysis_id),
+                "original_name": sanitized_name,
+            },
+        )
+        return Document(
             id=uuid4(),
-            owner_id=command.owner_id,
-            kind=command.kind,
+            owner_id=owner_id,
+            kind=kind,
             s3_key=key,
             sha256=inspected.sha256,
             size=inspected.size,
@@ -87,22 +118,36 @@ class UploadDocumentHandler:
             created_at=self._clock(),
         )
 
-        try:
-            command.stream.seek(0)
-        except OSError as exc:
-            raise InvalidDocumentError() from exc
 
-        await self._storage.put(
-            key,
-            command.stream,
-            content_type=inspected.content_type,
-            size=inspected.size,
-            metadata={
-                "sha256": inspected.sha256,
-                "kind": command.kind.value,
-                "analysis_id": str(analysis_id),
-                "original_name": sanitized_name,
-            },
+class UploadDocumentHandler:
+    def __init__(
+        self,
+        unit_of_work: DocumentUnitOfWork,
+        storage: StoragePort,
+        inspector: DocumentInspector,
+        *,
+        max_bytes: int,
+        max_pdf_pages: int,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._unit_of_work = unit_of_work
+        self._storage = storage
+        self._preparer = DocumentPreparer(
+            storage,
+            inspector,
+            max_bytes=max_bytes,
+            max_pdf_pages=max_pdf_pages,
+            clock=clock,
+        )
+
+    async def handle(self, command: UploadDocumentCommand) -> UploadedDocumentResult:
+        analysis_id = uuid4()
+        document = await self._preparer.prepare(
+            owner_id=command.owner_id,
+            kind=command.kind,
+            original_name=command.original_name,
+            stream=command.stream,
+            analysis_id=analysis_id,
         )
 
         try:
@@ -111,7 +156,7 @@ class UploadDocumentHandler:
                 await uow.commit()
         except Exception:
             try:
-                await self._storage.delete(key)
+                await self._storage.delete(document.s3_key)
             except Exception:
                 _logger.error("storage_compensation_failed")
             raise

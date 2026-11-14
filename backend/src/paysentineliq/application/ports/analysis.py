@@ -33,7 +33,17 @@ class AnalysisDocumentPort(Protocol):
     async def read(self, document: AnalysisDocument) -> bytes: ...
 
 
-class AnalysisRepositoryPort(Protocol):
+class AnalysisLookupPort(Protocol):
+    async def find_by_idempotency(
+        self,
+        owner_id: UUID,
+        idempotency_key: str,
+    ) -> AnalysisRecord | None: ...
+
+    async def count_active_for_owner(self, owner_id: UUID) -> int: ...
+
+
+class AnalysisRepositoryPort(AnalysisLookupPort, Protocol):
     async def create(
         self,
         record: AnalysisRecord,
@@ -86,14 +96,6 @@ class AnalysisRepositoryPort(Protocol):
     ) -> AnalysisRecord | None: ...
 
     async def get(self, analysis_id: UUID) -> AnalysisRecord | None: ...
-
-    async def find_by_idempotency(
-        self,
-        owner_id: UUID,
-        idempotency_key: str,
-    ) -> AnalysisRecord | None: ...
-
-    async def count_active_for_owner(self, owner_id: UUID) -> int: ...
 
     async def list_stale_processing(
         self,

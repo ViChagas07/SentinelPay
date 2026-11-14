@@ -10,13 +10,19 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from paysentineliq.application.commands.auth import AuthService
-from paysentineliq.application.commands.documents import UploadDocumentHandler
+from paysentineliq.application.commands.create_analysis import CreateAnalysisHandler
+from paysentineliq.application.commands.documents import (
+    DocumentPreparer,
+    UploadDocumentHandler,
+)
 from paysentineliq.application.errors import (
     ForbiddenError,
     InvalidAccessTokenError,
     StorageNotConfiguredError,
 )
 from paysentineliq.application.locale import resolve_locale
+from paysentineliq.application.ports.analysis import AnalysisLookupPort
+from paysentineliq.application.ports.analysis_unit_of_work import AnalysisUnitOfWork
 from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
 from paysentineliq.application.ports.document_inspector import DocumentInspector
 from paysentineliq.application.ports.document_read_repository import DocumentReadRepository
@@ -27,6 +33,7 @@ from paysentineliq.application.ports.readiness import ReadinessChecker
 from paysentineliq.application.ports.repository import ExampleRepository
 from paysentineliq.application.ports.revoked_tokens import RevokedTokenStore
 from paysentineliq.application.ports.storage import StoragePort
+from paysentineliq.application.ports.task_dispatcher import TaskDispatcherPort
 from paysentineliq.application.ports.token_service import (
     AccessTokenClaims,
     AccessTokenService,
@@ -35,6 +42,9 @@ from paysentineliq.application.queries.documents import GetDocumentDownloadUrlHa
 from paysentineliq.application.queries.example import GetExampleHandler
 from paysentineliq.domain.user import Role, User
 from paysentineliq.infrastructure.config import Settings
+from paysentineliq.infrastructure.db.repositories.analyses import (
+    SqlAlchemyAnalysisRepository,
+)
 from paysentineliq.infrastructure.db.repositories.documents import (
     SqlAlchemyDocumentReadRepository,
 )
@@ -42,6 +52,8 @@ from paysentineliq.infrastructure.db.repositories.example import (
     SqlAlchemyExampleRepository,
 )
 from paysentineliq.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from paysentineliq.infrastructure.messaging.celery_app import build_celery_app
+from paysentineliq.infrastructure.messaging.dispatcher import CeleryTaskDispatcher
 from paysentineliq.infrastructure.readiness import SqlAlchemyRedisReadinessChecker
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 
@@ -62,6 +74,30 @@ def get_document_unit_of_work(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> DocumentUnitOfWork:
     return SqlAlchemyUnitOfWork(session)
+
+
+def get_analysis_unit_of_work(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AnalysisUnitOfWork:
+    return SqlAlchemyUnitOfWork(session)
+
+
+def get_task_dispatcher(request: Request) -> TaskDispatcherPort:
+    dispatcher: TaskDispatcherPort | None = getattr(
+        request.app.state,
+        "task_dispatcher",
+        None,
+    )
+    if dispatcher is None:
+        settings: Settings = request.app.state.settings
+        dispatcher = CeleryTaskDispatcher(build_celery_app(settings))
+        request.app.state.task_dispatcher = dispatcher
+    return dispatcher
+
+
+def get_analysis_lookup(request: Request) -> AnalysisLookupPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return SqlAlchemyAnalysisRepository(session_factory)
 
 
 def get_example_read_repository(
@@ -145,6 +181,28 @@ def get_upload_document_handler(
         inspector,
         max_bytes=settings.upload_max_mb * 1024 * 1024,
         max_pdf_pages=settings.pdf_max_pages,
+    )
+
+
+def get_create_analysis_handler(
+    uow: Annotated[AnalysisUnitOfWork, Depends(get_analysis_unit_of_work)],
+    storage: Annotated[StoragePort, Depends(get_storage)],
+    inspector: Annotated[DocumentInspector, Depends(get_document_inspector)],
+    dispatcher: Annotated[TaskDispatcherPort, Depends(get_task_dispatcher)],
+    lookup: Annotated[AnalysisLookupPort, Depends(get_analysis_lookup)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> CreateAnalysisHandler:
+    return CreateAnalysisHandler(
+        uow,
+        DocumentPreparer(
+            storage,
+            inspector,
+            max_bytes=settings.upload_max_mb * 1024 * 1024,
+            max_pdf_pages=settings.pdf_max_pages,
+        ),
+        lookup,
+        dispatcher,
+        max_concurrent_per_user=settings.analysis_max_concurrent_per_user,
     )
 
 

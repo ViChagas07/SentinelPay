@@ -29,6 +29,7 @@ from paysentineliq.interface.api.limits import MaxBodySizeMiddleware, TimeoutMid
 from paysentineliq.interface.api.middleware import RequestIdMiddleware
 from paysentineliq.interface.api.problems import register_exception_handlers
 from paysentineliq.interface.api.rate_limit import RateLimitMiddleware
+from paysentineliq.interface.api.routes.analyses import router as analyses_router
 from paysentineliq.interface.api.routes.auth import router as auth_router
 from paysentineliq.interface.api.routes.documents import router as documents_router
 from paysentineliq.interface.api.routes.example import router as example_router
@@ -127,11 +128,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         MaxBodySizeMiddleware,
         max_bytes=resolved_settings.max_request_body_bytes,
-        skip_paths=frozenset({"/api/v1/documents/upload"}),
+        skip_paths=frozenset({"/api/v1/documents/upload", "/api/v1/analyses"}),
     )
     app.add_middleware(
         UploadSizeLimitMiddleware,
-        path="/api/v1/documents/upload",
+        paths=frozenset({"/api/v1/documents/upload", "/api/v1/analyses"}),
         max_bytes=resolved_settings.upload_max_mb * 1024 * 1024,
     )
     app.add_middleware(
@@ -168,6 +169,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(users_router, prefix=API_V1_PREFIX)
     app.include_router(protected_router, prefix=API_V1_PREFIX)
     app.include_router(documents_router, prefix=API_V1_PREFIX)
+    app.include_router(analyses_router, prefix=API_V1_PREFIX)
     app.include_router(example_router, prefix=API_V1_PREFIX)
     return app
 
