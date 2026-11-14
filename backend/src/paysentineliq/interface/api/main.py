@@ -7,9 +7,11 @@ from redis.asyncio import Redis
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.db.engine import build_engine, build_session_factory
 from paysentineliq.infrastructure.logging import configure_logging
+from paysentineliq.infrastructure.security.rate_limit import TokenBucketRateLimiter
 from paysentineliq.interface.api.constants import API_V1_PREFIX
 from paysentineliq.interface.api.middleware import RequestIdMiddleware
 from paysentineliq.interface.api.problems import register_exception_handlers
+from paysentineliq.interface.api.rate_limit import RateLimitMiddleware
 from paysentineliq.interface.api.routes.example import router as example_router
 from paysentineliq.interface.api.routes.ops import router as ops_router
 
@@ -28,6 +30,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         application.state.engine = engine
         application.state.session_factory = build_session_factory(engine)
         application.state.redis = redis
+        application.state.rate_limiter = TokenBucketRateLimiter(
+            redis,
+            capacity=resolved_settings.rate_limit_capacity,
+            refill_per_second=resolved_settings.rate_limit_refill_per_sec,
+            hash_secret=resolved_settings.security_hash_secret,
+        )
         try:
             yield
         finally:
@@ -36,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="PaySentinelIQ", version="0.1.0", lifespan=lifespan)
     app.state.settings = resolved_settings
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(ops_router)

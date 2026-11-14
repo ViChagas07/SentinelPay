@@ -38,6 +38,7 @@ def test_non_local_accepts_external_urls() -> None:
         app_env="production",
         database_url="postgresql+asyncpg://user:pass@db:5432/app",
         redis_url="redis://cache:6379/0",
+        security_hash_secret="production-secret",
     )
 
     assert settings.app_env == "production"

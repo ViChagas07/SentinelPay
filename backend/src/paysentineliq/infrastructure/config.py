@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     database_url: str = ""
     redis_url: str = ""
     log_level: str = "INFO"
+    rate_limit_capacity: int = 60
+    rate_limit_refill_per_sec: float = 1.0
+    security_hash_secret: str = ""
 
     @model_validator(mode="after")
     def _apply_local_defaults_or_fail(self) -> Self:
@@ -35,6 +38,17 @@ class Settings(BaseSettings):
                 self.redis_url = DEFAULT_LOCAL_REDIS_URL
             else:
                 missing.append("REDIS_URL")
+
+        if not self.security_hash_secret:
+            if self.app_env == "local":
+                self.security_hash_secret = "local-security-hash-secret"
+            else:
+                missing.append("SECURITY_HASH_SECRET")
+
+        if self.rate_limit_capacity <= 0:
+            raise ValueError("RATE_LIMIT_CAPACITY must be positive")
+        if self.rate_limit_refill_per_sec <= 0:
+            raise ValueError("RATE_LIMIT_REFILL_PER_SEC must be positive")
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")

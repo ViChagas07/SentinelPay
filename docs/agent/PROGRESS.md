@@ -33,3 +33,4 @@
 - P02.7 Backup/migration: `make backup` gerou dump de 974 bytes (nao vazio); `make migrate` executou backup e `alembic upgrade head` no container; `alembic_version=0001_initial` confirmado. `make check` e `make test-docker` verdes; stack no ar.
 - P02.8 Prova liveness/readiness: com Postgres e Redis parados, `/health` continuou 200 e `/ready` retornou 503 com ambos os checks falsos; apos `start` + `make up`, `/ready` voltou a 200. Nenhuma alteracao de codigo; stack restaurada.
 - P03.1 Spec e ADR: SPEC 0003 e ADR-0006 definem rate limit Token Bucket, SWR, headers/CORS/TrustedHost, CSRF, SSRF com pinagem, forca bruta, limites e auditoria. Sem codigo ainda.
+- P03.2 Rate limit: Token Bucket Lua atomico por IP/usuario com chaves pseudonimizadas, 429 com `Retry-After`, fail-open fora de auth e 503 em `/api/v1/auth/*`; 11 testes unitarios e teste de concorrencia Redis (20 chamadas, 5 permitidas) verdes. Suite unitaria 61 verdes.

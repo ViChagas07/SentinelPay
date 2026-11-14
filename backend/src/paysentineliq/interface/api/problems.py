@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -35,6 +36,7 @@ def build_problem_response(
     code: str,
     title: str,
     detail: str,
+    extra_headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     request_id = _request_id(request)
     content: dict[str, object] = {
@@ -46,12 +48,16 @@ def build_problem_response(
         "code": code,
         "request_id": request_id,
     }
-    headers = {REQUEST_ID_HEADER: request_id} if request_id else None
+    headers: dict[str, str] = {}
+    if request_id:
+        headers[REQUEST_ID_HEADER] = request_id
+    if extra_headers:
+        headers.update(extra_headers)
     return JSONResponse(
         status_code=status_code,
         content=content,
         media_type="application/problem+json",
-        headers=headers,
+        headers=headers or None,
     )
 
 
