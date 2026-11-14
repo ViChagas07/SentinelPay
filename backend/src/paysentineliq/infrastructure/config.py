@@ -90,6 +90,18 @@ class Settings(BaseSettings):
     upload_max_mb: int = 25
     pdf_max_pages: int = 50
     s3_presigned_url_ttl_seconds: int = 300
+    ocr_langs: str = "pt,es,en"
+    ocr_max_pages: int = 20
+    ocr_render_dpi: int = 200
+    ocr_timeout_seconds: float = 120.0
+    ocr_max_image_pixels: int = 25_000_000
+    ocr_native_min_chars: int = 40
+
+    @property
+    def ocr_languages_list(self) -> list[str]:
+        return [
+            language.strip().lower() for language in self.ocr_langs.split(",") if language.strip()
+        ]
 
     @property
     def google_configured(self) -> bool:
@@ -168,6 +180,21 @@ class Settings(BaseSettings):
             raise ValueError("PDF_MAX_PAGES must be positive")
         if self.s3_presigned_url_ttl_seconds <= 0:
             raise ValueError("S3_PRESIGNED_URL_TTL_SECONDS must be positive")
+        languages = self.ocr_languages_list
+        if not languages:
+            raise ValueError("OCR_LANGS must not be empty")
+        if set(languages) - {"pt", "es", "en"}:
+            raise ValueError("OCR_LANGS supports only pt, es and en")
+        if self.ocr_max_pages <= 0:
+            raise ValueError("OCR_MAX_PAGES must be positive")
+        if self.ocr_render_dpi <= 0:
+            raise ValueError("OCR_RENDER_DPI must be positive")
+        if self.ocr_timeout_seconds <= 0:
+            raise ValueError("OCR_TIMEOUT_SECONDS must be positive")
+        if self.ocr_max_image_pixels <= 0:
+            raise ValueError("OCR_MAX_IMAGE_PIXELS must be positive")
+        if self.ocr_native_min_chars < 0:
+            raise ValueError("OCR_NATIVE_MIN_CHARS must be non-negative")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")

@@ -124,3 +124,14 @@ def test_jwt_secret_reads_production_alias(
     settings = Settings(app_env="local")
 
     assert settings.jwt_secret == "y" * 64
+
+
+def test_ocr_languages_are_parsed() -> None:
+    settings = Settings(app_env="local", ocr_langs="PT, es,en")
+
+    assert settings.ocr_languages_list == ["pt", "es", "en"]
+
+
+def test_unsupported_ocr_language_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", ocr_langs="pt,de")
