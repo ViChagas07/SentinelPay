@@ -20,6 +20,7 @@ class AnalysisEventType(StrEnum):
     QUEUED = "queued"
     PROCESSING = "processing"
     RULE_TRIGGERED = "rule_triggered"
+    GUARDRAIL_TRIGGERED = "guardrail_triggered"
     COMPLETED = "completed"
     FAILED = "failed"
     DEGRADED = "degraded"
@@ -29,6 +30,11 @@ class DegradationFlag(StrEnum):
     LLM_UNAVAILABLE = "llm_unavailable"
     RAG_UNAVAILABLE = "rag_unavailable"
     ML_UNAVAILABLE = "ml_unavailable"
+    PROMPT_INJECTION_DETECTED = "prompt_injection_detected"
+    GUARDRAIL_CLASSIFIER_UNAVAILABLE = "guardrail_classifier_unavailable"
+    LLM_OUTPUT_REJECTED = "llm_output_rejected"
+    LLM_JUDGE_UNAVAILABLE = "llm_judge_unavailable"
+    LLM_JUDGE_REJECTED = "llm_judge_rejected"
 
 
 class AnalysisDocumentType(StrEnum):

@@ -381,7 +381,7 @@ class InputGuardrailService:
                 classifier_unavailable = True
             else:
                 try:
-                    score = self._classifier.score(sanitized.text)
+                    score = self._max_classifier_score(sanitized.text)
                 except Exception:
                     classifier_unavailable = True
                 else:
@@ -396,13 +396,22 @@ class InputGuardrailService:
                                 message_key="guardrail.classifier_injection",
                             ),
                         )
-        unique = _dedupe_findings(findings)
+        unique = dedupe_findings(findings)
         return InputGuardResult(
             sanitized=sanitized,
             findings=unique,
             classifier_version=classifier_version,
             classifier_unavailable=classifier_unavailable,
         )
+
+    def _max_classifier_score(self, text: str) -> float:
+        if self._classifier is None:
+            return 0.0
+        segments = [line.strip() for line in text.splitlines() if line.strip()]
+        if not segments:
+            return self._classifier.score(text)
+        scores = [self._classifier.score(segment[:2000]) for segment in segments[:200]]
+        return max(scores)
 
 
 class OutputGuardrailService:
@@ -497,7 +506,7 @@ def findings_to_evidence(
     return tuple(evidence[:12])
 
 
-def _dedupe_findings(findings: list[GuardrailFinding]) -> tuple[GuardrailFinding, ...]:
+def dedupe_findings(findings: list[GuardrailFinding]) -> tuple[GuardrailFinding, ...]:
     unique: list[GuardrailFinding] = []
     seen: set[tuple[str, str]] = set()
     for finding in sorted(findings, key=lambda item: _SEVERITY_ORDER[item.severity]):

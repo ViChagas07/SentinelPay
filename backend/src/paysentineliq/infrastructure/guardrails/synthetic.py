@@ -147,7 +147,8 @@ def generate_injection_dataset(
     config: InjectionDatasetConfig | None = None,
 ) -> InjectionDataset:
     actual = config if config is not None else InjectionDatasetConfig()
-    rng = random.Random(actual.seed)
+    # Deterministic synthetic dataset; PRNG is not used for security.
+    rng = random.Random(actual.seed)  # nosec B311
     samples: list[InjectionSample] = []
     obfuscators = (str, _zero_width, _homoglyph, str.upper)
     for index in range(actual.injection_variants):

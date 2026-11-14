@@ -17,7 +17,8 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 
 _MASK_LABELS = {
     "jwt": "[REDACTED_JWT]",
-    "bearer_token": "Bearer [REDACTED_TOKEN]",
+    # Masking label, not a credential.
+    "bearer_token": "Bearer [REDACTED_TOKEN]",  # nosec B105
     "aws_access_key": "[REDACTED_AWS_KEY]",
     "private_key": "[REDACTED_PRIVATE_KEY]",
     "cnpj": "[REDACTED_CNPJ]",
@@ -48,3 +49,15 @@ def find_sensitive_patterns(value: str) -> tuple[str, ...]:
 def contains_sensitive_term(value: str, terms: tuple[str, ...]) -> bool:
     folded = value.casefold()
     return any(len(term.strip()) >= 4 and term.strip().casefold() in folded for term in terms)
+
+
+def mask_terms(value: str, terms: tuple[str, ...]) -> str:
+    masked = value
+    unique = sorted(
+        {term.strip() for term in terms if len(term.strip()) >= 4},
+        key=len,
+        reverse=True,
+    )
+    for term in unique:
+        masked = re.sub(re.escape(term), "[REDACTED_TERM]", masked, flags=re.IGNORECASE)
+    return masked

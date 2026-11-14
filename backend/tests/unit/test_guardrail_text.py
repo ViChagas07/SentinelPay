@@ -14,6 +14,7 @@ from paysentineliq.application.security.guardrails import (
     findings_to_evidence,
     sanitize_text,
 )
+from paysentineliq.application.security.redaction import mask_terms
 from paysentineliq.infrastructure.metrics.guardrails import InMemoryGuardrailMetrics
 
 pytestmark = pytest.mark.unit
@@ -160,6 +161,23 @@ def test_input_guard_keeps_clean_text_untriggered() -> None:
     assert result.triggered is False
 
 
+def test_input_guard_scores_long_documents_by_line() -> None:
+    class LengthAwareClassifier(FakeClassifier):
+        def score(self, text: str) -> float:
+            return 0.99 if "injection" in text else 0.01
+
+    service = InputGuardrailService(
+        max_chars=10_000,
+        classifier=LengthAwareClassifier(),
+        threshold=0.8,
+    )
+
+    result = service.inspect("linha benigna 1\nlinha benigna 2\ninjection aqui")
+
+    assert {finding.code for finding in result.findings} == {"classifier_injection"}
+    assert result.triggered
+
+
 def test_input_guard_degrades_when_classifier_fails() -> None:
     service = InputGuardrailService(
         max_chars=1000,
@@ -217,6 +235,17 @@ def test_output_guard_removes_unexpected_urls_and_keeps_allowed() -> None:
     assert {finding.code for finding in removed.findings} == {"output_url"}
     assert allowed.text == "Relatorio em https://paysentineliq.local/report."
     assert allowed.findings == ()
+
+
+def test_mask_terms_redacts_known_document_terms() -> None:
+    masked = mask_terms(
+        "PAGAMENTOS SINTETICOS LTDA pagou para Cliente Sintetico.",
+        ("PAGAMENTOS SINTETICOS LTDA", "Cliente Sintetico"),
+    )
+
+    assert "PAGAMENTOS SINTETICOS" not in masked
+    assert "Cliente Sintetico" not in masked
+    assert masked.count("[REDACTED_TERM]") == 2
 
 
 def test_tool_allowlist_rejects_unknown_tools() -> None:

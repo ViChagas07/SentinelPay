@@ -126,6 +126,9 @@ class Settings(BaseSettings):
     guardrail_classifier_threshold: float = 0.5
     guardrail_classifier_model_dir: str = "models/artifacts"
     guardrail_judge_enabled: bool = False
+    guardrail_max_text_chars: int = 20_000
+    guardrail_llm_excerpt_chars: int = 6_000
+    guardrail_allowed_output_urls: str = ""
 
     @property
     def ocr_languages_list(self) -> list[str]:
@@ -154,6 +157,10 @@ class Settings(BaseSettings):
     @property
     def ssrf_allowed_hosts_list(self) -> list[str]:
         return [host.strip() for host in self.ssrf_allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def guardrail_allowed_output_urls_list(self) -> list[str]:
+        return [url.strip() for url in self.guardrail_allowed_output_urls.split(",") if url.strip()]
 
     @model_validator(mode="after")
     def _apply_local_defaults_or_fail(self) -> Self:
@@ -264,6 +271,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "LLM_JUDGE_MODEL is required when GUARDRAIL_JUDGE_ENABLED=true",
                 )
+        if self.guardrail_max_text_chars <= 0:
+            raise ValueError("GUARDRAIL_MAX_TEXT_CHARS must be positive")
+        if self.guardrail_llm_excerpt_chars <= 0:
+            raise ValueError("GUARDRAIL_LLM_EXCERPT_CHARS must be positive")
 
         if self.rate_limit_capacity <= 0:
             raise ValueError("RATE_LIMIT_CAPACITY must be positive")
