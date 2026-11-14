@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P07 em andamento (boletos FEBRABAN). P07.6 (motor de regras) concluido.
+- Fase atual: P07 em andamento (boletos FEBRABAN). P07.7 (servico e OpenCV) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -69,3 +69,4 @@
 - P07.4 Bancos: `febraban_banks_v1.json` reproduz os 25 codigos da secao 1.6 do manual com fonte por banco; loader valida schema e aplica o override do Bradesco (campo 3 modulo 11). 4 testes verdes; Ruff, format e mypy strict verdes. Codigo fora da lista sera evidencia HIGH com ressalva BACEN, nao fraude confirmada.
 - P07.5 Extracao: parser OCR deterministico extrai linha de 47/48 (inclusive dividida em duas linhas e com confusoes 0/O e 1/I/l), codigo de barras textual, valor, vencimento, beneficiario, pagador, CPF/CNPJ e banco do cabecalho, cada um com confianca; ausencia de vencimento e reconhecida. 11 testes verdes; Ruff, format e mypy strict verdes. Linha de 48 digitos e extraida, mas segue NAO VERIFICAVEL para decodificacao.
 - P07.6 Motor de regras: `febraban-v1` com 12 regras, fonte obrigatoria, evidencias ordenadas, piso critico 80, cap 100 e NAO VALIDADOS explicitos (BACEN/CIP/Receita, ciclo pos-2025, DV de CPF/CNPJ, leitura de imagem). Boleto sintetico valido pontua 0; cada adulteracao isolada dispara a regra esperada (DV, linha x barras, valor, vencimento, cabecalho, banco, moeda, CPF/CNPJ, campo ilegivel, barras ilegiveis) e a linha de 48 retorna INFO/0. 14 testes verdes; Ruff, mypy e import-linter verdes.
+- P07.7 Servico/OpenCV: `BarcodeReaderPort`, `BoletoAnalysisService` com degradacao controlada (sem imagem, sem leitor ou falha do leitor) e `OpenCvBarcodeReader` via `detectAndDecode`. 10 testes verdes com detector fake; Ruff, format, mypy e import-linter verdes. Leitura real de ITF sintetico com OpenCV 4.10 retornou `not_found` no host, entao a leitura real de codigo de barras fica NAO VALIDADA; a linha digitavel e usada.
