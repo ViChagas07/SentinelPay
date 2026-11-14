@@ -3,11 +3,15 @@ from typing import Self
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paysentineliq.application.ports.document_repository import DocumentRepository
 from paysentineliq.application.ports.refresh_token_repository import (
     RefreshTokenRepository,
 )
 from paysentineliq.application.ports.repository import ExampleRepository
 from paysentineliq.application.ports.user_repository import UserRepository
+from paysentineliq.infrastructure.db.repositories.documents import (
+    SqlAlchemyDocumentRepository,
+)
 from paysentineliq.infrastructure.db.repositories.example import (
     SqlAlchemyExampleRepository,
 )
@@ -25,6 +29,7 @@ class SqlAlchemyUnitOfWork:
         self.examples: ExampleRepository = SqlAlchemyExampleRepository(session)
         self.users: UserRepository = SqlAlchemyUserRepository(session)
         self.refresh_tokens: RefreshTokenRepository = SqlAlchemyRefreshTokenRepository(session)
+        self.documents: DocumentRepository = SqlAlchemyDocumentRepository(session)
 
     async def __aenter__(self) -> Self:
         return self

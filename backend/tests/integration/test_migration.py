@@ -39,7 +39,7 @@ def test_alembic_version_table_is_populated() -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "0002_auth"
+    assert result.stdout.strip() == "0003_documents"
 
 
 def test_auth_tables_exist() -> None:
@@ -55,11 +55,13 @@ def test_auth_tables_exist() -> None:
             "paysentineliq",
             "-tAc",
             "SELECT tablename FROM pg_tables WHERE schemaname='public' "
-            "AND tablename IN ('users', 'refresh_tokens') ORDER BY tablename",
+            "AND tablename IN ('users', 'refresh_tokens', 'documents') "
+            "ORDER BY tablename",
         ]
     )
 
     assert result.returncode == 0, result.stderr
     tables = result.stdout.split()
+    assert "documents" in tables
     assert "refresh_tokens" in tables
     assert "users" in tables

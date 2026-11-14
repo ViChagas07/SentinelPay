@@ -1,7 +1,14 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Uuid
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from paysentineliq.infrastructure.db.base import Base
@@ -47,3 +54,26 @@ class RefreshTokenModel(Base):
     family_id: Mapped[UUID] = mapped_column(Uuid, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DocumentModel(Base):
+    __tablename__ = "documents"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('bank_slip', 'payslip', 'receipt')",
+            name="ck_documents_kind",
+        ),
+    )
+
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    s3_key: Mapped[str] = mapped_column(String(512), unique=True, index=True, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    original_name_sanitized: Mapped[str] = mapped_column(String(255), nullable=False)
