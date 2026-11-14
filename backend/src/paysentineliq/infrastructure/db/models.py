@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
@@ -8,8 +9,10 @@ from sqlalchemy import (
     Integer,
     String,
     Uuid,
+    text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from paysentineliq.infrastructure.db.base import Base
 
@@ -77,3 +80,72 @@ class DocumentModel(Base):
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     original_name_sanitized: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class AnalysisModel(Base):
+    __tablename__ = "analyses"
+
+    owner_id: Mapped[UUID] = mapped_column(Uuid, index=True, nullable=False)
+    document_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    document_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    band: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    rule_set_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model_versions: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    )
+    degradation_flags: Mapped[list[str]] = mapped_column(
+        JSONB,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+        nullable=False,
+    )
+    state: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    )
+    report_s3_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    events: Mapped[list["AnalysisEventModel"]] = relationship(
+        back_populates="analysis",
+        cascade="all, delete-orphan",
+    )
+
+
+class AnalysisEventModel(Base):
+    __tablename__ = "analysis_events"
+
+    analysis_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("analyses.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    rule_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    rule_set_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    degradation_flags: Mapped[list[str]] = mapped_column(
+        JSONB,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+        nullable=False,
+    )
+    payload: Mapped[dict[str, str]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    )
+    analysis: Mapped[AnalysisModel] = relationship(back_populates="events")
