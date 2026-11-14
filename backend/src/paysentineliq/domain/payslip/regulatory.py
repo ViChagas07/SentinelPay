@@ -1,12 +1,19 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
 import yaml
 
+from paysentineliq.domain.payslip.models import YearMonth
+
 _DEFAULT_DATA_DIR = Path(__file__).with_name("data") / "regulatory"
+_CENT = Decimal("0.01")
+
+
+def _money(value: Decimal) -> Decimal:
+    return value.quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +30,26 @@ class InssTable:
     salary_cap: Decimal | None
     brackets: tuple[InssBracket, ...]
 
+    def calculate(self, salary: Decimal) -> Decimal:
+        if salary < 0:
+            raise ValueError("salary must be non-negative")
+        if not self.brackets:
+            raise ValueError("INSS table has no brackets")
+        taxable = salary if self.salary_cap is None else min(salary, self.salary_cap)
+        total = Decimal("0")
+        lower = Decimal("0")
+        for bracket in self.brackets:
+            upper = bracket.up_to if bracket.up_to is not None else taxable
+            if upper < lower:
+                break
+            portion = min(taxable, upper) - lower
+            if portion > 0:
+                total += portion * bracket.rate
+            lower = upper
+            if taxable <= upper:
+                break
+        return _money(total)
+
 
 @dataclass(frozen=True, slots=True)
 class IrrfBracket:
@@ -37,6 +64,15 @@ class IrrfTable:
     valid_from: date
     valid_until: date | None
     brackets: tuple[IrrfBracket, ...]
+
+    def calculate(self, base: Decimal) -> Decimal:
+        if base < 0:
+            raise ValueError("base must be non-negative")
+        for bracket in self.brackets:
+            if bracket.up_to is None or base <= bracket.up_to:
+                value = base * bracket.rate - bracket.deduction
+                return _money(max(Decimal("0"), value))
+        return Decimal("0.00")
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +164,23 @@ class RegulatoryTables:
     irrf: IrrfData
     minimum_wage: MinimumWageData
     clt: CltData
+
+    def inss_for(self, competency: YearMonth) -> InssTable | None:
+        return self.inss.for_date(competency.first_day)
+
+    def irrf_for(self, competency: YearMonth) -> IrrfTable | None:
+        return self.irrf.for_date(competency.first_day)
+
+    def minimum_wage_for(self, competency: YearMonth) -> Decimal | None:
+        value = self.minimum_wage.for_date(competency.first_day)
+        return value.value if value is not None else None
+
+    def clt_parameter_for(
+        self,
+        parameter_id: str,
+        competency: YearMonth,
+    ) -> CltParameter | None:
+        return self.clt.parameter_for(parameter_id, competency.first_day)
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -260,6 +313,10 @@ def _load_inss(path: Path) -> InssData:
                 f"{context}.teto_salario",
             )
         )
+        if brackets[-1].up_to is not None and salary_cap is None:
+            raise ValueError(
+                f"{context} needs a final open bracket or teto_salario",
+            )
         tables.append(
             InssTable(
                 source=_string(raw_table, "fonte", context),
@@ -312,6 +369,8 @@ def _load_irrf(path: Path) -> IrrfData:
                     ),
                 ),
             )
+        if brackets[-1].up_to is not None:
+            raise ValueError(f"{context} needs a final open bracket")
         tables.append(
             IrrfTable(
                 source=_string(raw_table, "fonte", context),

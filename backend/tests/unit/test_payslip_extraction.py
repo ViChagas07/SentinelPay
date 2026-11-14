@@ -25,11 +25,11 @@ def test_extracts_valid_synthetic_payslip() -> None:
     assert fields.total_earnings is not None
     assert fields.total_earnings.value == Decimal("2100.00")
     assert fields.total_deductions is not None
-    assert fields.total_deductions.value == Decimal("380.00")
+    assert fields.total_deductions.value == Decimal("407.00")
     assert fields.net is not None
-    assert fields.net.value == Decimal("1720.00")
+    assert fields.net.value == Decimal("1693.00")
     assert fields.irrf_base is not None
-    assert fields.irrf_base.value == Decimal("1800.00")
+    assert fields.irrf_base.value == Decimal("1770.00")
     assert fields.layout_recognized
     assert fields.layout_confidence == 1.0
 

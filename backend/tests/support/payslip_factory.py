@@ -12,11 +12,11 @@ class SyntheticPayslip:
     overtime_percent: str = "50%"
     overtime_amount: str = "100,00"
     total_earnings: str = "2.100,00"
-    inss: str = "300,00"
-    irrf: str = "80,00"
-    total_deductions: str = "380,00"
-    net: str = "1.720,00"
-    irrf_base: str = "1.800,00"
+    inss: str = "330,00"
+    irrf: str = "77,00"
+    total_deductions: str = "407,00"
+    net: str = "1.693,00"
+    irrf_base: str = "1.770,00"
 
     def ocr_text(self) -> str:
         return "\n".join(
