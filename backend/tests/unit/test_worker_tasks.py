@@ -114,3 +114,17 @@ async def test_worker_runtime_builds_and_disposes_with_null_pool() -> None:
     async with build_worker_runtime(settings) as handler:
         assert handler is not None
         assert datetime.now(UTC).tzinfo is not None
+
+
+def test_payable_tasks_return_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_reminders() -> int:
+        return 3
+
+    async def fake_overdue() -> int:
+        return 1
+
+    monkeypatch.setattr(tasks, "_dispatch_payable_reminders", fake_reminders)
+    monkeypatch.setattr(tasks, "_mark_overdue_payables", fake_overdue)
+
+    assert tasks.dispatch_payable_reminders.run() == 3
+    assert tasks.mark_overdue_payables.run() == 1

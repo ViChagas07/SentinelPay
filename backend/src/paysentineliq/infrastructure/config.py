@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     analysis_max_concurrent_per_user: int = 2
     analysis_lease_seconds: int = 900
     analysis_stale_sweep_seconds: int = 300
+    payables_reminder_interval_seconds: int = 120
+    payables_overdue_interval_seconds: int = 600
+    payables_reminder_lookback_days: int = 7
     fraud_model_dir: str = "models/artifacts"
     llm_interpreter: Literal["structured", "crewai"] = "structured"
     log_level: str = "INFO"
@@ -324,6 +327,12 @@ class Settings(BaseSettings):
             raise ValueError("ANALYSIS_LEASE_SECONDS must be positive")
         if self.analysis_stale_sweep_seconds <= 0:
             raise ValueError("ANALYSIS_STALE_SWEEP_SECONDS must be positive")
+        if self.payables_reminder_interval_seconds <= 0:
+            raise ValueError("PAYABLES_REMINDER_INTERVAL_SECONDS must be positive")
+        if self.payables_overdue_interval_seconds <= 0:
+            raise ValueError("PAYABLES_OVERDUE_INTERVAL_SECONDS must be positive")
+        if self.payables_reminder_lookback_days < 0:
+            raise ValueError("PAYABLES_REMINDER_LOOKBACK_DAYS must be non-negative")
         if not self.fraud_model_dir.strip():
             raise ValueError("FRAUD_MODEL_DIR must not be empty")
 

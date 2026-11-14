@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P14 em andamento (recibos e vencimentos). P14.1-P14.5 concluidos; P14.6 (tarefas beat/lembretes) nao iniciado.
+- Fase atual: P14 em andamento (recibos e vencimentos). P14.1-P14.6 concluidos; P14.7 (E2E/fechamento) nao iniciado.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0006_analysis_queue` aplicada e rotas de auth/documentos/analises ativas; 21 documentos de `knowledge/` indexados no PGVector com embedder fake local. Worker/beat Celery ativos; suite Docker 30 passed + 1 skip em 2026-11-14.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS; embeddings reais do LM Studio e Pinecone real tambem NAO VALIDADOS (indice local usa embedder fake 8D); CrewAI/LM Studio reais e o grafo de agentes real seguem NAO VALIDADOS (testes usam LLM/crew fakes). Guardrails: ataques reais/adaptativos, judge real e desempenho do classificador fora do dataset sintetico NAO VALIDADOS; injeccao via RAG tem cobertura parcial (delimitadores + judge) e a allowlist de ferramentas segue vazia. Mensageria: throughput do worker, dead-letter real, HA do beat e entrega de notificacao (P15) NAO VALIDADOS; o E2E local conclui `degraded` por ausencia de LLM no container.
 
@@ -111,6 +111,7 @@
 
 - P13.6 Worker/tarefas: ponte `run_async` cria loop dedicado por tarefa e fecha pending/asyncgens; runtime do worker usa engine `NullPool` e dispose ao fim; `ProcessAnalysisHandler` reivindica com task_id/lease, retry reenfileira (`queued` + evento `retry_scheduled`) e falha final grava `failed`+evento; tasks `analysis.run`, `notifications.dispatch` (placeholder P15) e `scheduler.sweep_stale_analyses` (reenfileira stale); DLQs declaradas no `worker_ready`; worker em `--pool=solo`, concurrency 1 e runtime importado sob demanda para reduzir memoria; notificacao publicada so depois do commit. 22 testes novos.
 - P13.7 Docker/E2E: teste real sobe API+worker+RabbitMQ e cobre POST 202, replay de Idempotency-Key, worker concluindo (degraded por LLM/RAG do ambiente), GET com score/classe/evidencias/justificativa sem `fields`, IDOR 404, notificacao unica, evento completed unico apos reentrega e DLQ existente. `make check` 617 passed + 1 skip; `make test-docker` 30 passed + 1 skip (backup 17337 bytes; `alembic check` sem operacoes novas); `make bandit` 0 achados e `make audit` sem vulnerabilidades conhecidas. Testes de host usam 127.0.0.1 (localhost IPv6 do Docker estava quebrado). Throughput, dead-letter real, HA de beat e entrega de notificacao (P15) seguem NAO VALIDADOS.
+
 
 
 

@@ -62,6 +62,14 @@ def test_celery_app_routes_tasks_and_schedules_sweeper() -> None:
     assert schedule["task"] == "paysentineliq.scheduler.sweep_stale_analyses"
     assert schedule["schedule"] == 300
     assert schedule["options"]["queue"] == SCHEDULER_QUEUE
+    reminders = conf.beat_schedule["dispatch-payable-reminders"]
+    assert reminders["task"] == "paysentineliq.payables.dispatch_reminders"
+    assert reminders["schedule"] == 120
+    assert reminders["options"]["queue"] == SCHEDULER_QUEUE
+    overdue = conf.beat_schedule["mark-overdue-payables"]
+    assert overdue["task"] == "paysentineliq.payables.mark_overdue"
+    assert overdue["schedule"] == 600
+    assert overdue["options"]["queue"] == SCHEDULER_QUEUE
     annotations = conf.task_annotations["paysentineliq.analysis.run"]
     assert annotations["max_retries"] == 3
     assert annotations["retry_backoff"] is True
@@ -83,6 +91,9 @@ def test_celery_settings_are_validated() -> None:
     assert settings.analysis_task_max_retries == 3
     assert settings.analysis_lease_seconds == 900
     assert settings.analysis_stale_sweep_seconds == 300
+    assert settings.payables_reminder_interval_seconds == 120
+    assert settings.payables_overdue_interval_seconds == 600
+    assert settings.payables_reminder_lookback_days == 7
     assert settings.fraud_model_dir
 
     with pytest.raises(ValidationError):

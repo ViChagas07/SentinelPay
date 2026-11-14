@@ -15,10 +15,15 @@ from paysentineliq.infrastructure.config import get_settings
 from paysentineliq.infrastructure.db.repositories.analyses import (
     SqlAlchemyAnalysisRepository,
 )
+from paysentineliq.infrastructure.db.repositories.payables import (
+    SqlAlchemyPayableReminderRepository,
+)
 from paysentineliq.infrastructure.messaging.async_bridge import run_async
 from paysentineliq.infrastructure.messaging.celery_app import (
     ANALYSIS_TASK,
     NOTIFICATION_TASK,
+    PAYABLES_OVERDUE_TASK,
+    PAYABLES_REMINDER_TASK,
     SWEEP_TASK,
     celery_app,
 )
@@ -135,5 +140,48 @@ async def _sweep_stale_analyses() -> int:
                 except Exception:
                     _logger.error("stale_analysis_dispatch_failed")
         return requeued
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name=PAYABLES_REMINDER_TASK)  # type: ignore[untyped-decorator]
+def dispatch_payable_reminders() -> int:
+    return run_async(_dispatch_payable_reminders)
+
+
+async def _dispatch_payable_reminders() -> int:
+    settings = get_settings()
+    engine = create_async_engine(
+        settings.database_url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+    )
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        repository = SqlAlchemyPayableReminderRepository(session_factory)
+        return await repository.create_due_reminders(
+            datetime.now(UTC),
+            lookback_days=settings.payables_reminder_lookback_days,
+        )
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name=PAYABLES_OVERDUE_TASK)  # type: ignore[untyped-decorator]
+def mark_overdue_payables() -> int:
+    return run_async(_mark_overdue_payables)
+
+
+async def _mark_overdue_payables() -> int:
+    settings = get_settings()
+    engine = create_async_engine(
+        settings.database_url,
+        poolclass=NullPool,
+        pool_pre_ping=True,
+    )
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        repository = SqlAlchemyPayableReminderRepository(session_factory)
+        return await repository.mark_overdue(datetime.now(UTC))
     finally:
         await engine.dispose()

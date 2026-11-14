@@ -12,6 +12,8 @@ DLX_NAME = "paysentineliq.dlx"
 ANALYSIS_TASK = "paysentineliq.analysis.run"
 NOTIFICATION_TASK = "paysentineliq.notifications.dispatch"
 SWEEP_TASK = "paysentineliq.scheduler.sweep_stale_analyses"
+PAYABLES_REMINDER_TASK = "paysentineliq.payables.dispatch_reminders"
+PAYABLES_OVERDUE_TASK = "paysentineliq.payables.mark_overdue"
 PING_TASK = "paysentineliq.health.ping"
 
 _TASK_ROUTES = {
@@ -24,6 +26,14 @@ _TASK_ROUTES = {
         "routing_key": NOTIFICATIONS_QUEUE,
     },
     SWEEP_TASK: {
+        "queue": SCHEDULER_QUEUE,
+        "routing_key": SCHEDULER_QUEUE,
+    },
+    PAYABLES_REMINDER_TASK: {
+        "queue": SCHEDULER_QUEUE,
+        "routing_key": SCHEDULER_QUEUE,
+    },
+    PAYABLES_OVERDUE_TASK: {
         "queue": SCHEDULER_QUEUE,
         "routing_key": SCHEDULER_QUEUE,
     },
@@ -105,6 +115,16 @@ def build_celery_app(settings: Settings) -> Celery:
             "sweep-stale-analyses": {
                 "task": SWEEP_TASK,
                 "schedule": settings.analysis_stale_sweep_seconds,
+                "options": {"queue": SCHEDULER_QUEUE},
+            },
+            "dispatch-payable-reminders": {
+                "task": PAYABLES_REMINDER_TASK,
+                "schedule": settings.payables_reminder_interval_seconds,
+                "options": {"queue": SCHEDULER_QUEUE},
+            },
+            "mark-overdue-payables": {
+                "task": PAYABLES_OVERDUE_TASK,
+                "schedule": settings.payables_overdue_interval_seconds,
                 "options": {"queue": SCHEDULER_QUEUE},
             },
         },
