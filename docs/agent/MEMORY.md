@@ -78,3 +78,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - O fluxo real com Google nao foi executado (sem credenciais); testes usam token/JWKS mockados. Nao declarar login Google validado em producao.
 - PowerShell 5.1 nao aceita `&&`; encadear comandos com `;` ou `if ($?)`.
 - O Graphify ignora `.env` por seguranca e por `.gitignore`; o caminho aparece como ignorado na saida, o que e esperado.
+- P13: tarefa Celery e sincrona; chame o caso de uso async por `run_async` com um loop NOVO por tarefa e feche loop/pending/asyncgens. O engine do worker usa `NullPool` e e descartado ao fim; nao compartilhe engine/loop entre tarefas.
+- P13: worker local roda `--pool=solo` com concurrency 1 e importa o runtime sob demanda; o Docker Desktop deste ambiente tem ~1.8 GB e prefork/import pesado causava SIGKILL/OOM. Em prefork, `worker_max_tasks_per_child=1` recicla o filho.
+- P13: claim permite `queued` ou `processing` com lease vencido; retry NAO usa o mesmo status processing: `requeue_for_retry` volta para `queued` com evento `retry_scheduled`; o sweeper de beat reenfileira `analysis_stale` e republica a tarefa.
+- P13: DLQ `*.dlq` precisa ser declarada explicitamente; o worker faz isso no sinal `worker_ready`. Publicar com um `Celery()` nu em fila existente com DLX falha 406 por argumentos diferentes; use `build_celery_app` com `task_queues`.
+- P13: notificacao e outbox na mesma transacao do `complete`; publish da fila `notifications` so depois do commit. A entrega real e P15; a task atual apenas registra `notification_pending_delivery`.
+- P13: testes Docker no host usam `127.0.0.1`; `localhost` resolve para IPv6 e o proxy do Docker neste Windows derruba conexoes Postgres/HTTP. `make test-docker` agora roda `build` antes de `up`.
+- P13: Compose local usa `RAG_FAKE_EMBEDDER=1`; LLM/RAG reais no container seguem NAO VALIDADOS. O E2E aceita `degraded` (LLM indisponivel) desde que score/evidencia/justificativa existam.
