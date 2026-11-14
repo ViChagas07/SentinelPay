@@ -8,6 +8,12 @@ from paysentineliq.domain.boleto.due_date import (
 )
 from paysentineliq.domain.boleto.dv import DvAlgorithm, DvError
 from paysentineliq.domain.boleto.errors import NotVerifiableLayoutError
+from paysentineliq.domain.boleto.extraction import (
+    BankHeader,
+    BoletoFields,
+    ExtractedField,
+    extract_boleto_fields,
+)
 from paysentineliq.domain.boleto.lines import (
     BankDigitableLine,
     Barcode,
@@ -23,17 +29,21 @@ __all__ = [
     "Bank",
     "BankDigitableLine",
     "BankDirectory",
+    "BankHeader",
     "Barcode",
+    "BoletoFields",
     "Cnpj",
     "Cpf",
     "DvAlgorithm",
     "DvError",
+    "ExtractedField",
     "Money",
     "NotVerifiableLayoutError",
     "TaxId",
     "TaxIdKind",
     "UtilityDigitableLine",
     "due_date_from_factor",
+    "extract_boleto_fields",
     "factor_from_due_date",
     "parse_tax_id",
 ]

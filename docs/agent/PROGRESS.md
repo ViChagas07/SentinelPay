@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P07 em andamento (boletos FEBRABAN). P07.4 (dados de bancos) concluido.
+- Fase atual: P07 em andamento (boletos FEBRABAN). P07.5 (extracao OCR) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -67,3 +67,4 @@
 - P07.2 Value objects: `BankDigitableLine` (47), `UtilityDigitableLine` (48), `Barcode` (44), conversao linha<->barras, DVs modulo 10/11 com override Bradesco campo 3, `Money` em centavos e fator de vencimento (0=sem data; 9999=21/02/2025). 29 testes verdes; Ruff, format e mypy strict verdes. Linha de 48 digitos so valida estrutura e levanta `NotVerifiableLayoutError` na conversao.
 - P07.3 CPF/CNPJ: `Cpf`/`Cnpj` validam digitos verificadores, rejeitam zeros/repetidos e expoem mascara; `parse_tax_id` aceita formato com pontuacao ou digitos. 6 testes verdes; algoritmo de DV e lacuna registrada no ADR-0010 porque nao consta em knowledge/febraban ou knowledge/layouts.
 - P07.4 Bancos: `febraban_banks_v1.json` reproduz os 25 codigos da secao 1.6 do manual com fonte por banco; loader valida schema e aplica o override do Bradesco (campo 3 modulo 11). 4 testes verdes; Ruff, format e mypy strict verdes. Codigo fora da lista sera evidencia HIGH com ressalva BACEN, nao fraude confirmada.
+- P07.5 Extracao: parser OCR deterministico extrai linha de 47/48 (inclusive dividida em duas linhas e com confusoes 0/O e 1/I/l), codigo de barras textual, valor, vencimento, beneficiario, pagador, CPF/CNPJ e banco do cabecalho, cada um com confianca; ausencia de vencimento e reconhecida. 11 testes verdes; Ruff, format e mypy strict verdes. Linha de 48 digitos e extraida, mas segue NAO VERIFICAVEL para decodificacao.
