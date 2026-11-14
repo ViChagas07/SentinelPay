@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P10 em andamento (RAG). P10.2 (dominio/chunking/fonte) concluido.
+- Fase atual: P10 em andamento (RAG). P10.3 (embedding) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -87,3 +87,4 @@
 - P09.5 Servico/fechamento: `FraudScoringService` combina deterministico + ML + visual, fallback `ml_unavailable`, piso critico 80 e metadados do modelo; 8 testes. Model card atualizado com metricas sinteticas do treino (seed 42, 240 linhas, hash do dataset e SHA-256 do artefato); `make check` com 420 testes, `make test-docker` 21 passed + 1 skip, Bandit 0 e pip-audit sem vulnerabilidades.
 - P10.1 Auditoria/spec/ADR: 21 PDFs em 8 categorias; pasta vazia `{febraban,...}` ignorada e reportada; nenhum PII real (apenas placeholders `000.000.000-00`/`usuario@dominio.com`); sem `knowledge/MANIFEST.yaml`, metadados default unknown; LM Studio indisponivel, embedding real NAO VALIDADO. SPEC 0011/ADR-0014 definem chunking, embedding configuravel, PGVector/Pinecone, idempotencia, citacoes e privacidade. `pgvector 0.5.1` e `pinecone 10.3.0` adicionados.
 - P10.2 Dominio/chunking/fonte: `KnowledgeDocument`/`KnowledgeChunk`/`Provenance`/filtros e citacoes; metadados com fonte/proveniencia/versao/vigencia e hash canonico; chunking de PDF por pagina e Markdown por titulo, com sobreposicao, blocos de tabela atomicos e posicao/hash; fonte real le PDF/MD, ignora pasta de nome estranho e reporta falhas. 12 testes verdes; Ruff, format e mypy verdes.
+- P10.3 Embedding: `EmbeddingPort`, adaptador OpenAI-compatible com lotes/timeout/retry e recusa de dimensao divergente, e `DeterministicHashEmbedding` para desenvolvimento/teste. Testes com `httpx.MockTransport` (lote, 503, timeout, dimensao) e fake normalizado; 7 testes verdes. LM Studio real NAO VALIDADO.

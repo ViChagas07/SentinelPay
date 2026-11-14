@@ -286,3 +286,15 @@ class OcrImageTooLargeError(ApplicationError):
             status_code=422,
             title="Unprocessable entity",
         )
+
+
+class RagUnavailableError(RuntimeError):
+    pass
+
+
+class EmbeddingDimensionError(ValueError):
+    pass
+
+
+class EmbeddingUnavailableError(RuntimeError):
+    pass
