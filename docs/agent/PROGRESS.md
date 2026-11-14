@@ -24,3 +24,4 @@
 - P01.5 Infra e Docker: Dockerfile multi-stage com usuario `app` (uid 999); Compose com Postgres+pgvector (55432), Redis, RabbitMQ, MinIO (ADR-0004), Mailpit e API; volumes nomeados e healthchecks. `make up` OK, `/health` 200, extensao `vector` presente e `make test-docker` com 1 teste verde.
 - P01.6 Checagens finais: `make check` verde (Ruff, format, mypy, import-linter, 2 testes unitarios e `docker compose config --quiet`). Compose usa `.env.example`, nunca o `.env` de producao.
 - P02.1 Spec e ADR: SPEC 0002 e ADR-0005 registram configuracao, DI, UoW, erros problem+json, logs, locale e readiness. Sem codigo de negocio; nada a validar alem dos documentos.
+- P02.2 Config: `Settings` com pydantic-settings lendo so ambiente (`env_file=None`), defaults locais e falha na inicializacao fora de local sem `DATABASE_URL`/`REDIS_URL`; 5 testes verdes. Ruff, mypy strict e import-linter verdes.
