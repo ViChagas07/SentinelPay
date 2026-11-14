@@ -2,7 +2,7 @@
 
 ## Comandos de checagem
 - Segredo fora do git: `git check-ignore -v .env` (deve retornar `.gitignore:2:.env	.env`) e `git ls-files | Select-String -Pattern '^\.env$'` (deve ser vazio).
-- Backend (na raiz): `make lint`, `make format-check`, `make format`, `make typecheck`, `make arch`, `make test`, `make test-docker`, `make check`. ML: `make train` (dataset sintetico seed 42; grava `models/artifacts/fraud-risk-v1.{joblib,json}`).
+- Backend (na raiz): `make lint`, `make format-check`, `make format`, `make typecheck`, `make arch`, `make test`, `make test-docker`, `make check`. ML: `make train` (dataset sintetico seed 42; grava `models/artifacts/fraud-risk-v1.{joblib,json}`). RAG: `make ingest-knowledge` (le `.env.example`, Postgres local em 55432; use `RAG_FAKE_EMBEDDER=1` sem LM Studio).
 - Auditoria: `make bandit` (0 achados) e `make audit` (`pip-audit --local`; sem vulnerabilidades conhecidas, com aviso de cobertura parcial do venv).
 - Backup/migration: `make backup` (grava `backups/*.sql`), `make db-migrate` (backup + `alembic upgrade head` no container da API), `make migrate` (alias de `db-migrate`), `make db-revision m='descricao'` (autogenerate com mount de `backend/migrations` e `--rev-id 000N` via `scripts/next_migration_id.py`) e `make db-check` (`alembic check`).
 - Equivalentes: `poetry -C backend run ruff check .`, `poetry -C backend run ruff format --check .`, `poetry -C backend run mypy src tests`, `poetry -C backend run lint-imports`, `poetry -C backend run pytest -m "not docker"`.
@@ -12,7 +12,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P10 em andamento (RAG). P10.4 (vetores/migration) concluido.
+- Fase atual: P10 em andamento (RAG). P10.5 (ingestao/retriever) concluido.
 - Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
 - Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
@@ -89,3 +89,4 @@
 - P10.2 Dominio/chunking/fonte: `KnowledgeDocument`/`KnowledgeChunk`/`Provenance`/filtros e citacoes; metadados com fonte/proveniencia/versao/vigencia e hash canonico; chunking de PDF por pagina e Markdown por titulo, com sobreposicao, blocos de tabela atomicos e posicao/hash; fonte real le PDF/MD, ignora pasta de nome estranho e reporta falhas. 12 testes verdes; Ruff, format e mypy verdes.
 - P10.3 Embedding: `EmbeddingPort`, adaptador OpenAI-compatible com lotes/timeout/retry e recusa de dimensao divergente, e `DeterministicHashEmbedding` para desenvolvimento/teste. Testes com `httpx.MockTransport` (lote, 503, timeout, dimensao) e fake normalizado; 7 testes verdes. LM Studio real NAO VALIDADO.
 - P10.4 Vetores/migration: `VectorStorePort`, PGVector (SQLAlchemy) e Pinecone (contrato fake), migration `0004_knowledge_chunks` com `vector(EMBEDDING_DIM)` e indice/campos de citacao; idempotencia por hash/chunk-set, filtros de categoria/proveniencia/vigencia e delete por documento. API image rebuilt; backup `paysentineliq_20261114T153101Z.sql` antes da migration; `make db-check` "No new upgrade operations detected"; PGVector Docker 1 passed e 4 testes Pinecone. `EMBEDDING_DIM=8` e apenas o fake de desenvolvimento; Pinecone/LM Studio reais NAO VALIDADOS.
+- P10.5 Ingestao/retriever: `IngestKnowledgeHandler` com guarda de caminho `knowledge/`, chunking, embedding em lote, upsert idempotente e relatorio de falhas/avisos/tempo; `KnowledgeRetriever` com filtros de categoria/vigencia, citacoes, `authoritative` e `rag_unavailable`. CLI `make ingest-knowledge` com embedder fake para desenvolvimento. Execucao real: 21 docs, 56 chunks, 0 falhas, 0.28s; segunda execucao skipped=21; consulta devolveu 5 trechos com citacao (proveniencia unknown, authoritative=false). Pasta `{febraban,...}` reportada e ignorada. LM Studio real e Pinecone real NAO VALIDADOS.
