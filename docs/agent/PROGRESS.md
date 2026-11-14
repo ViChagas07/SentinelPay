@@ -18,6 +18,7 @@
 
 ## Historico
 - P15.1 Spec/ADR: SPEC 0016 e ADR 0019 definem Central, tipos de notificacao, consentimento (e-mail transacional por padrao; SMS/WhatsApp com opt-in e E.164), cifra AES-GCM do telefone, portas/adaptadores (SMTP real + console), retry/backoff, idempotencia por (notificacao, canal) e criterios de provedor de SMS/WhatsApp pendentes. Sem codigo de produto ainda.
+- P15.2 Dominio/i18n/cifra: tipos e status de entrega, preferencia com E.164/consentimento, mascaramento de destino, templates nos 9 locales com fallback en e `DestinationCipher` AES-GCM com HKDF-SHA256 sobre `SECURITY_HASH_SECRET`. 79 testes direcionados verdes; Ruff, format e mypy strict verdes.
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
 - P00.2 Harness: PROGRESS/MEMORY atualizados; ADR-0001 (stack), ADR-0002 (score deterministico) e ADR-0003 (artefato Graphify) aceitos; checklist OWASP com as 10 categorias criado.
 - P00.3 Graphify: atualizado para 0.9.108 via `uv tool install "graphifyy[gemini]" --force`; `graphify extract .` e `graphify cluster-only .` geraram `graphify-out/graph.json`, `GRAPH_REPORT.md` e `graph.html`. Pendencia: regenerar quando os documentos mudarem.
