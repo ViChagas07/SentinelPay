@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     swr_wait_timeout_seconds: float = 2.0
     allowed_hosts: str = "localhost,127.0.0.1,test,testserver,api"
     cors_allowed_origins: str = "http://localhost:3000"
+    max_request_body_bytes: int = 1_048_576
+    request_timeout_seconds: float = 30.0
 
     @property
     def allowed_hosts_list(self) -> list[str]:
@@ -79,6 +81,10 @@ class Settings(BaseSettings):
             raise ValueError("ALLOWED_HOSTS must not contain a wildcard")
         if "*" in self.cors_allowed_origins_list:
             raise ValueError("CORS_ALLOWED_ORIGINS must not contain a wildcard")
+        if self.max_request_body_bytes <= 0:
+            raise ValueError("MAX_REQUEST_BODY_BYTES must be positive")
+        if self.request_timeout_seconds <= 0:
+            raise ValueError("REQUEST_TIMEOUT_SECONDS must be positive")
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")

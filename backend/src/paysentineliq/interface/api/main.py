@@ -12,6 +12,7 @@ from paysentineliq.infrastructure.db.engine import build_engine, build_session_f
 from paysentineliq.infrastructure.logging import configure_logging
 from paysentineliq.infrastructure.security.rate_limit import TokenBucketRateLimiter
 from paysentineliq.interface.api.constants import API_V1_PREFIX, REQUEST_ID_HEADER
+from paysentineliq.interface.api.limits import MaxBodySizeMiddleware, TimeoutMiddleware
 from paysentineliq.interface.api.middleware import RequestIdMiddleware
 from paysentineliq.interface.api.problems import register_exception_handlers
 from paysentineliq.interface.api.rate_limit import RateLimitMiddleware
@@ -57,6 +58,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="PaySentinelIQ", version="0.1.0", lifespan=lifespan)
     app.state.settings = resolved_settings
     app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(
+        MaxBodySizeMiddleware,
+        max_bytes=resolved_settings.max_request_body_bytes,
+    )
+    app.add_middleware(
+        TimeoutMiddleware,
+        timeout_seconds=resolved_settings.request_timeout_seconds,
+    )
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         TrustedHostMiddleware,
