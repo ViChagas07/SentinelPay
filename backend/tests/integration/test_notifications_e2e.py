@@ -78,9 +78,11 @@ async def test_event_creates_central_item_email_and_respects_consent() -> None:
             assert delivery.last_error_safe == "channel_disabled"
 
         message = await _wait_for_mailpit_email(owner.email)
-        assert "Recibo" in message["Subject"]
-        assert "184.75" not in message["Text"]
-        assert "Energia Sul" not in message["Text"]
+        subject = str(message["Subject"])
+        body = str(message["Text"])
+        assert "Recibo" in subject
+        assert "184.75" not in body
+        assert "Energia Sul" not in body
 
         async with httpx.AsyncClient(base_url=_API_URL, timeout=30) as client:
             central = await client.get("/api/v1/notifications", headers=header)
@@ -94,10 +96,7 @@ async def test_event_creates_central_item_email_and_respects_consent() -> None:
 
             foreign = await client.get("/api/v1/notifications", headers=other_header)
             assert foreign.status_code == 200
-            assert all(
-                item["id"] != str(first_notification.id)
-                for item in foreign.json()["items"]
-            )
+            assert all(item["id"] != str(first_notification.id) for item in foreign.json()["items"])
             forbidden = await client.delete(
                 f"/api/v1/notifications/{first_notification.id}",
                 headers=other_header,
@@ -131,9 +130,7 @@ async def test_event_creates_central_item_email_and_respects_consent() -> None:
                 },
             )
             assert preferences.status_code == 200, preferences.text
-            channels = {
-                item["channel"]: item for item in preferences.json()["channels"]
-            }
+            channels = {item["channel"]: item for item in preferences.json()["channels"]}
             assert channels["sms"]["enabled"] is True
             assert channels["sms"]["destination"] == "+55*******9999"
             assert channels["sms"]["consented_at"] is not None
