@@ -32,6 +32,8 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P07: a lista de bancos vem de `febraban_banks_v1.json` com fonte por banco; nao escrever codigos de memoria. Bradesco usa modulo 11 no campo 3 da linha; os demais usam modulo 10. Linha de 48 digitos e NAO VERIFICAVEL alem do comprimento.
 - P07: o `BarcodeDetector` do OpenCV 4.10 no Windows esta disponivel, mas nao decodificou um ITF sintetico gerado no host; leitura real de codigo de barras segue NAO VALIDADA. O adaptador retorna `not_found`/`not_validated` e a analise usa a linha digitavel.
 - P07: o motor de regras so aceita fonte em `knowledge/febraban/` ou `knowledge/layouts/`; regra sem fonte e descartada. O subscore e risco (0 seguro, 100 maximo), com piso 80 para qualquer regra critica.
+- P07: `make bandit` exige 0 achados e o Bandit B101 acusa `assert` em codigo de producao. Nao usar `assert` para narrowing no dominio; usar guarda explicita ou `typing.cast`.
+- P07: nesta sessao o Docker Desktop/daemon estava parado; `make test-docker` falha em `up` no npipe e a suite Docker fica NAO VALIDADA. Nao iniciar Docker Desktop automaticamente.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.

@@ -1,3 +1,5 @@
+import pytest
+
 from paysentineliq.domain.boleto.tax_id import Cnpj, Cpf, TaxIdKind, parse_tax_id
 
 
@@ -45,3 +47,12 @@ def test_parse_tax_id_rejects_other_lengths() -> None:
     assert parse_tax_id("123") is None
     assert parse_tax_id("123456789012345") is None
     assert parse_tax_id("") is None
+
+
+def test_tax_id_rejects_invalid_structure() -> None:
+    with pytest.raises(ValueError):
+        Cpf("123")
+    with pytest.raises(ValueError):
+        Cpf("1234567890A")
+    with pytest.raises(ValueError):
+        Cnpj("123")

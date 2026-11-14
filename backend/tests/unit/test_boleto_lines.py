@@ -172,3 +172,25 @@ def test_money_keeps_integer_cents() -> None:
         Money(-1)
     with pytest.raises(ValueError):
         Money.from_decimal(Decimal("1.234"))
+
+
+def test_bradesco_barcode_roundtrip_uses_mod11_field_three() -> None:
+    boleto = build_boleto(bank="237")
+    line = BankDigitableLine(boleto.line)
+
+    assert line.to_barcode().to_line(BRADESCO_DIRECTORY) == line
+    assert BRADESCO_DIRECTORY.field_dv_source("237", 3) == "knowledge/layouts/boleto_bradesco.pdf"
+
+
+def test_money_rejects_negative_decimal() -> None:
+    with pytest.raises(ValueError):
+        Money.from_decimal(Decimal("-1.00"))
+
+
+def test_field_access_rejects_unknown_field() -> None:
+    line = BankDigitableLine(build_boleto().line)
+
+    with pytest.raises(ValueError):
+        line.field_data(4)
+    with pytest.raises(ValueError):
+        line.field_dv(4)

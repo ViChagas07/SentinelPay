@@ -1,3 +1,8 @@
+import json
+from pathlib import Path
+
+import pytest
+
 from paysentineliq.domain.boleto.bank_directory import load_bank_directory
 from paysentineliq.domain.boleto.dv import DvAlgorithm
 from paysentineliq.domain.boleto.sources import ACTIVE_SOURCES
@@ -45,3 +50,32 @@ def test_bradesco_field_three_override_is_loaded() -> None:
     assert directory.field_dv_algorithm("237", 3) is DvAlgorithm.MOD11
     assert directory.field_dv_algorithm("237", 1) is DvAlgorithm.MOD10
     assert directory.field_dv_algorithm("341", 3) is DvAlgorithm.MOD10
+
+
+def test_loader_rejects_missing_version(tmp_path: Path) -> None:
+    path = tmp_path / "banks.json"
+    path.write_text(json.dumps({"sources": [], "banks": []}), encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_bank_directory(path)
+
+
+def test_loader_rejects_invalid_field_dv(tmp_path: Path) -> None:
+    payload = {
+        "version": "v1",
+        "sources": ["knowledge/febraban/manual_febraban_v1.pdf#1.6"],
+        "banks": [
+            {
+                "code": "001",
+                "name": "Banco",
+                "aliases": [],
+                "field_dv": {"3": "mod99"},
+                "source": "knowledge/febraban/manual_febraban_v1.pdf#1.6",
+            }
+        ],
+    }
+    path = tmp_path / "banks.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_bank_directory(path)

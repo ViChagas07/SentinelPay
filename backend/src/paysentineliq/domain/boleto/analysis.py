@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import date
-from typing import Literal
+from typing import Literal, cast
 
 from paysentineliq.domain.boleto.bank_directory import BankDirectory, load_bank_directory
 from paysentineliq.domain.boleto.due_date import due_date_from_factor
@@ -224,12 +224,12 @@ def analyze_boleto(
         amount_cents = line.amount_cents
         free_field = line.free_field
     else:
-        assert barcode is not None
-        bank_code = barcode.bank_code
-        currency = barcode.currency
-        due_factor = barcode.due_factor
-        amount_cents = barcode.amount_cents
-        free_field = barcode.free_field
+        barcode_value = cast(Barcode, barcode)
+        bank_code = barcode_value.bank_code
+        currency = barcode_value.currency
+        due_factor = barcode_value.due_factor
+        amount_cents = barcode_value.amount_cents
+        free_field = barcode_value.free_field
 
     bank = directory.find_by_code(bank_code)
     decoded = BoletoDecoded(
@@ -275,8 +275,14 @@ def analyze_boleto(
             )
 
     if fields.due_date is None:
-        if decoded.due_date is not None and not fields.due_date_absent:
-            illegible.append("due_date")
+        if decoded.due_date is not None:
+            if fields.due_date_absent:
+                builder.add(
+                    "due_date_mismatch",
+                    {"text": "absent", "decoded": decoded.due_date.isoformat()},
+                )
+            else:
+                illegible.append("due_date")
     else:
         if fields.due_date.confidence < 0.5:
             illegible.append("due_date")
