@@ -463,3 +463,43 @@ def test_barcode_only_invalid_general_dv_triggers_rule() -> None:
     assert "dv_invalid" in _ids(analysis)
     evidence = next(item for item in analysis.evidence if item.rule_id == "dv_invalid")
     assert evidence.details["fields"] == "general"
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_rule", "expected_score"),
+    [
+        ("valid", None, 0),
+        ("dv", "dv_invalid", 80),
+        ("amount", "amount_mismatch", 80),
+        ("due_date", "due_date_mismatch", 30),
+        ("tax_id", "tax_id_invalid", 25),
+    ],
+)
+def test_rule_matrix_with_one_alteration_at_a_time(
+    case: str,
+    expected_rule: str | None,
+    expected_score: int,
+) -> None:
+    tax_id = "11.222.333/0001-80" if case == "tax_id" else "11.222.333/0001-81"
+    boleto = build_boleto(beneficiary_tax_id=tax_id)
+    text = boleto.ocr_text()
+
+    if case == "dv":
+        tampered = boleto.line[:9] + str((int(boleto.line[9]) + 1) % 10) + boleto.line[10:]
+        text = text.replace(boleto.formatted_line, format_line(tampered))
+    elif case == "amount":
+        text = text.replace("R$ 1.234,56", "R$ 1.234,57")
+    elif case == "due_date":
+        assert boleto.due_date is not None
+        text = text.replace(
+            format_date(boleto.due_date),
+            format_date(boleto.due_date + timedelta(days=1)),
+        )
+
+    analysis = _analyze_text(text)
+
+    if expected_rule is None:
+        assert _ids(analysis) == []
+    else:
+        assert _ids(analysis) == [expected_rule]
+    assert analysis.subscore == expected_score
