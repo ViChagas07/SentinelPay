@@ -25,6 +25,7 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 - Textos de usuario usam `PlainText` (sem `<`/`>`, sem controles, max 10k); API responde JSON/problem+json.
 - Evidencia: `backend/tests/integration/test_injection_docker.py`, `backend/tests/unit/test_text_validation.py`, `backend/tests/unit/test_limits.py`.
 - Upload: nome original sanitizado nunca compoe a chave; tipo/extensao vem de magic bytes, nao de extensao/Content-Type. Evidencia: `backend/tests/unit/test_storage_keys.py`, `backend/tests/unit/test_document_inspector.py`, `backend/tests/integration/test_document_api.py`.
+- OCR: texto reconhecido e dado nao confiavel, nao vira instrucao e nao e interpretado como campo. Evidencia: `backend/tests/unit/test_ingestion_service.py`.
 - Pendencia: repetir o teste em cada filtro novo de negocio.
 
 ## A04:2021 - Insecure Design
@@ -33,6 +34,7 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 - Testes de concorrencia: `backend/tests/integration/test_rate_limit_concurrency.py`, `backend/tests/integration/test_swr_cache.py`.
 - Evidencia adicional: `backend/tests/unit/test_rate_limit_middleware.py`, `backend/tests/integration/test_bruteforce.py`, `backend/tests/unit/test_ssrf_guard.py`.
 - Upload: tamanho e paginas limitados, PDF ativo/criptografado recusado, falha do banco compensa o objeto e nao deixa metadado orfao. Evidencia: `backend/tests/unit/test_document_service.py`, `backend/tests/unit/test_upload_limit.py`, `backend/tests/integration/test_document_upload.py`.
+- OCR/visao: `OCR_MAX_PAGES`, DPI, timeout e teto de pixels limitam abuso; sinais visuais sao heuristicas e nao veredito. Evidencia: `backend/tests/unit/test_ingestion_service.py`, `backend/tests/unit/test_visual_anomalies.py`.
 
 ## A05:2021 - Security Misconfiguration
 
@@ -40,6 +42,7 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 - TrustedHost e CORS com allowlist explicita; wildcard e rejeitado na configuracao. Swagger/Redoc/OpenAPI desativados fora de local.
 - Evidencia: `backend/tests/unit/test_security_headers.py`, `backend/tests/unit/test_config.py`.
 - Bucket S3 privado, sem ACL publica, com `AES256` por objeto e URL pre-assinada curta; MinIO local usa KMS de desenvolvimento. AWS/IAM/SSE-KMS real: **NAO VALIDADO**.
+- Modelos PaddleOCR ficam em cache fora do repositorio; download/provenance dos modelos **NAO VALIDADO**.
 - Pendencia: revisar configuracao de proxy/CDN e exposicao de portas do Compose em producao.
 
 ## A06:2021 - Vulnerable and Outdated Components
@@ -62,8 +65,9 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 
 - Lockfile versionado; dependencias instaladas apenas do lock; nenhuma desserializacao insegura (pickle/yaml.load) no codigo de aplicacao.
 - SHA-256 do conteudo e metadados no Postgres; bucket/objetos sem ACL publica. Versionamento/lifecycle/retencao do bucket: **NAO VALIDADO**.
+- Modelos PaddleOCR sao baixados do hoster oficial e ficam em `~/.paddlex`; checksums/provenance dos artefatos de modelo **NAO VALIDADOS**.
 - pip-audit sem vulnerabilidades conhecidas; assinatura/provenance de artefatos e SBOM **NAO VALIDADO**.
-- Evidencia: `backend/poetry.lock`, `make audit`, `make bandit`, `backend/tests/unit/test_document_service.py`.
+- Evidencia: `backend/poetry.lock`, `make audit`, `make bandit`, `backend/tests/unit/test_document_service.py`, `backend/tests/integration/test_paddle_ocr_real.py`.
 - Pendencia: verificacao de assinatura/provenance no CI.
 
 ## A09:2021 - Security Logging and Monitoring Failures
@@ -71,6 +75,7 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 - Logs JSON com `request_id`; filtro mascara CPF, CNPJ, e-mail, telefone, JWT, Bearer e chaves; access log do uvicorn desativado para nao imprimir query string.
 - Rate limit e forca bruta registram falhas/degradacao sem IP ou identificador bruto.
 - **Metricas/alertas e retencao: NAO VALIDADO** (sem backend de metricas nesta fase).
+- Texto OCR nao e logado integralmente; logs de ingestao nao incluem conteudo do documento.
 - Evidencia: `backend/tests/unit/test_logging.py`, `backend/tests/unit/test_request_id.py`, `backend/tests/unit/test_rate_limit_middleware.py`.
 
 ## A10:2021 - Server-Side Request Forgery (SSRF)
@@ -93,3 +98,11 @@ Ultima revisao: 2026-11-14 (P03). Cada item aponta o controle implementado e o t
 - Bucket privado, SSE `AES256`, presign curto e sem URL publica permanente. MinIO local criado pelo sistema; AWS real/IAM/SSE-KMS: **NAO VALIDADO**.
 - **Antivirus/malware scanning: NAO VALIDADO.** A porta `AntivirusScanner` existe sem implementacao; arquivos estruturalmente validos ainda podem conter malware.
 - Lifecycle, versionamento, retencao e quarentena de objetos: **NAO VALIDADO**.
+
+## OCR e visao (P06)
+
+- PDF nativo usa a camada de texto; PDF escaneado/imagem sao renderizados e passam pelo PaddleOCR. `OCR_MAX_PAGES`, `OCR_RENDER_DPI`, `OCR_TIMEOUT_SECONDS` e `OCR_MAX_IMAGE_PIXELS` limitam custo/abuso.
+- Sinais heuristicos: qualidade (desfoque/resolucao/ruido), ELA, variancia de ruido por blocos, copy-move ORB e metadados de PDF. Cada sinal tem nome, valor 0..1, explicacao "Heuristic signal, not proof" e pagina/regiao quando aplicavel.
+- Fixtures 100% sinteticas cobrem imagem limpa/borrada/pequena/colada, PDF nativo/escaneado/incremental/layers e todos os sinais. Nenhum documento real.
+- OCR real validado apenas em CPU/Windows, idioma `en`, fixture sintetica: **19,6s** e **+444 MB RSS**. Modelos reais `pt`/`es`, inferencia dentro do container Docker e qualidade/limites com documentos reais: **NAO VALIDADOS**.
+- **NAO VALIDADO:** integridade/provenance dos modelos baixados, OCR adversarial, antivirus do arquivo antes do OCR e analise forense pericial. Os sinais sao indicios, nao prova.

@@ -27,6 +27,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - OpenCV GUI e headless nao devem coexistir: o PaddleOCR declara `opencv-contrib-python`; instalar headless junto deixa o pacote `cv2` quebrado. Use `pip install --force-reinstall --no-deps opencv-contrib-python==4.10.0.84` para reparar.
 - Texto de OCR e dado nao confiavel e nunca deve virar instrucao; nao logar o texto completo.
 - PaddleOCR 3.7 instala `httpx2`, e o Authlib passa a preferi-lo. `GoogleOIDCClient` aceita `oauth_transport` separado; testes OIDC usam `httpx2.MockTransport` para token e `httpx.MockTransport` para JWKS.
+- O teste de OCR real e opt-in (`RUN_REAL_OCR=1` + `--run-docker`); `make test-docker` o pula. Modelos pt/es reais e OCR dentro do container ainda NAO VALIDADOS.
 
 ## Armadilhas conhecidas
 - O `.env` atual aponta para servicos de producao. Nao rodar testes ou scripts locais contra ele; o Compose usa `.env.example`.

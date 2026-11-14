@@ -6,14 +6,15 @@
 - Auditoria: `make bandit` (0 achados) e `make audit` (`pip-audit --local`; sem vulnerabilidades conhecidas, com aviso de cobertura parcial do venv).
 - Backup/migration: `make backup` (grava `backups/*.sql`), `make migrate` (backup + `alembic upgrade head` no container da API).
 - Equivalentes: `poetry -C backend run ruff check .`, `poetry -C backend run ruff format --check .`, `poetry -C backend run mypy src tests`, `poetry -C backend run lint-imports`, `poetry -C backend run pytest -m "not docker"`.
+- OCR real (opcional, host): `$env:RUN_REAL_OCR='1'; poetry -C backend run pytest tests/integration/test_paddle_ocr_real.py -q -s --run-docker`.
 - Compose (na raiz): `make compose-config` (= `docker compose --env-file .env.example config --quiet`), `make up`, `make stop`.
 - Graphify (regenerar o grafo; saida em `graphify-out/`): `graphify extract .` e depois `graphify cluster-only .`.
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
-- Fase atual: P06 em andamento (ingestao OCR e sinais visuais). P05 concluida.
-- Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Graphify 0.9.108 instalado; grafo em `graphify-out/` (ignorado, ADR-0003).
-- Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
+- Fase atual: P06 concluida (ingestao OCR e sinais visuais). Proximo passo: P07, conforme instrucao do dono.
+- Stack local no ar com 6 servicos saudaveis; `/health` 200, `/ready` 200, migrations `0003_documents` aplicada e rotas de auth/documentos ativas. Imagem da API reconstruida com PaddleOCR/PyMuPDF/OpenCV e libs importam no container.
+- Pendencias conhecidas: fluxo real Google, MFA/recuperacao, antivirus, AWS real/lifecycle, OCR pt/es real, OCR dentro do container, DDoS de borda e metricas/alertas seguem NAO VALIDADOS.
 
 ## Historico
 - P00.1 Estrutura e git: docs consolidados na raiz; `git init`; `.env` local criado e ignorado (`git check-ignore` OK; 0 arquivos `.env` rastreados). A pasta `repo/` era duplicata e foi removida.
@@ -61,3 +62,4 @@
 - P06.4 Ingestao: config `OCR_LANGS`/limites e `DocumentIngestionService` que usa camada nativa de PDF quando util, renderiza/OCR por pagina caso contrario, processa imagem, respeita `OCR_MAX_PAGES`/`OCR_MAX_IMAGE_PIXELS`/timeout e retorna `IngestionResult` com sinais. 7 testes com OCR fake e config OCR verdes.
 - P06.5 OCR real: PaddleOCR 3.7.0 (PP-OCRv6, en) em CPU processou a fixture sintetica em **19,6s** com **+444 MB RSS** e 2 blocos, apos desabilitar MKLDNN (`enable_mkldnn=False`); sem isso o oneDNN falha com NotImplemented no Windows. Teste opcional `RUN_REAL_OCR=1`; modelos pt/es reais e execucao no container permanecem NAO VALIDADOS.
 - P06.6 Integracao de dependencias: PaddleOCR instalou `httpx2`; Authlib passou a usa-lo e o cliente OIDC separa transporte OAuth (httpx2) do JWKS (httpx). Testes OIDC ajustados, `types-psutil`/`httpx2` declarados e formatacao corrigida; 205 unitarios e 20 docker verdes (OCR real skipped por padrao).
+- P06.7 OWASP/fechamento: checklist atualizado com OCR/visao, limites e pendencias; imagem Docker com PaddleOCR/PyMuPDF/OpenCV construida e imports validados no container; `make check` 205 unitarios, `make test-docker` 20 verdes + 1 skip, `bandit` 0 achados e `pip-audit` sem vulnerabilidades conhecidas. OCR real medido no host: 19,6s/+444 MB; pt/es real e inferencia no container NAO VALIDADOS.
