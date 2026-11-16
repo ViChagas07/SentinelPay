@@ -85,3 +85,22 @@ Makefile ou por outro teste.
 - Capacidade de producao: o script de carga mede apenas a API local.
 - Ataques reais/adaptativos e malware real: os testes usam conteudo sintetico controlado.
 - Cobertura de 80% nao prova ausencia de defeitos.
+
+## Revalidacao final (2026-11-16)
+
+| Verificacao | Resultado |
+| --- | --- |
+| `make check` | 783 passed + 2 skips + 44 deselected; cobertura 82,98% (piso 80%). |
+| `make test-docker` | 43 passed + 1 skip (OCR real opt-in). |
+| Postgres/Redis/RabbitMQ/MinIO/Mailpit | cobertos pela suite Docker acima. |
+| Ruff + format | verdes. |
+| mypy strict | 357 arquivos, sem erros. |
+| import-linter | 6 contratos mantidos, 0 quebrados. |
+| Bandit | 0 achados (`# nosec B105` justificado no token local de metricas). |
+| pip-audit | sem vulnerabilidades conhecidas; 4 CVEs do Chroma ignorados (justificativa no Makefile). |
+| `make load-check` | 60x404 + 60x429; p50 95,63 ms, p95 143,29 ms, max 155,64 ms. |
+
+A cobertura subiu de 82,97% para 82,98% com os testes novos. O ganho pequeno e esperado: a maior
+parte do codigo adicionado e de teste, e os endpoints exercitados ja tinham cobertura por outros
+testes. O valor esta nos invariantes provados (query count, IDOR com banco real, contrato,
+stampede e limites de upload), nao no percentual.

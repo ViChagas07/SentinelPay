@@ -425,7 +425,8 @@ class Settings(BaseSettings):
 
         if not self.metrics_token.strip():
             if self.app_env == "local":
-                self.metrics_token = "local-metrics-token"
+                # Token fixo e publico, valido somente em APP_ENV=local; nao e segredo real.
+                self.metrics_token = "local-metrics-token"  # nosec B105
             else:
                 missing.append("METRICS_TOKEN")
         elif self.app_env != "local" and self.metrics_token.strip() in {

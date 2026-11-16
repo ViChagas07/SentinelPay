@@ -103,3 +103,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P16: no Compose, Prometheus precisa de `entrypoint: ["/bin/sh","-c"]`; so `command` faz o binario interpretar `/bin/sh` como argumento. O token e injetado via `sed` no startup.
 - P16: o template de rota `/api/v1/analyses/{analysis_id}` contem o literal `analysis_id`; validacao de PII deve olhar valores reais (e-mail, UUIDs), nao nomes de campos.
 - P16: nao rode `docker build`/`compose build` com o beat/worker ativos em maquina com pouca RAM; o Docker Desktop pode cair e exigir restart do WSL. Depois de um teste falho, reinicie o worker para descartar retry preso de analise apagada.
+- P17: o piso de cobertura (80%) vale para a suite sem Docker (`make coverage`); modulos de repositorio/S3/Redis/RabbitMQ/MinIO/Mailpit continuam medidos pela suite Docker, nao pelo piso.
+- P17: para contar queries, escute `before_cursor_execute` no `engine.sync_engine` (o AsyncEngine nao recebe o evento direto) e remova o listener no `finally`. Nos endpoints de listagem, o custo esperado e 1 SELECT de auth + 1 da lista, independente do numero de linhas.
+- P17: o snapshot `backend/tests/contracts/openapi.json` e comparado campo a campo; ele so deve ser regenerado com `make openapi` no mesmo commit em que a mudanca de contrato for intencional.
+- P17: `cv2.imdecode` aloca a imagem inteira; para bomba de descompressao, leia as dimensoes pelo cabecalho (Pillow) antes de decodificar. Em PDF, cheque `page.rect` x DPI antes de `get_pixmap`.
+- P17: `make load-check` e smoke local (429 e latencia), nao benchmark; um bucket ja drenado pode produzir 100% de 429, o que ainda valida o limitador mas nao a capacidade.
+- P17: o Bandit B105 no token fixo `local-metrics-token` e falso positivo (valor publico, so em `APP_ENV=local`); a linha tem `# nosec B105` com justificativa ao lado.

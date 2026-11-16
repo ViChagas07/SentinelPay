@@ -110,4 +110,3 @@ async def test_cold_miss_stampede_computes_once() -> None:
     finally:
         await redis.delete(*cache.redis_keys(logical_key))
         await redis.aclose()
-
