@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import delete, event
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from paysentineliq.domain.analysis import (
@@ -18,6 +18,7 @@ from paysentineliq.infrastructure.db.repositories.analysis_read import (
     SqlAlchemyAnalysisReadRepository,
 )
 from paysentineliq.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from tests.support.query_counter import count_queries
 
 pytestmark = [pytest.mark.integration, pytest.mark.docker]
 
@@ -114,28 +115,13 @@ async def test_list_is_owner_scoped_ordered_and_single_query() -> None:
         analyses.append(other_id)
 
         reader = SqlAlchemyAnalysisReadRepository(factory)
-        statements: list[str] = []
 
-        def count_selects(
-            conn: object,
-            cursor: object,
-            statement: str,
-            parameters: object,
-            context: object,
-            executemany: bool,
-        ) -> None:
-            if statement.lstrip().upper().startswith("SELECT"):
-                statements.append(statement)
-
-        event.listen(engine.sync_engine, "before_cursor_execute", count_selects)
-        try:
+        with count_queries(engine) as counter:
             page = await reader.list_for_owner(owners[0], limit=2)
-        finally:
-            event.remove(engine.sync_engine, "before_cursor_execute", count_selects)
 
         assert [item.id for item in page] == created[:2]
         assert all(item.owner_id == owners[0] for item in page)
-        assert len(statements) == 1
+        assert counter.select_count == 1
 
         cursor = (page[-1].created_at, page[-1].id)
         next_page = await reader.list_for_owner(owners[0], limit=2, before=cursor)
