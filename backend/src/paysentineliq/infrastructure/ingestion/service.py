@@ -1,8 +1,11 @@
 import asyncio
+import io
+import math
 
 import cv2
 import numpy as np
 import pymupdf
+from PIL import Image, UnidentifiedImageError
 
 from paysentineliq.application.errors import (
     InvalidDocumentError,
@@ -129,6 +132,7 @@ class DocumentIngestionService:
                     page_number,
                 )
                 native_chars = sum(len(block.text.strip()) for block in native_blocks)
+                self._ensure_page_size(page)
                 pixmap = await asyncio.to_thread(
                     page.get_pixmap,
                     dpi=self._render_dpi,
@@ -186,12 +190,35 @@ class DocumentIngestionService:
             raise OcrTimeoutError() from exc
 
     def _ensure_image_size(self, data: bytes) -> None:
-        buffer = np.frombuffer(data, dtype=np.uint8)
-        image = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
-        if image is None:
-            raise InvalidDocumentError()
-        height, width = image.shape[:2]
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                width, height = image.size
+        except Image.DecompressionBombError as exc:
+            raise OcrImageTooLargeError() from exc
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise InvalidDocumentError() from exc
+
         if width * height > self._max_image_pixels:
+            raise OcrImageTooLargeError()
+
+        buffer = np.frombuffer(data, dtype=np.uint8)
+        decoded = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
+        if decoded is None:
+            raise InvalidDocumentError()
+        decoded_height, decoded_width = decoded.shape[:2]
+        if decoded_width * decoded_height > self._max_image_pixels:
+            raise OcrImageTooLargeError()
+
+    def _ensure_page_size(self, page: object) -> None:
+        rect = page.rect  # type: ignore[attr-defined]
+        scale = self._render_dpi / 72.0
+        width = float(rect.width) * scale
+        height = float(rect.height) * scale
+        if (
+            not math.isfinite(width)
+            or not math.isfinite(height)
+            or math.ceil(width) * math.ceil(height) > self._max_image_pixels
+        ):
             raise OcrImageTooLargeError()
 
     @staticmethod
