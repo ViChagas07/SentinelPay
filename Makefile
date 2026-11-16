@@ -2,7 +2,7 @@ POETRY ?= poetry
 COMPOSE ?= docker compose --env-file .env.example
 DB_REVISION_ID := $(shell python scripts/next_migration_id.py)
 
-.PHONY: install lint format format-check typecheck arch test test-docker build train train-guardrails backup migrate db-migrate db-revision db-check ingest-knowledge compose-config observability-config observability-up observability-down observability-test up stop check audit bandit security
+.PHONY: install lint format format-check typecheck arch test test-docker coverage openapi build train train-guardrails backup migrate db-migrate db-revision db-check ingest-knowledge compose-config observability-config observability-up observability-down observability-test up stop check audit bandit security
 
 install:
 	$(POETRY) -C backend install
@@ -33,6 +33,12 @@ security: audit bandit
 
 test:
 	$(POETRY) -C backend run pytest -m "not docker"
+
+coverage:
+	$(POETRY) -C backend run pytest -m "not docker" --cov=paysentineliq --cov-report=term-missing --cov-fail-under=80
+
+openapi:
+	$(POETRY) -C backend run python ../scripts/export_openapi.py
 
 test-docker: build up migrate
 	$(POETRY) -C backend run pytest -m docker --run-docker
@@ -89,4 +95,4 @@ up:
 stop:
 	$(COMPOSE) stop
 
-check: lint format-check typecheck arch test compose-config
+check: lint format-check typecheck arch coverage compose-config
