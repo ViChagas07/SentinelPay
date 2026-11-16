@@ -66,3 +66,48 @@ async def test_stale_while_revalidate_recomputes_once() -> None:
     finally:
         await redis.delete(*cache.redis_keys(logical_key))
         await redis.aclose()
+
+
+async def test_cold_miss_stampede_computes_once() -> None:
+    redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+    metrics = PlatformMetrics(multiprocess=False)
+    cache = SWRCache(
+        redis,
+        soft_ttl_seconds=10,
+        hard_ttl_seconds=20,
+        jitter_ratio=0.0,
+        lock_ttl_seconds=5,
+        wait_timeout_seconds=2.0,
+        metrics=metrics,
+    )
+    logical_key = f"test:{uuid4()}"
+    calls = 0
+
+    async def factory() -> str:
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.1)
+        return f"value-{calls}"
+
+    def encode(value: str) -> str:
+        return value
+
+    def decode(value: str) -> str:
+        return value
+
+    try:
+        results = await asyncio.gather(
+            *[
+                cache.get_or_compute(logical_key, factory, encoder=encode, decoder=decode)
+                for _ in range(30)
+            ],
+        )
+
+        assert calls == 1
+        assert results == ["value-1"] * 30
+        rendered = metrics.render().decode("utf-8")
+        assert 'result="miss"' in rendered
+    finally:
+        await redis.delete(*cache.redis_keys(logical_key))
+        await redis.aclose()
+
