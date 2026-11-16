@@ -42,6 +42,8 @@ COPY --from=builder --chown=app:app /app/src /app/src
 COPY --from=builder --chown=app:app /app/alembic.ini /app/alembic.ini
 COPY --from=builder --chown=app:app /app/migrations /app/migrations
 
+RUN mkdir -p /var/run/prometheus/api /var/run/prometheus/worker /var/run/prometheus/beat && chown -R app:app /var/run/prometheus
+
 USER app
 EXPOSE 8000
 CMD ["uvicorn", "paysentineliq.interface.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

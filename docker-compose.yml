@@ -96,7 +96,14 @@ x-app-environment: &app-environment
   GUARDRAIL_MAX_TEXT_CHARS: ${GUARDRAIL_MAX_TEXT_CHARS}
   GUARDRAIL_LLM_EXCERPT_CHARS: ${GUARDRAIL_LLM_EXCERPT_CHARS}
   GUARDRAIL_ALLOWED_OUTPUT_URLS: ${GUARDRAIL_ALLOWED_OUTPUT_URLS}
-  OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED}
+  OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-paysentineliq-api}
+  OTEL_SERVICE_VERSION: ${OTEL_SERVICE_VERSION:-0.1.0}
+  OTEL_TRACES_SAMPLER_RATIO: ${OTEL_TRACES_SAMPLER_RATIO:-1.0}
+  OTEL_EXPORTER_TIMEOUT_SECONDS: ${OTEL_EXPORTER_TIMEOUT_SECONDS:-5}
+  METRICS_TOKEN: ${METRICS_TOKEN}
+  QUEUE_DEPTH_REFRESH_SECONDS: ${QUEUE_DEPTH_REFRESH_SECONDS:-15}
   CREWAI_DISABLE_TELEMETRY: ${CREWAI_DISABLE_TELEMETRY}
   CREWAI_DISABLE_TRACKING: ${CREWAI_DISABLE_TRACKING}
   CREWAI_TRACING_ENABLED: ${CREWAI_TRACING_ENABLED}
@@ -119,7 +126,12 @@ services:
   api:
     build: *app-build
     image: paysentineliq-api:local
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      PROMETHEUS_MULTIPROC_DIR: /var/run/prometheus/api
+      PROMETHEUS_MULTIPROC_SCRAPE_DIRS: /var/run/prometheus/api,/var/run/prometheus/worker,/var/run/prometheus/beat
+    volumes:
+      - prometheus_multiproc:/var/run/prometheus
     ports:
       - "${API_PORT}:8000"
     depends_on:
@@ -163,9 +175,13 @@ services:
         "-Q",
         "analysis,notifications,scheduler",
       ]
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      OTEL_SERVICE_NAME: paysentineliq-worker
+      PROMETHEUS_MULTIPROC_DIR: /var/run/prometheus/worker
     volumes:
       - ./models:/app/models:ro
+      - prometheus_multiproc:/var/run/prometheus
     depends_on:
       postgres:
         condition: service_healthy
@@ -189,7 +205,12 @@ services:
         "--loglevel=INFO",
         "--schedule=/tmp/celerybeat-schedule",
       ]
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      OTEL_SERVICE_NAME: paysentineliq-beat
+      PROMETHEUS_MULTIPROC_DIR: /var/run/prometheus/beat
+    volumes:
+      - prometheus_multiproc:/var/run/prometheus
     depends_on:
       postgres:
         condition: service_healthy
@@ -286,12 +307,81 @@ services:
       retries: 5
     restart: unless-stopped
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.165.0
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./infra/observability/otel-collector.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+    depends_on:
+      - tempo
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.9.2
+    profiles: ["observability"]
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./infra/observability/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.16.0-busybox
+    profiles: ["observability"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sed "s|__METRICS_TOKEN__|$${METRICS_TOKEN}|g" /etc/prometheus/prometheus.yml.template > /tmp/prometheus.yml
+        exec /bin/prometheus --config.file=/tmp/prometheus.yml --storage.tsdb.path=/prometheus --web.enable-lifecycle
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN}
+    volumes:
+      - ./infra/observability/prometheus.yml.template:/etc/prometheus/prometheus.yml.template:ro
+      - ./infra/observability/prometheus-rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.6
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-CHANGE_ME}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+      - tempo
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
   minio_data:
   mailpit_data:
+  prometheus_multiproc:
+  prometheus_data:
+  grafana_data:
+  tempo_data:
 
 
 

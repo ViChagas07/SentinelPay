@@ -96,3 +96,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P15: no Compose use `SMTP_HOST: mailpit` fixo; `${SMTP_HOST:-mailpit}` resolve para `localhost` por causa do `.env.example`, que serve aos testes no host. Mailpit em `127.0.0.1:8025`.
 - P15: SWR faz dupla checagem de valor/soft apos adquirir o lock; sem isso, 20 chamadas concorrentes podem recomputar duas vezes depois do soft TTL.
 - P15: provedor real de SMS/WhatsApp segue pendente (ADR 0019); `SMS_PROVIDER`/`WHATSAPP_PROVIDER` so aceitam `console`.
+- P16: OTLP HTTP exige `/v1/traces`; `create_otlp_exporter` completa o path para que `OTEL_EXPORTER_OTLP_ENDPOINT` continue sendo so a base.
+- P16: `opentelemetry-instrumentation-sqlalchemy` 0.66b2 nao aceita SQLAlchemy 2.1; o tracing de SQL usa listeners `before_cursor_execute`/`after_cursor_execute`/`handle_error` e so registra `db.system.name`, `db.operation` e `db.executemany`.
+- P16: `PiiSanitizingSpanProcessor` roda antes do `BatchSpanProcessor` e redige chaves sensiveis, `http.target/url`, headers, `db.statement`, IPs, eventos e descricao de status; sempre teste um trace real no Tempo.
+- P16: `/metrics` usa registry multiprocess (`PROMETHEUS_MULTIPROC_DIR`) para agregar API e worker; metricas com labels fixos sao pre-inicializadas em zero para aparecerem antes do primeiro evento.
+- P16: no Compose, Prometheus precisa de `entrypoint: ["/bin/sh","-c"]`; so `command` faz o binario interpretar `/bin/sh` como argumento. O token e injetado via `sed` no startup.
+- P16: o template de rota `/api/v1/analyses/{analysis_id}` contem o literal `analysis_id`; validacao de PII deve olhar valores reais (e-mail, UUIDs), nao nomes de campos.
+- P16: nao rode `docker build`/`compose build` com o beat/worker ativos em maquina com pouca RAM; o Docker Desktop pode cair e exigir restart do WSL. Depois de um teste falho, reinicie o worker para descartar retry preso de analise apagada.

@@ -1,0 +1,51 @@
+groups:
+  - name: paysentineliq
+    rules:
+      - alert: ApiDown
+        expr: up{job="paysentineliq-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PaySentinelIQ API is down"
+          description: "Prometheus cannot scrape the API for more than 2 minutes."
+
+      - alert: HighApiErrorRate
+        expr: |
+          sum(rate(paysentineliq_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(paysentineliq_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 5xx rate above 5%"
+          description: "The API has been returning more than 5% 5xx responses for 5 minutes."
+
+      - alert: AnalysisQueueBacklog
+        expr: max_over_time(paysentineliq_queue_depth{queue="analysis"}[10m]) > 25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Analysis queue is growing"
+          description: "The analysis queue has stayed above 25 messages for 10 minutes."
+
+      - alert: LlmUnavailable
+        expr: increase(paysentineliq_llm_requests_total{outcome="error"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM requests are failing"
+          description: "There are LLM errors in the last 5 minutes."
+
+      - alert: DeadLetterQueueNotEmpty
+        expr: paysentineliq_queue_depth{queue=~".*\\.dlq"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead letter queue has messages"
+          description: "A dead letter queue has messages and needs inspection."

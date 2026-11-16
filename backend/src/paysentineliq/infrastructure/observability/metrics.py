@@ -1,8 +1,10 @@
 import atexit
 import contextlib
+import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -15,6 +17,9 @@ from prometheus_client import (
 from prometheus_client import (
     multiprocess as prometheus_multiprocess,
 )
+from prometheus_client.metrics_core import Metric
+
+_logger = logging.getLogger("paysentineliq")
 
 KNOWN_QUEUES = (
     "analysis",
@@ -71,12 +76,21 @@ class PlatformMetrics:
         self._multiprocess = bool(multiprocess_dir) if multiprocess is None else multiprocess
         if self._multiprocess and not multiprocess_dir:
             raise ValueError("PROMETHEUS_MULTIPROC_DIR is required in multiprocess mode")
+        self._scrape_registry = CollectorRegistry()
         if self._multiprocess and multiprocess_dir:
             Path(multiprocess_dir).mkdir(parents=True, exist_ok=True)
             atexit.register(_mark_process_dead, os.getpid())
-        self._scrape_registry = CollectorRegistry()
-        if self._multiprocess:
-            prometheus_multiprocess.MultiProcessCollector(self._scrape_registry)  # type: ignore[no-untyped-call]
+            scrape_dirs = [
+                directory.strip()
+                for directory in os.environ.get(
+                    "PROMETHEUS_MULTIPROC_SCRAPE_DIRS",
+                    multiprocess_dir,
+                ).split(",")
+                if directory.strip()
+            ]
+            self._scrape_registry.register(
+                _MergedMultiProcessCollector(scrape_dirs),
+            )
             creation_registry = CollectorRegistry()
         else:
             creation_registry = self._scrape_registry
@@ -153,6 +167,15 @@ class PlatformMetrics:
         )
         for queue in KNOWN_QUEUES:
             self.queue_depth.labels(queue=queue).set(0)
+        for result in _CACHE_RESULTS - {"other"}:
+            self.cache_events.labels(result=result).inc(0)
+        for scope in _RATE_LIMIT_SCOPES - {"other"}:
+            self.http_rate_limited.labels(scope=scope).inc(0)
+        for layer in _GUARDRAIL_LAYERS - {"other"}:
+            self.guardrail_blocks.labels(layer=layer).inc(0)
+        for channel in _CHANNELS - {"other"}:
+            for status in _NOTIFICATION_STATUSES - {"other"}:
+                self.notifications.labels(channel=channel, status=status).inc(0)
 
     @property
     def content_type(self) -> str:
@@ -265,6 +288,51 @@ def _safe_route(route: str) -> str:
     path = _UUID_SEGMENT.sub("/{id}", path)
     path = _NUMERIC_SEGMENT.sub("/{id}", path)
     return path[:120]
+
+
+class _MergedMultiProcessCollector:
+    def __init__(self, directories: list[str]) -> None:
+        self._directories = directories
+        self._logged_failures: set[str] = set()
+
+    def collect(self) -> list[Metric]:
+        merged: dict[
+            tuple[str, str],
+            tuple[str, dict[tuple[str, tuple[tuple[str, str], ...]], Any]],
+        ] = {}
+        for directory in self._directories:
+            try:
+                collector = prometheus_multiprocess.MultiProcessCollector(  # type: ignore[no-untyped-call]
+                    CollectorRegistry(),
+                    path=directory,
+                )
+                metrics = list(collector.collect())  # type: ignore[no-untyped-call]
+            except Exception:
+                if directory not in self._logged_failures:
+                    _logger.warning("prometheus_multiprocess_dir_unreadable")
+                    self._logged_failures.add(directory)
+                continue
+            self._logged_failures.discard(directory)
+            for metric in metrics:
+                _, samples = merged.setdefault(
+                    (metric.name, metric.type),
+                    (metric.documentation, {}),
+                )
+                for sample in metric.samples:
+                    key = (sample.name, tuple(sorted(sample.labels.items())))
+                    existing = samples.get(key)
+                    if existing is None:
+                        samples[key] = sample
+                    else:
+                        samples[key] = existing._replace(
+                            value=existing.value + sample.value,
+                        )
+        output: list[Metric] = []
+        for (name, metric_type), (documentation, samples) in merged.items():
+            metric = Metric(name, documentation, metric_type)
+            metric.samples.extend(samples.values())
+            output.append(metric)
+        return output
 
 
 def _mark_process_dead(pid: int) -> None:

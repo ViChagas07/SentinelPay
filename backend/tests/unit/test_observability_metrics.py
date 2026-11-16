@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from prometheus_client import CONTENT_TYPE_LATEST
 
@@ -91,3 +93,20 @@ def test_unknown_label_values_are_collapsed() -> None:
 
     assert 'channel="other"' in text
     assert 'result="other"' in text
+
+
+def test_multiprocess_metrics_tolerate_missing_scrape_dirs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root = str(tmp_path)
+    monkeypatch.setenv("PROMETHEUS_MULTIPROC_DIR", f"{root}/api")
+    monkeypatch.setenv(
+        "PROMETHEUS_MULTIPROC_SCRAPE_DIRS",
+        f"{root}/api,{root}/missing",
+    )
+
+    metrics = PlatformMetrics(multiprocess=True)
+    rendered = metrics.render()
+
+    assert isinstance(rendered, bytes)

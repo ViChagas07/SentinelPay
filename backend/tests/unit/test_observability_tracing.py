@@ -6,6 +6,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import Status, StatusCode
+from sqlalchemy import create_engine, text
 
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.logging import reset_request_id, set_request_id
@@ -47,6 +48,7 @@ def test_sanitizer_redacts_pii_headers_urls_and_exception_events(
             span.set_attribute("document.text", _DOCUMENT_TEXT)
             span.set_attribute("http.target", f"/api/v1/x?email={_EMAIL}")
             span.set_attribute("http.request.header.authorization", "Bearer secret")
+            span.set_attribute("net.peer.ip", "203.0.113.10")
             span.set_attribute("safe.attribute", "ok")
             span.record_exception(ValueError(f"falha para {_EMAIL}"))
             span.set_status(Status(StatusCode.ERROR, f"erro de {_EMAIL}"))
@@ -65,6 +67,7 @@ def test_sanitizer_redacts_pii_headers_urls_and_exception_events(
     assert attributes["document.text"] == "[REDACTED]"
     assert attributes["http.target"] == "[REDACTED]"
     assert attributes["http.request.header.authorization"] == "[REDACTED]"
+    assert attributes["net.peer.ip"] == "[REDACTED]"
     assert attributes["safe.attribute"] == "ok"
     assert attributes["request_id"] == "req-123"
     assert _EMAIL not in dumped
@@ -80,6 +83,31 @@ def test_sanitizer_redacts_pii_headers_urls_and_exception_events(
     assert _EMAIL not in event_dump
     assert _CPF not in event_dump
     assert _PHONE not in event_dump
+
+
+def test_sqlalchemy_spans_have_operation_but_no_statement_or_parameters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(
+        PiiSanitizingSpanProcessor(SimpleSpanProcessor(exporter)),
+    )
+    monkeypatch.setattr(trace, "get_tracer", provider.get_tracer)
+    engine = create_engine("sqlite://")
+
+    tracing.instrument_sqlalchemy_engine(engine, enabled=True)
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 42 AS secret_value"))
+
+    spans = [span for span in exporter.get_finished_spans() if span.name == "sql.query"]
+    assert spans
+    attributes = dict(spans[0].attributes or {})
+    dumped = repr(attributes)
+    assert attributes["db.system.name"] == "postgresql"
+    assert attributes["db.operation"] == "SELECT"
+    assert "SELECT 42" not in dumped
+    assert "secret_value" not in dumped
 
 
 def test_configure_tracing_is_disabled_by_default() -> None:
@@ -109,7 +137,31 @@ def test_otel_exporter_uses_endpoint_from_settings(
     exporter = tracing.create_otlp_exporter(settings)
 
     assert isinstance(exporter, FakeOtlpExporter)
-    assert captured == {"endpoint": "http://collector:4318", "timeout": 3.5}
+    assert captured == {
+        "endpoint": "http://collector:4318/v1/traces",
+        "timeout": 3.5,
+    }
+
+
+def test_otlp_exporter_keeps_full_traces_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOtlpExporter:
+        def __init__(self, *, endpoint: str, timeout: float) -> None:
+            captured["endpoint"] = endpoint
+
+    monkeypatch.setattr(tracing, "OTLPSpanExporter", FakeOtlpExporter)
+    settings = Settings(
+        app_env="local",
+        otel_sdk_disabled=False,
+        otel_exporter_otlp_endpoint="http://collector:4318/v1/traces/",
+    )
+
+    tracing.create_otlp_exporter(settings)
+
+    assert captured["endpoint"] == "http://collector:4318/v1/traces"
 
 
 def test_sampler_ratio_is_applied() -> None:

@@ -9,7 +9,6 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.propagate import set_global_textmap
 from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.sdk.resources import Resource
@@ -56,6 +55,10 @@ _DROPPED_KEYS = frozenset(
         "payable_id",
         "notification_id",
         "exception.stacktrace",
+        "net.peer.ip",
+        "net.sock.peer.addr",
+        "http.client_ip",
+        "client.address",
     },
 )
 _SENSITIVE_FRAGMENTS = (
@@ -182,8 +185,13 @@ def build_resource(settings: Settings) -> Resource:
 
 
 def create_otlp_exporter(settings: Settings) -> OTLPSpanExporter:
+    endpoint = settings.otel_exporter_otlp_endpoint.strip()
+    if endpoint.endswith("/"):
+        endpoint = endpoint[:-1]
+    if not endpoint.endswith("/v1/traces"):
+        endpoint = f"{endpoint}/v1/traces"
     return OTLPSpanExporter(
-        endpoint=settings.otel_exporter_otlp_endpoint.strip(),
+        endpoint=endpoint,
         timeout=settings.otel_exporter_timeout_seconds,
     )
 
@@ -258,13 +266,62 @@ def instrument_fastapi_app(app: Any, settings: Settings) -> None:
     )
 
 
-def instrument_sqlalchemy_engine(engine: Any) -> None:
-    if not _configured or _provider is None:
+def instrument_sqlalchemy_engine(
+    engine: Any,
+    *,
+    enabled: bool | None = None,
+) -> None:
+    if enabled is None:
+        enabled = _configured and _provider is not None
+    if not enabled:
         return
     identifier = id(engine)
     if identifier in _sqlalchemy_instrumented:
         return
-    SQLAlchemyInstrumentor().instrument(engine=engine)
+    from sqlalchemy import event
+
+    tracer = trace.get_tracer("paysentineliq")
+
+    def before_cursor_execute(
+        conn: Any,
+        cursor: Any,
+        statement: str,
+        parameters: Any,
+        context: Any,
+        executemany: bool,
+    ) -> None:
+        span = tracer.start_span("sql.query")
+        operation = statement.lstrip().split(None, 1)[0].upper() if statement else "SQL"
+        span.set_attribute("db.system.name", "postgresql")
+        span.set_attribute("db.operation", operation[:16])
+        span.set_attribute("db.executemany", bool(executemany))
+        context._otel_span = span
+
+    def after_cursor_execute(
+        conn: Any,
+        cursor: Any,
+        statement: str,
+        parameters: Any,
+        context: Any,
+        executemany: bool,
+    ) -> None:
+        span = getattr(context, "_otel_span", None)
+        if span is not None:
+            span.set_status(Status(StatusCode.OK))
+            span.end()
+            context._otel_span = None
+
+    def handle_error(exception_context: Any) -> None:
+        context = getattr(exception_context, "execution_context", None)
+        span = getattr(context, "_otel_span", None) if context is not None else None
+        if context is not None and span is not None:
+            span.set_status(Status(StatusCode.ERROR))
+            span.end()
+            context._otel_span = None
+
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    event.listen(engine, "after_cursor_execute", after_cursor_execute)
+    event.listen(engine, "handle_error", handle_error)
     _sqlalchemy_instrumented.add(identifier)
 
 
