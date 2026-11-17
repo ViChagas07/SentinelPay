@@ -151,6 +151,7 @@ def test_retrieval_defaults_are_local_and_cpu_only() -> None:
     assert settings.rerank_max_length == 512
     assert settings.batch_size == 16
     assert settings.torch_num_threads == 0
+    assert settings.rerank_timeout_seconds == 30.0
 
 
 def test_rerank_top_n_must_not_exceed_top_k() -> None:

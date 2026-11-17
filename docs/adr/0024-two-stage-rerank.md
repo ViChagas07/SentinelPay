@@ -10,7 +10,7 @@ A ETAPA B entregou o estagio 1 hibrido com top-K 25 atras de `HYBRID_RETRIEVAL_E
 - Criar `TwoStageRetriever` na camada de aplicacao, compondo `RagContextPort` do estagio 1 e `Reranker` do estagio 2.
 - Quando `RERANK_ENABLED=false`, o `TwoStageRetriever` devolve o top-K do estagio 1 na ordem original, sem chamar o reranker.
 - Quando `HYBRID_RETRIEVAL_ENABLED=false`, a composicao mantem o `KnowledgeRetriever` antigo e nao cria o pipeline de dois estagios.
-- Aplicar timeout do reranker no `TwoStageRetriever`; timeout, erro, resposta vazia ou reranker indisponivel fazem fallback para os primeiros top-N do estagio 1.
+- Aplicar timeout do reranker no `TwoStageRetriever`; timeout, erro, resposta vazia ou reranker indisponivel fazem fallback para os primeiros top-N do estagio 1. O timeout padrao e 30 s, calibrado na ETAPA D (p95 de 13,5 s em CPU int8).
 - Criar `RemoteReranker` com o mesmo contrato `Reranker`, usando `SafeHttpClient` e `SSRFGuard`, selecionado por `RERANKER_BACKEND=remote`.
 - Manter o adaptador local `BgeRerankerV2M3`, com lotes e truncamento por `RERANK_MAX_LENGTH`.
 - Adicionar metricas Prometheus por estagio, candidatos, scores antes/depois e resultado do rerank; adicionar spans OpenTelemetry sem texto de consulta.

@@ -119,6 +119,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17.1: `RetrievalModelHealth.backend` agora aceita `remote`; o snapshot OpenAPI foi regenerado. Atualize o snapshot no mesmo commit de qualquer mudanca de contrato.
 - P17.1: o `RERANKER_REMOTE_URL` em producao deve ser HTTPS e usar porta 443/80; `SafeHttpClient` bloqueia IPs privados e portas fora desse padrao, exceto `APP_ENV=local` com host na allowlist SSRF.
 - P17.1: o reranker remoto retorna probabilidade; se o provedor devolver logit fora de 0..1, o adaptador rejeita e o pipeline cai para o estagio 1. Ajuste o provedor, nao relaxe a validacao.
+- P17.1: `models/retrieval` fica fora do git e ja tem as conversoes int8 usadas no eval. O servico `api` ainda nao monta esse diretorio, entao `/health` no container mostra `model_files_missing`; o worker monta `./models`.
+- P17.1: os modelos int8 da comunidade sao derivados dos pesos BAAI, mas nao sao o caminho oficial de warmup/quantizacao. Nao os trate como substitutos validados do `warmup_models.py` em producao.
+- P17.1: o dataset usa perguntas sem acento para evitar problemas de encoding, mas as consultas reais podem ser acentuadas; o BGE-M3 e multilíngue e o eval deve ser repetido com consultas reais antes de conclusoes fortes.
 - P17: `cv2.imdecode` aloca a imagem inteira; para bomba de descompressao, leia as dimensoes pelo cabecalho (Pillow) antes de decodificar. Em PDF, cheque `page.rect` x DPI antes de `get_pixmap`.
 - P17: `make load-check` e smoke local (429 e latencia), nao benchmark; um bucket ja drenado pode produzir 100% de 429, o que ainda valida o limitador mas nao a capacidade.
 - P17: o Bandit B105 no token fixo `local-metrics-token` e falso positivo (valor publico, so em `APP_ENV=local`); a linha tem `# nosec B105` com justificativa ao lado.
@@ -137,3 +140,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17.1: o timeout do reranker fica no `TwoStageRetriever` (`RERANK_TIMEOUT_SECONDS`, padrao 5). `asyncio.wait_for` libera a analise, mas a thread do reranker local pode continuar ate terminar.
 - P17.1: metricas novas usam `PlatformMetrics` (`paysentineliq_retrieval_*`) e multiprocess Prometheus; o worker grava em `PROMETHEUS_MULTIPROC_DIR` e a API agrega. Nao crie registry separado para o worker.
 - P17.1: spans sao `retrieval.two_stage`, `retrieval.stage1` e `retrieval.rerank`; nunca adicione query ou documento como atributo.
+- P17.1 ETAPA D: `eval/retrieval_eval.jsonl` tem 30 perguntas e `scripts/eval_retrieval.py` gera `eval/RESULTS.md` e `eval/results.json`; `make eval-retrieval` reproduz. Nao edite RESULTS.md a mao, rode o script.
+- P17.1: a avaliacao real usou conversoes int8 da comunidade `onnx-community/bge-m3-ONNX` e `onnx-community/bge-reranker-v2-m3-ONNX` em `models/retrieval`, com o `sparse_linear.pt` oficial. Reindex: 21 docs/56 chunks; segunda execucao skipped=21.
+- P17.1: resultados nesta maquina: denso Recall@5 0,9333/MRR 0,8917; hibrido RRF 0,8667/0,8011; hibrido+rerank 0,9667/0,9583. O rerank custa cerca de 12 s p50/13,4 s p95 em CPU int8.
+- P17.1: o timeout de 5 s fazia todo rerank cair no fallback; o padrao foi calibrado para 30 s. Se o p95 real subir, reavalie `RERANK_TIMEOUT_SECONDS`, top-K e lote antes de reduzir.
+- P17.1: o hibrido RRF ficou abaixo do denso neste corpus de 21 docs; nao presuma que hibrido sempre ganha. Use o eval para calibrar fusao e pesos em corpus maior.
+- P17.1: os textos extraidos dos PDFs de `knowledge/` tem mojibake; o eval limpa apenas a exibicao dos snippets, nao o conteudo indexado. Corrigir a extracao e reindexar e uma pendencia separada.

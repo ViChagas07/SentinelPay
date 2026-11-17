@@ -1,0 +1,30 @@
+{"id":"pt-febraban-01","language":"pt","domain":"febraban","question":"Qual e o tamanho da linha digitavel de um boleto bancario e quantos digitos tem o codigo de barras?","expected_documents":["febraban/manual_febraban_v1.pdf"]}
+{"id":"pt-febraban-02","language":"pt","domain":"febraban","question":"Quais sao os campos obrigatorios de um boleto segundo a FEBRABAN?","expected_documents":["febraban/manual_febraban_v1.pdf"]}
+{"id":"pt-febraban-03","language":"pt","domain":"febraban","question":"Desde quando todo boleto de cobranca precisa ser registrado na CIP?","expected_documents":["bacen/boletos.pdf"]}
+{"id":"pt-febraban-04","language":"pt","domain":"febraban","question":"Quais sao as carteiras e o tamanho do nosso numero no layout do Banco Bradesco?","expected_documents":["layouts/boleto_bradesco.pdf"]}
+{"id":"pt-febraban-05","language":"pt","domain":"febraban","question":"O que e o fator de vencimento e como ele e calculado no boleto?","expected_documents":["glossary/glossary.pdf"]}
+{"id":"pt-inss-01","language":"pt","domain":"inss","question":"Qual e o CNPJ do INSS e da DATAPREV que deve constar na GPS?","expected_documents":["entities/orgaos_publicos.pdf"]}
+{"id":"pt-inss-02","language":"pt","domain":"inss","question":"Quais sao as faixas e aliquotas do INSS em 2024 usadas para validar um holerite?","expected_documents":["fraud_patterns/holerite.pdf"]}
+{"id":"pt-clt-01","language":"pt","domain":"clt","question":"Quais campos sao obrigatorios no holerite segundo o artigo 464 da CLT?","expected_documents":["fraud_patterns/holerite.pdf"]}
+{"id":"pt-clt-02","language":"pt","domain":"clt","question":"Como identificar funcionario fantasma ou salario inflado na folha de pagamento?","expected_documents":["fraud_patterns/folha_pagamento.pdf"]}
+{"id":"pt-fraud-01","language":"pt","domain":"fraud","question":"Quais codigos de banco inexistentes indicam boleto falso?","expected_documents":["fraud_patterns/banco_inexistente.pdf","bacen/instituicoes.pdf"]}
+{"id":"es-febraban-01","language":"es","domain":"febraban","question":"Cual es el codigo del Banco do Brasil y como se valida el DAC general del boleto?","expected_documents":["layouts/boleto_bb.pdf"]}
+{"id":"es-febraban-02","language":"es","domain":"febraban","question":"Que reglas de vencimiento y pago con atraso aplican a los boletos?","expected_documents":["bacen/boletos.pdf","faq/antifraud_faq.pdf"]}
+{"id":"es-febraban-03","language":"es","domain":"febraban","question":"Que campos y reglas tiene el codigo de barras de un boleto segun FEBRABAN?","expected_documents":["febraban/manual_febraban_v1.pdf","glossary/glossary.pdf"]}
+{"id":"es-febraban-04","language":"es","domain":"febraban","question":"Cuales son las carteras y el formato del campo libre del Banco Santander?","expected_documents":["layouts/boleto_santander.pdf"]}
+{"id":"es-inss-01","language":"es","domain":"inss","question":"Que guia se usa para pagar el INSS de autonomos y MEI y cual es su identificacion?","expected_documents":["entities/orgaos_publicos.pdf"]}
+{"id":"es-inss-02","language":"es","domain":"inss","question":"Que indicadores de fraude aparecen cuando el FGTS o el INSS no se recolle en la nomina?","expected_documents":["fraud_patterns/folha_pagamento.pdf"]}
+{"id":"es-clt-01","language":"es","domain":"clt","question":"Que datos del empleador y del empleado son obligatorios en el recibo de nomina?","expected_documents":["fraud_patterns/holerite.pdf"]}
+{"id":"es-clt-02","language":"es","domain":"clt","question":"Que es la modalidad de salario inflado y como se detecta en la folha?","expected_documents":["fraud_patterns/folha_pagamento.pdf"]}
+{"id":"es-fraud-01","language":"es","domain":"fraud","question":"Como funciona el golpe del QR Code falso en PIX y que campos EMV se validan?","expected_documents":["fraud_patterns/qr_code_falso.pdf","bacen/normas_pix.pdf"]}
+{"id":"es-fraud-02","language":"es","domain":"fraud","question":"Como se detecta un beneficiario divergente en un boleto o PIX?","expected_documents":["fraud_patterns/beneficiario_divergente.pdf"]}
+{"id":"en-febraban-01","language":"en","domain":"febraban","question":"Which bank code belongs to Caixa Economica Federal and what is the format of its nosso numero?","expected_documents":["layouts/boleto_caixa.pdf"]}
+{"id":"en-febraban-02","language":"en","domain":"febraban","question":"How does boleto registration at CIP protect against beneficiary substitution?","expected_documents":["bacen/boletos.pdf"]}
+{"id":"en-febraban-03","language":"en","domain":"febraban","question":"What are the main mandatory fields and verification priorities of a boleto?","expected_documents":["febraban/manual_febraban_v1.pdf"]}
+{"id":"en-febraban-04","language":"en","domain":"febraban","question":"Which bank uses code 341 and what is the free-field layout for Itau?","expected_documents":["layouts/boleto_itau.pdf"]}
+{"id":"en-inss-01","language":"en","domain":"inss","question":"Which official CNPJ should appear on an INSS GPS payment guide?","expected_documents":["entities/orgaos_publicos.pdf"]}
+{"id":"en-inss-02","language":"en","domain":"inss","question":"What is the maximum INSS deduction for a 2024 payslip above the ceiling?","expected_documents":["fraud_patterns/holerite.pdf"]}
+{"id":"en-clt-01","language":"en","domain":"clt","question":"What are common indicators of a forged payslip under CLT rules?","expected_documents":["fraud_patterns/holerite.pdf","fraud_patterns/folha_pagamento.pdf"]}
+{"id":"en-clt-02","language":"en","domain":"clt","question":"How can ghost employees and inflated salaries be detected in payroll?","expected_documents":["fraud_patterns/folha_pagamento.pdf"]}
+{"id":"en-fraud-01","language":"en","domain":"fraud","question":"What are the signs of a fake boleto sent by email or phishing?","expected_documents":["fraud_patterns/boleto_falso.pdf"]}
+{"id":"en-fraud-02","language":"en","domain":"fraud","question":"What fields of a PIX QR Code must be validated to avoid a fake QR code?","expected_documents":["fraud_patterns/qr_code_falso.pdf","bacen/normas_pix.pdf"]}

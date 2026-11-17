@@ -51,7 +51,7 @@ Fechar o estagio 2 do retrieval: o `HybridRetriever` entrega top-K candidatos e 
 - OpenTelemetry: spans `retrieval.two_stage`, `retrieval.stage1` e `retrieval.rerank`, com atributos numericos e de resultado, sem texto de consulta ou documento.
 
 ## Configuracao adicional
-- `RERANK_TIMEOUT_SECONDS` (padrao 5): timeout do estagio 2.
+- `RERANK_TIMEOUT_SECONDS` (padrao 30): timeout do estagio 2. O valor foi calibrado na avaliacao da ETAPA D, com p95 de 13,5 s em CPU int8.
 - `RERANKER_REMOTE_URL`, `RERANKER_REMOTE_API_KEY`, `RERANKER_REMOTE_MODEL`.
 - `RERANKER_BACKEND` passa a aceitar `remote`.
 

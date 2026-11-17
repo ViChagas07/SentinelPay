@@ -167,7 +167,7 @@ class Settings(BaseSettings):
     reranker_remote_url: str = ""
     reranker_remote_api_key: str = ""
     reranker_remote_model: str = "BAAI/bge-reranker-v2-m3"
-    rerank_timeout_seconds: float = 5.0
+    rerank_timeout_seconds: float = 30.0
     rerank_max_length: int = 512
     batch_size: int = 16
     torch_num_threads: int = 0
