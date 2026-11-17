@@ -12,6 +12,7 @@ from paysentineliq.domain.ports.retrieval import (
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.retrieval.bge_m3 import BgeM3Embedder
 from paysentineliq.infrastructure.retrieval.bge_reranker import BgeRerankerV2M3
+from paysentineliq.infrastructure.retrieval.remote_reranker import RemoteReranker
 
 _logger = logging.getLogger("paysentineliq")
 
@@ -39,6 +40,9 @@ class LocalEmbedderModel(Protocol):
 
 
 class LocalRerankerModel(Protocol):
+    @property
+    def model_id(self) -> str: ...
+
     @property
     def status(self) -> ModelStatus: ...
 
@@ -73,13 +77,18 @@ class RetrievalRuntime:
         )
         self._reranker: LocalRerankerModel | None = None
         if settings.rerank_enabled:
-            self._reranker = reranker or BgeRerankerV2M3(
-                model_dir=model_root / "bge-reranker-v2-m3",
-                backend=settings.reranker_backend,
-                batch_size=settings.batch_size,
-                max_length=settings.rerank_max_length,
-                torch_num_threads=settings.torch_num_threads,
-            )
+            if reranker is not None:
+                self._reranker = reranker
+            elif settings.reranker_backend == "remote":
+                self._reranker = RemoteReranker(settings)
+            else:
+                self._reranker = BgeRerankerV2M3(
+                    model_dir=model_root / "bge-reranker-v2-m3",
+                    backend=settings.reranker_backend,
+                    batch_size=settings.batch_size,
+                    max_length=settings.rerank_max_length,
+                    torch_num_threads=settings.torch_num_threads,
+                )
         self._load_lock = asyncio.Lock()
         self._load_attempted = False
         self._closed = False

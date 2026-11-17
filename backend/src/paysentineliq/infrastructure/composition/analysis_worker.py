@@ -17,6 +17,7 @@ from paysentineliq.application.ports.vector_store import VectorStorePort
 from paysentineliq.application.queries.fraud_scoring import FraudScoringService
 from paysentineliq.application.queries.hybrid_retrieval import HybridRetriever
 from paysentineliq.application.queries.knowledge_retrieval import KnowledgeRetriever
+from paysentineliq.application.queries.two_stage_retrieval import TwoStageRetriever
 from paysentineliq.infrastructure.ai.crew import CrewAIInterpreter
 from paysentineliq.infrastructure.ai.graph import LangGraphAnalysisOrchestrator
 from paysentineliq.infrastructure.ai.judge import LlmReportJudge
@@ -40,6 +41,7 @@ from paysentineliq.infrastructure.db.repositories.analysis_documents import (
 from paysentineliq.infrastructure.ingestion.service import DocumentIngestionService
 from paysentineliq.infrastructure.metrics.guardrails import InMemoryGuardrailMetrics
 from paysentineliq.infrastructure.ml.artifact import load_fraud_model_or_none
+from paysentineliq.infrastructure.observability.metrics import get_platform_metrics
 from paysentineliq.infrastructure.observability.tracing import (
     instrument_sqlalchemy_engine,
 )
@@ -121,9 +123,7 @@ async def build_worker_runtime(
     retrieval_runtime: RetrievalRuntime | None = None
     cache_redis: Redis | None = None
     if settings.hybrid_retrieval_enabled:
-        retrieval_runtime = RetrievalRuntime(
-            settings.model_copy(update={"rerank_enabled": False}),
-        )
+        retrieval_runtime = RetrievalRuntime(settings)
         await retrieval_runtime.load()
         cache_redis = Redis.from_url(settings.redis_url, decode_responses=True)
     try:
@@ -278,7 +278,8 @@ def _build_hybrid_retriever(
     except Exception:
         _logger.warning("hybrid_retrieval_store_unavailable")
         return UnavailableRetriever()
-    return HybridRetriever(
+    platform_metrics = get_platform_metrics()
+    stage1 = HybridRetriever(
         cached,
         cached,
         store,
@@ -288,4 +289,16 @@ def _build_hybrid_retriever(
         rrf_k=settings.hybrid_rrf_k,
         dense_weight=settings.hybrid_dense_weight,
         sparse_weight=settings.hybrid_sparse_weight,
+        metrics=platform_metrics,
+    )
+    reranker = retrieval_runtime.reranker if settings.rerank_enabled else None
+    if reranker is not None and not reranker.status.loaded:
+        reranker = None
+    return TwoStageRetriever(
+        stage1,
+        reranker=reranker,
+        rerank_enabled=settings.rerank_enabled,
+        top_n=settings.rerank_top_n,
+        timeout_seconds=settings.rerank_timeout_seconds,
+        metrics=platform_metrics,
     )

@@ -48,6 +48,8 @@ class FakeEmbedder:
 
 
 class FakeReranker:
+    model_id = "fake-reranker"
+
     def __init__(self) -> None:
         self.loads = 0
         self.closes = 0

@@ -20,7 +20,7 @@ router = APIRouter(tags=["ops"])
 
 class RetrievalModelHealth(BaseModel):
     model: str
-    backend: Literal["onnx", "pytorch"]
+    backend: Literal["onnx", "pytorch", "remote"]
     loaded: bool
     error: str | None = None
 
@@ -42,7 +42,7 @@ class HealthResponse(BaseModel):
 def _model_health(status: ModelStatus) -> RetrievalModelHealth:
     return RetrievalModelHealth(
         model=status.model_id,
-        backend=cast(Literal["onnx", "pytorch"], status.backend),
+        backend=cast(Literal["onnx", "pytorch", "remote"], status.backend),
         loaded=status.loaded,
         error=status.error,
     )

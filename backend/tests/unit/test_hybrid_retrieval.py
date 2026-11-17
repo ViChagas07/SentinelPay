@@ -8,6 +8,7 @@ from paysentineliq.application.queries.hybrid_retrieval import (
     fuse_weighted,
 )
 from paysentineliq.application.queries.knowledge_retrieval import KnowledgeQuery
+from paysentineliq.application.queries.two_stage_retrieval import TwoStageRetriever
 from paysentineliq.domain.knowledge import (
     KnowledgeDocument,
     KnowledgeFilter,
@@ -17,6 +18,7 @@ from paysentineliq.domain.knowledge import (
 )
 from paysentineliq.domain.ports.retrieval import (
     HybridEmbeddedChunk,
+    RerankResult,
     SparseVector,
 )
 
@@ -303,6 +305,55 @@ async def test_hybrid_retriever_respects_limit_and_filters() -> None:
     assert len(result.passages) == 1
     assert store.filters[0].categories == ("faq",)
     assert store.filters[0].as_of == date(2026, 2, 1)
+
+
+class PipelineReranker:
+    model_id = "pipeline-reranker"
+
+    def __init__(self) -> None:
+        self.documents: tuple[str, ...] = ()
+
+    async def rerank(
+        self,
+        query: str,
+        documents: tuple[str, ...],
+        *,
+        top_n: int | None = None,
+    ) -> tuple[RerankResult, ...]:
+        del query
+        self.documents = documents
+        return tuple(
+            RerankResult(index=index, score=0.99 - index * 0.1)
+            for index in range(min(top_n or len(documents), len(documents)))
+        )
+
+
+async def test_two_stage_pipeline_reranks_hybrid_stage_one() -> None:
+    pt = _chunk(key="faq/pt.md", content="prazo de atraso", score=0.9)
+    other = _chunk(key="faq/outro.md", content="outro texto", index=1, score=0.5)
+    stage1 = HybridRetriever(
+        FakeEmbedder(),
+        FakeSparseEmbedder(),
+        FakeStore(
+            {(1.0, 0.0, 0.0): (pt, other)},
+            {10: (pt,)},
+        ),
+    )
+    reranker = PipelineReranker()
+    retriever = TwoStageRetriever(
+        stage1,
+        reranker=reranker,
+        rerank_enabled=True,
+        top_n=1,
+        timeout_seconds=1.0,
+    )
+
+    result = await retriever.retrieve(KnowledgeQuery(text="atraso", limit=5))
+
+    assert len(result.passages) == 1
+    assert result.retrieval_mode == "hybrid_rrf_reranked"
+    assert result.passages[0].rerank_score == pytest.approx(0.99)
+    assert reranker.documents == ("prazo de atraso", "outro texto")
 
 
 def test_fuse_rrf_and_weighted_are_deterministic() -> None:

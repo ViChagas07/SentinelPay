@@ -46,8 +46,8 @@ class ModelStatus:
     def __post_init__(self) -> None:
         if not self.model_id.strip():
             raise ValueError("model_id must not be empty")
-        if self.backend not in ("onnx", "pytorch"):
-            raise ValueError("backend must be onnx or pytorch")
+        if self.backend not in ("onnx", "pytorch", "remote"):
+            raise ValueError("backend must be onnx, pytorch or remote")
         if self.loaded and self.error is not None:
             raise ValueError("loaded models cannot carry an error")
 

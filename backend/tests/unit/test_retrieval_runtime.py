@@ -58,6 +58,36 @@ async def test_runtime_exposes_load_error_without_raising() -> None:
     assert runtime.status.sparse_embedder.error == "model_files_missing"
 
 
+async def test_runtime_builds_remote_reranker_from_settings() -> None:
+    settings = Settings(
+        app_env="local",
+        reranker_backend="remote",
+        reranker_remote_url="https://reranker.example/v1/rerank",
+    )
+    runtime = RetrievalRuntime(settings, embedder=FakeEmbedder())
+
+    await runtime.load()
+
+    assert runtime.status.reranker is not None
+    assert runtime.status.reranker.backend == "remote"
+    assert runtime.status.reranker.loaded is True
+
+
+async def test_runtime_reports_unconfigured_remote_reranker() -> None:
+    settings = Settings(
+        app_env="local",
+        reranker_backend="remote",
+        reranker_remote_url="",
+    )
+    runtime = RetrievalRuntime(settings, embedder=FakeEmbedder())
+
+    await runtime.load()
+
+    assert runtime.status.reranker is not None
+    assert runtime.status.reranker.loaded is False
+    assert runtime.status.reranker.error == "remote_not_configured"
+
+
 async def test_runtime_close_is_idempotent() -> None:
     embedder = FakeEmbedder()
     runtime = RetrievalRuntime(

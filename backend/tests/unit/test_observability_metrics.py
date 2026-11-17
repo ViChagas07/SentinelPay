@@ -52,6 +52,32 @@ def test_metrics_expose_named_series_and_safe_labels() -> None:
     assert metrics.content_type == CONTENT_TYPE_LATEST
 
 
+def test_retrieval_metrics_expose_stages_candidates_scores_and_outcomes() -> None:
+    metrics = PlatformMetrics(multiprocess=False)
+    metrics.record_retrieval_stage("dense", 0.12)
+    metrics.record_retrieval_stage("rerank", 0.34)
+    metrics.record_retrieval_candidates("stage1", 25)
+    metrics.record_retrieval_candidates("reranked", 4)
+    metrics.record_retrieval_score("stage1", 0.03)
+    metrics.record_retrieval_score("reranked", 0.91)
+    metrics.record_rerank_outcome("success")
+    metrics.record_rerank_outcome("timeout")
+
+    text = _text(metrics)
+
+    for name in (
+        "paysentineliq_retrieval_stage_duration_seconds",
+        "paysentineliq_retrieval_candidates",
+        "paysentineliq_retrieval_scores",
+        "paysentineliq_retrieval_rerank_total",
+    ):
+        assert name in text
+    assert 'stage="dense"' in text
+    assert 'stage="reranked"' in text
+    assert 'outcome="success"' in text
+    assert 'outcome="timeout"' in text
+
+
 def test_queue_gauges_are_initialized_for_known_queues() -> None:
     metrics = PlatformMetrics(multiprocess=False)
 

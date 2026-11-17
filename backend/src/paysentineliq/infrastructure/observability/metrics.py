@@ -63,6 +63,16 @@ _CHANNELS = frozenset({"email", "sms", "whatsapp", "in_app", "other"})
 _NOTIFICATION_STATUSES = frozenset({"sent", "skipped", "failed", "created", "other"})
 _CACHE_RESULTS = frozenset({"hit", "miss", "stale", "refresh", "error", "other"})
 _RATE_LIMIT_SCOPES = frozenset({"ip", "user", "other"})
+_RETRIEVAL_STAGES = frozenset(
+    {"embed", "dense", "sparse", "fusion", "stage1", "rerank", "total", "other"},
+)
+_RETRIEVAL_CANDIDATE_STAGES = frozenset(
+    {"dense", "sparse", "fused", "stage1", "reranked", "other"},
+)
+_RETRIEVAL_SCORE_STAGES = frozenset({"stage1", "reranked", "other"})
+_RERANK_OUTCOMES = frozenset(
+    {"success", "disabled", "timeout", "error", "empty", "unavailable", "other"},
+)
 
 _UUID_SEGMENT = re.compile(
     r"/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
@@ -127,6 +137,33 @@ class PlatformMetrics:
             buckets=(0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60),
             registry=creation_registry,
         )
+        self.retrieval_stage_duration = Histogram(
+            "paysentineliq_retrieval_stage_duration_seconds",
+            "Retrieval stage duration.",
+            ("stage",),
+            buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10),
+            registry=creation_registry,
+        )
+        self.retrieval_candidates = Histogram(
+            "paysentineliq_retrieval_candidates",
+            "Retrieval candidates per stage.",
+            ("stage",),
+            buckets=(0, 1, 2, 4, 8, 16, 25, 50, 100),
+            registry=creation_registry,
+        )
+        self.retrieval_scores = Histogram(
+            "paysentineliq_retrieval_scores",
+            "Retrieval scores before and after rerank.",
+            ("stage",),
+            buckets=(0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0),
+            registry=creation_registry,
+        )
+        self.retrieval_rerank = Counter(
+            "paysentineliq_retrieval_rerank_total",
+            "Rerank outcomes.",
+            ("outcome",),
+            registry=creation_registry,
+        )
         self.llm_requests = Counter(
             "paysentineliq_llm_requests_total",
             "LLM requests.",
@@ -171,6 +208,14 @@ class PlatformMetrics:
             self.cache_events.labels(result=result).inc(0)
         for scope in _RATE_LIMIT_SCOPES - {"other"}:
             self.http_rate_limited.labels(scope=scope).inc(0)
+        for stage in _RETRIEVAL_STAGES - {"other"}:
+            self.retrieval_stage_duration.labels(stage=stage)
+        for stage in _RETRIEVAL_CANDIDATE_STAGES - {"other"}:
+            self.retrieval_candidates.labels(stage=stage)
+        for stage in _RETRIEVAL_SCORE_STAGES - {"other"}:
+            self.retrieval_scores.labels(stage=stage)
+        for outcome in _RERANK_OUTCOMES - {"other"}:
+            self.retrieval_rerank.labels(outcome=outcome).inc(0)
         for layer in _GUARDRAIL_LAYERS - {"other"}:
             self.guardrail_blocks.labels(layer=layer).inc(0)
         for channel in _CHANNELS - {"other"}:
@@ -254,6 +299,26 @@ class PlatformMetrics:
 
     def record_cache(self, result: str) -> None:
         self.cache_events.labels(result=_bounded(result, _CACHE_RESULTS)).inc()
+
+    def record_retrieval_stage(self, stage: str, duration_seconds: float) -> None:
+        self.retrieval_stage_duration.labels(
+            stage=_bounded(stage, _RETRIEVAL_STAGES),
+        ).observe(max(0.0, duration_seconds))
+
+    def record_retrieval_candidates(self, stage: str, count: int) -> None:
+        self.retrieval_candidates.labels(
+            stage=_bounded(stage, _RETRIEVAL_CANDIDATE_STAGES),
+        ).observe(max(0, int(count)))
+
+    def record_retrieval_score(self, stage: str, score: float) -> None:
+        self.retrieval_scores.labels(
+            stage=_bounded(stage, _RETRIEVAL_SCORE_STAGES),
+        ).observe(min(1.0, max(0.0, float(score))))
+
+    def record_rerank_outcome(self, outcome: str) -> None:
+        self.retrieval_rerank.labels(
+            outcome=_bounded(outcome, _RERANK_OUTCOMES),
+        ).inc()
 
 
 _metrics: PlatformMetrics | None = None

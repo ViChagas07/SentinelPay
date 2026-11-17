@@ -183,6 +183,28 @@ def test_hybrid_retrieval_defaults_keep_old_path_off() -> None:
     assert settings.query_embedding_cache_ttl_seconds == 3600
 
 
+def test_remote_reranker_settings_are_supported() -> None:
+    settings = Settings(
+        app_env="local",
+        reranker_backend="remote",
+        reranker_remote_url="https://reranker.example/v1/rerank",
+        reranker_remote_api_key="secret",
+        reranker_remote_model="remote-reranker",
+        rerank_timeout_seconds=2.5,
+    )
+
+    assert settings.reranker_backend == "remote"
+    assert settings.reranker_remote_url == "https://reranker.example/v1/rerank"
+    assert settings.rerank_timeout_seconds == 2.5
+
+
+def test_rerank_timeout_and_remote_url_are_validated() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", rerank_timeout_seconds=0)
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", reranker_remote_url="ftp://reranker.example")
+
+
 def test_hybrid_fusion_settings_are_validated() -> None:
     with pytest.raises(ValidationError):
         Settings(app_env="local", hybrid_rrf_k=0)

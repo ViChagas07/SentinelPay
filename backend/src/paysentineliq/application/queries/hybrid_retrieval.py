@@ -1,9 +1,15 @@
 import asyncio
 import logging
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import date
+from time import perf_counter
 
 from paysentineliq.application.ports.hybrid_vector_store import HybridVectorStorePort
+from paysentineliq.application.ports.retrieval_metrics import (
+    NullRetrievalMetrics,
+    RetrievalMetricsPort,
+)
 from paysentineliq.application.queries.knowledge_retrieval import (
     KnowledgeQuery,
     KnowledgeRetrievalResult,
@@ -154,6 +160,7 @@ class HybridRetriever:
         rrf_k: int = 60,
         dense_weight: float = 0.6,
         sparse_weight: float = 0.4,
+        metrics: RetrievalMetricsPort | None = None,
     ) -> None:
         if default_limit <= 0:
             raise ValueError("default_limit must be positive")
@@ -174,6 +181,7 @@ class HybridRetriever:
         self._rrf_k = rrf_k
         self._dense_weight = dense_weight
         self._sparse_weight = sparse_weight
+        self._metrics = metrics or NullRetrievalMetrics()
 
     async def retrieve(self, query: KnowledgeQuery) -> KnowledgeRetrievalResult:
         limit = query.limit or self._default_limit
@@ -181,8 +189,16 @@ class HybridRetriever:
             categories=query.categories,
             as_of=query.as_of or date.today(),
         )
+        embed_started = perf_counter()
         dense_vector, sparse_vector = await self._query_vectors(query.text)
+        self._metrics.record_retrieval_stage(
+            "embed",
+            perf_counter() - embed_started,
+        )
         if dense_vector is None and sparse_vector is None:
+            self._metrics.record_retrieval_candidates("dense", 0)
+            self._metrics.record_retrieval_candidates("sparse", 0)
+            self._metrics.record_retrieval_candidates("fused", 0)
             return KnowledgeRetrievalResult(
                 passages=(),
                 rag_unavailable=True,
@@ -196,12 +212,14 @@ class HybridRetriever:
             filters=filters,
         )
         if not dense_ok and not sparse_ok:
+            self._metrics.record_retrieval_candidates("fused", 0)
             return KnowledgeRetrievalResult(
                 passages=(),
                 rag_unavailable=True,
                 reason="rag_unavailable",
             )
 
+        fusion_started = perf_counter()
         if dense_ok and sparse_ok:
             fused = (
                 fuse_rrf(dense_chunks, sparse_chunks, rrf_k=self._rrf_k)
@@ -240,6 +258,11 @@ class HybridRetriever:
                 for rank, chunk in enumerate(sparse_chunks, start=1)
             )
             mode = "sparse"
+        self._metrics.record_retrieval_stage(
+            "fusion",
+            perf_counter() - fusion_started,
+        )
+        self._metrics.record_retrieval_candidates("fused", len(fused))
 
         passages = tuple(
             RetrievedPassage(
@@ -314,10 +337,13 @@ class HybridRetriever:
         if dense_vector is not None:
             tasks.append(
                 asyncio.ensure_future(
-                    self._store.dense_query(
-                        dense_vector,
-                        limit=limit,
-                        filters=filters,
+                    self._timed_query(
+                        "dense",
+                        self._store.dense_query(
+                            dense_vector,
+                            limit=limit,
+                            filters=filters,
+                        ),
                     ),
                 ),
             )
@@ -325,10 +351,13 @@ class HybridRetriever:
         if sparse_vector is not None:
             tasks.append(
                 asyncio.ensure_future(
-                    self._store.sparse_query(
-                        sparse_vector,
-                        limit=limit,
-                        filters=filters,
+                    self._timed_query(
+                        "sparse",
+                        self._store.sparse_query(
+                            sparse_vector,
+                            limit=limit,
+                            filters=filters,
+                        ),
                     ),
                 ),
             )
@@ -350,4 +379,20 @@ class HybridRetriever:
                 dense_chunks = result
             else:
                 sparse_chunks = result
+        self._metrics.record_retrieval_candidates("dense", len(dense_chunks))
+        self._metrics.record_retrieval_candidates("sparse", len(sparse_chunks))
         return dense_chunks, sparse_chunks, dense_ok, sparse_ok
+
+    async def _timed_query(
+        self,
+        stage: str,
+        awaitable: Awaitable[tuple[RetrievedChunk, ...]],
+    ) -> tuple[RetrievedChunk, ...]:
+        started = perf_counter()
+        try:
+            return await awaitable
+        finally:
+            self._metrics.record_retrieval_stage(
+                stage,
+                perf_counter() - started,
+            )

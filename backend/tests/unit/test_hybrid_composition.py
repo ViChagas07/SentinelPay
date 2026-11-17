@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from paysentineliq.application.queries.hybrid_retrieval import HybridRetriever
+from paysentineliq.application.queries.two_stage_retrieval import TwoStageRetriever
 from paysentineliq.infrastructure.ai.unavailable import UnavailableRetriever
 from paysentineliq.infrastructure.composition import analysis_worker
 from paysentineliq.infrastructure.composition.analysis_worker import _build_retriever
@@ -41,7 +42,11 @@ def test_hybrid_flag_builds_hybrid_retriever(
     embedder.load()
     runtime = cast(
         RetrievalRuntime,
-        SimpleNamespace(embedder=embedder, sparse_embedder=embedder),
+        SimpleNamespace(
+            embedder=embedder,
+            sparse_embedder=embedder,
+            reranker=None,
+        ),
     )
     monkeypatch.setattr(
         analysis_worker,
@@ -57,14 +62,18 @@ def test_hybrid_flag_builds_hybrid_retriever(
         redis=cast(Redis, object()),
     )
 
-    assert isinstance(retriever, HybridRetriever)
+    assert isinstance(retriever, TwoStageRetriever)
 
 
 def test_hybrid_flag_degrades_when_models_are_not_loaded() -> None:
     embedder = FakeEmbedder()
     runtime = cast(
         RetrievalRuntime,
-        SimpleNamespace(embedder=embedder, sparse_embedder=embedder),
+        SimpleNamespace(
+            embedder=embedder,
+            sparse_embedder=embedder,
+            reranker=None,
+        ),
     )
     settings = Settings(app_env="local", hybrid_retrieval_enabled=True)
 
@@ -84,3 +93,4 @@ def test_hybrid_flag_off_keeps_old_retriever() -> None:
     retriever = _build_retriever(settings, _session_factory())
 
     assert not isinstance(retriever, HybridRetriever)
+    assert not isinstance(retriever, TwoStageRetriever)

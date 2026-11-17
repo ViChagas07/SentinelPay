@@ -946,7 +946,8 @@
           "backend": {
             "enum": [
               "onnx",
-              "pytorch"
+              "pytorch",
+              "remote"
             ],
             "title": "Backend",
             "type": "string"

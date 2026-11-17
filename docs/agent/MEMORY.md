@@ -115,6 +115,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17.1: `scripts/reindex_kb.py` exige os modelos BGE em `models/retrieval`; sem eles o `--dry-run` retorna ausente e o modo real falha antes de tocar no banco. A idempotencia inclui `embedding_model`, entao trocar o modelo forca reescrita.
 - P17.1: `make test-docker` completo faz `downgrade base` no teste de migration; evite rodar sem backup. Nesta etapa foram executados apenas os testes Docker de PGVector antigo e hibrido.
 - P17.1: o cache Redis e opcional e fail-open; falha de leitura/escrita so gera warning e a consulta segue para o modelo. Nao transforme falha de cache em `rag_unavailable`.
+- P17.1: as envs de retrieval/rerank precisam estar no bloco `x-app-environment` do Compose; sem isso o valor do `.env` nao chega ao container e o default do codigo vence.
+- P17.1: `RetrievalModelHealth.backend` agora aceita `remote`; o snapshot OpenAPI foi regenerado. Atualize o snapshot no mesmo commit de qualquer mudanca de contrato.
+- P17.1: o `RERANKER_REMOTE_URL` em producao deve ser HTTPS e usar porta 443/80; `SafeHttpClient` bloqueia IPs privados e portas fora desse padrao, exceto `APP_ENV=local` com host na allowlist SSRF.
+- P17.1: o reranker remoto retorna probabilidade; se o provedor devolver logit fora de 0..1, o adaptador rejeita e o pipeline cai para o estagio 1. Ajuste o provedor, nao relaxe a validacao.
 - P17: `cv2.imdecode` aloca a imagem inteira; para bomba de descompressao, leia as dimensoes pelo cabecalho (Pillow) antes de decodificar. Em PDF, cheque `page.rect` x DPI antes de `get_pixmap`.
 - P17: `make load-check` e smoke local (429 e latencia), nao benchmark; um bucket ja drenado pode produzir 100% de 429, o que ainda valida o limitador mas nao a capacidade.
 - P17: o Bandit B105 no token fixo `local-metrics-token` e falso positivo (valor publico, so em `APP_ENV=local`); a linha tem `# nosec B105` com justificativa ao lado.
@@ -126,4 +130,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17.1 ETAPA B: o retrieval hibrido usa tabelas paralelas `knowledge_hybrid_chunks` (denso 1024 + HNSW) e `knowledge_hybrid_chunk_sparse_terms` (token/weight). A tabela antiga `knowledge_chunks` e a coluna `embedding vector(8)` nao sao alteradas; a flag `HYBRID_RETRIEVAL_ENABLED` decide o caminho.
 - P17.1: a fusao padrao e RRF com `HYBRID_RRF_K=60`; `weighted` normaliza o denso (0..1) e o esparso pelo maximo da consulta. `KnowledgeQuery.limit=0` significa usar o default do retriever; o grafo passa `RETRIEVAL_TOP_K` quando a flag hibrida esta ligada.
 - P17.1: o cache de consulta usa SHA-256 de modelo e texto, TTL `QUERY_EMBEDDING_CACHE_TTL_SECONDS` e fail-open. Texto bruto nunca entra na chave nem no valor.
-- P17.1: o worker carrega o `RetrievalRuntime` uma vez quando a flag hibrida esta ligada, com reranker desligado, e cria o `CachedEmbedder` sobre Redis. Sem modelos, o `HybridRetriever` vira `UnavailableRetriever` e a analise degrada.
+- P17.1: o worker carrega o `RetrievalRuntime` uma vez quando a flag hibrida esta ligada e cria o `CachedEmbedder` sobre Redis. Sem modelos, o `HybridRetriever` vira `UnavailableRetriever` e a analise degrada.
+- P17.1 ETAPA C: `HYBRID_RETRIEVAL_ENABLED=false` usa o `KnowledgeRetriever` antigo; com hibrido ligado e `RERANK_ENABLED=false`, o `TwoStageRetriever` devolve o top-K do estagio 1 sem reranker; com rerank ligado, entrega top-N.
+- P17.1: o reranker local e carregado uma vez no worker; `RERANKER_BACKEND=remote` cria o `RemoteReranker` sem carregar modelo local. `RemoteReranker.status.loaded=true` significa URL configurada, nao endpoint saudavel.
+- P17.1: o contrato remoto e `POST {"model","query","documents","top_n","max_length"}` e resposta `{"results":[{"index","score"}]}` com score 0..1. Indices duplicados/fora do range, score invalido, HTTP nao 2xx e timeout viram erro/falback.
+- P17.1: o timeout do reranker fica no `TwoStageRetriever` (`RERANK_TIMEOUT_SECONDS`, padrao 5). `asyncio.wait_for` libera a analise, mas a thread do reranker local pode continuar ate terminar.
+- P17.1: metricas novas usam `PlatformMetrics` (`paysentineliq_retrieval_*`) e multiprocess Prometheus; o worker grava em `PROMETHEUS_MULTIPROC_DIR` e a API agrega. Nao crie registry separado para o worker.
+- P17.1: spans sao `retrieval.two_stage`, `retrieval.stage1` e `retrieval.rerank`; nunca adicione query ou documento como atributo.

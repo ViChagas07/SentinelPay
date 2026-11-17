@@ -163,7 +163,11 @@ class Settings(BaseSettings):
     rerank_top_n: int = 4
     rerank_enabled: bool = True
     embedder_backend: Literal["onnx", "pytorch"] = "onnx"
-    reranker_backend: Literal["onnx", "pytorch"] = "onnx"
+    reranker_backend: Literal["onnx", "pytorch", "remote"] = "onnx"
+    reranker_remote_url: str = ""
+    reranker_remote_api_key: str = ""
+    reranker_remote_model: str = "BAAI/bge-reranker-v2-m3"
+    rerank_timeout_seconds: float = 5.0
     rerank_max_length: int = 512
     batch_size: int = 16
     torch_num_threads: int = 0
@@ -348,6 +352,12 @@ class Settings(BaseSettings):
             raise ValueError("RERANK_TOP_N must not exceed RETRIEVAL_TOP_K")
         if self.rerank_max_length <= 0:
             raise ValueError("RERANK_MAX_LENGTH must be positive")
+        if self.rerank_timeout_seconds <= 0:
+            raise ValueError("RERANK_TIMEOUT_SECONDS must be positive")
+        if self.reranker_remote_url and not self.reranker_remote_url.startswith(
+            ("http://", "https://"),
+        ):
+            raise ValueError("RERANKER_REMOTE_URL must start with http:// or https://")
         if self.batch_size <= 0:
             raise ValueError("BATCH_SIZE must be positive")
         if self.torch_num_threads < 0:

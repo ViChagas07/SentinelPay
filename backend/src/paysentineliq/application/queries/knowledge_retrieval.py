@@ -47,6 +47,7 @@ class RetrievedPassage:
     fused_score: float | None = None
     dense_rank: int | None = None
     sparse_rank: int | None = None
+    rerank_score: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +56,9 @@ class KnowledgeRetrievalResult:
     rag_unavailable: bool
     reason: str | None
     retrieval_mode: str = "dense"
+    rerank_applied: bool = False
+    rerank_fallback: str | None = None
+    rerank_model: str | None = None
 
 
 def citation_from_chunk(chunk: RetrievedChunk) -> KnowledgeCitation:
