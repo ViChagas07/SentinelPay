@@ -18,6 +18,12 @@ _logger = logging.getLogger("paysentineliq")
 
 class LocalEmbedderModel(Protocol):
     @property
+    def dimension(self) -> int: ...
+
+    @property
+    def model_id(self) -> str: ...
+
+    @property
     def status(self) -> ModelStatus: ...
 
     @property

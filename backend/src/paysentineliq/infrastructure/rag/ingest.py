@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import os
 from pathlib import Path
-from urllib.parse import quote
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -18,29 +17,16 @@ from paysentineliq.application.queries.knowledge_retrieval import (
 )
 from paysentineliq.domain.knowledge_chunking import ChunkingConfig
 from paysentineliq.infrastructure.config import Settings
+from paysentineliq.infrastructure.rag.cli_env import (
+    load_env_file,
+    local_database_url,
+)
 from paysentineliq.infrastructure.rag.embeddings import OpenAICompatibleEmbedding
 from paysentineliq.infrastructure.rag.fake_embedding import (
     DeterministicHashEmbedding,
 )
 from paysentineliq.infrastructure.rag.pinecone import PineconeVectorStore
 from paysentineliq.infrastructure.rag.source import KnowledgeFileSource
-
-
-def _load_env_file(path: Path) -> None:
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
-
-
-def _local_database_url() -> str:
-    user = quote(os.environ.get("POSTGRES_USER", "sentinel"), safe="")
-    password = quote(os.environ.get("POSTGRES_PASSWORD", "CHANGE_ME"), safe="")
-    database = quote(os.environ.get("POSTGRES_DB", "paysentineliq"), safe="")
-    port = os.environ.get("POSTGRES_PORT", "55432")
-    return f"postgresql+asyncpg://{user}:{password}@localhost:{port}/{database}"
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -142,8 +128,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.env_file.is_file():
         raise SystemExit(f"env file not found: {args.env_file}")
-    _load_env_file(args.env_file)
-    os.environ["DATABASE_URL"] = _local_database_url()
+    load_env_file(args.env_file)
+    os.environ["DATABASE_URL"] = local_database_url()
     os.environ.setdefault("APP_ENV", "local")
     return asyncio.run(_run(args))
 

@@ -170,3 +170,27 @@ def test_retrieval_batch_and_threads_must_be_valid() -> None:
         Settings(app_env="local", batch_size=0)
     with pytest.raises(ValidationError):
         Settings(app_env="local", torch_num_threads=-1)
+
+
+def test_hybrid_retrieval_defaults_keep_old_path_off() -> None:
+    settings = Settings(app_env="local")
+
+    assert settings.hybrid_retrieval_enabled is False
+    assert settings.hybrid_fusion == "rrf"
+    assert settings.hybrid_rrf_k == 60
+    assert settings.hybrid_dense_weight == 0.6
+    assert settings.hybrid_sparse_weight == 0.4
+    assert settings.query_embedding_cache_ttl_seconds == 3600
+
+
+def test_hybrid_fusion_settings_are_validated() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", hybrid_rrf_k=0)
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", hybrid_dense_weight=0.0, hybrid_sparse_weight=0.0)
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", hybrid_dense_weight=-0.1)
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", query_embedding_cache_ttl_seconds=0)
+    with pytest.raises(ValidationError):
+        Settings.model_validate({"app_env": "local", "hybrid_fusion": "magic"})

@@ -152,6 +152,12 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 1200
     rag_chunk_overlap: int = 150
     rag_fake_embedder: bool = False
+    hybrid_retrieval_enabled: bool = False
+    hybrid_fusion: Literal["rrf", "weighted"] = "rrf"
+    hybrid_rrf_k: int = 60
+    hybrid_dense_weight: float = 0.6
+    hybrid_sparse_weight: float = 0.4
+    query_embedding_cache_ttl_seconds: int = 3600
     retrieval_model_dir: str = "models/retrieval"
     retrieval_top_k: int = 25
     rerank_top_n: int = 4
@@ -324,6 +330,14 @@ class Settings(BaseSettings):
             raise ValueError("RAG_CHUNK_SIZE must be positive")
         if not 0 <= self.rag_chunk_overlap < self.rag_chunk_size:
             raise ValueError("RAG_CHUNK_OVERLAP must be between 0 and RAG_CHUNK_SIZE")
+        if self.hybrid_rrf_k <= 0:
+            raise ValueError("HYBRID_RRF_K must be positive")
+        if self.hybrid_dense_weight < 0 or self.hybrid_sparse_weight < 0:
+            raise ValueError("HYBRID_DENSE_WEIGHT and HYBRID_SPARSE_WEIGHT must be non-negative")
+        if self.hybrid_dense_weight == 0 and self.hybrid_sparse_weight == 0:
+            raise ValueError("at least one hybrid fusion weight must be positive")
+        if self.query_embedding_cache_ttl_seconds <= 0:
+            raise ValueError("QUERY_EMBEDDING_CACHE_TTL_SECONDS must be positive")
         if not self.retrieval_model_dir.strip():
             raise ValueError("RETRIEVAL_MODEL_DIR must not be empty")
         if self.retrieval_top_k <= 0:

@@ -1,9 +1,11 @@
 from pathlib import Path
 from typing import NoReturn
 
+from paysentineliq.domain.ports.retrieval import DENSE_EMBEDDING_DIMENSION
+
 BGE_M3_MODEL_ID = "BAAI/bge-m3"
 BGE_RERANKER_MODEL_ID = "BAAI/bge-reranker-v2-m3"
-BGE_M3_DIMENSION = 1024
+BGE_M3_DIMENSION = DENSE_EMBEDDING_DIMENSION
 BGE_M3_MAX_LENGTH = 8192
 ONNX_INT8_FILE = "model_int8.onnx"
 ONNX_FLOAT_FILE = "model.onnx"

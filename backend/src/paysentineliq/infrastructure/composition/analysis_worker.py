@@ -1,17 +1,21 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from paysentineliq.application.commands.process_analysis import ProcessAnalysisHandler
 from paysentineliq.application.errors import StorageNotConfiguredError
 from paysentineliq.application.ports.embedding import EmbeddingPort
+from paysentineliq.application.ports.hybrid_vector_store import HybridVectorStorePort
 from paysentineliq.application.ports.interpretation import EvidenceInterpreterPort
 from paysentineliq.application.ports.rag import RagContextPort
 from paysentineliq.application.ports.vector_store import VectorStorePort
 from paysentineliq.application.queries.fraud_scoring import FraudScoringService
+from paysentineliq.application.queries.hybrid_retrieval import HybridRetriever
 from paysentineliq.application.queries.knowledge_retrieval import KnowledgeRetriever
 from paysentineliq.infrastructure.ai.crew import CrewAIInterpreter
 from paysentineliq.infrastructure.ai.graph import LangGraphAnalysisOrchestrator
@@ -23,6 +27,7 @@ from paysentineliq.infrastructure.ai.unavailable import (
     UnavailableInterpreter,
     UnavailableRetriever,
 )
+from paysentineliq.infrastructure.cache.embedding_cache import CachedEmbedder
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.db.repositories.analyses import (
     SqlAlchemyAnalysisEventRepository,
@@ -42,16 +47,24 @@ from paysentineliq.infrastructure.ocr.paddle import PaddleOcrAdapter
 from paysentineliq.infrastructure.rag.embeddings import OpenAICompatibleEmbedding
 from paysentineliq.infrastructure.rag.fake_embedding import DeterministicHashEmbedding
 from paysentineliq.infrastructure.rag.pgvector import PGVectorStore
+from paysentineliq.infrastructure.rag.pgvector_hybrid import PGVectorHybridStore
 from paysentineliq.infrastructure.rag.pinecone import PineconeVectorStore
+from paysentineliq.infrastructure.rag.pinecone_hybrid import PineconeHybridVectorStore
+from paysentineliq.infrastructure.retrieval.runtime import RetrievalRuntime
 from paysentineliq.infrastructure.security.ssrf import SafeHttpClient, SSRFGuard
 from paysentineliq.infrastructure.storage.s3 import S3StorageAdapter
 from paysentineliq.infrastructure.vision.visual_anomalies import VisualAnomalyService
+
+_logger = logging.getLogger("paysentineliq")
 
 
 def build_analysis_orchestrator(
     settings: Settings,
     session_factory: async_sessionmaker[AsyncSession],
     storage: S3StorageAdapter,
+    *,
+    retrieval_runtime: RetrievalRuntime | None = None,
+    redis: Redis | None = None,
 ) -> LangGraphAnalysisOrchestrator:
     prompts = PromptRepository()
     guard = SSRFGuard(
@@ -76,7 +89,12 @@ def build_analysis_orchestrator(
         fraud_service=FraudScoringService(
             model=load_fraud_model_or_none(Path(settings.fraud_model_dir)),
         ),
-        retriever=_build_retriever(settings, session_factory),
+        retriever=_build_retriever(
+            settings,
+            session_factory,
+            retrieval_runtime=retrieval_runtime,
+            redis=redis,
+        ),
         interpreter=interpreter,
         analyses=SqlAlchemyAnalysisRepository(session_factory),
         events=SqlAlchemyAnalysisEventRepository(session_factory),
@@ -100,9 +118,23 @@ async def build_worker_runtime(
     )
     instrument_sqlalchemy_engine(engine.sync_engine)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    retrieval_runtime: RetrievalRuntime | None = None
+    cache_redis: Redis | None = None
+    if settings.hybrid_retrieval_enabled:
+        retrieval_runtime = RetrievalRuntime(
+            settings.model_copy(update={"rerank_enabled": False}),
+        )
+        await retrieval_runtime.load()
+        cache_redis = Redis.from_url(settings.redis_url, decode_responses=True)
     try:
         storage = S3StorageAdapter(settings)
-        orchestrator = build_analysis_orchestrator(settings, session_factory, storage)
+        orchestrator = build_analysis_orchestrator(
+            settings,
+            session_factory,
+            storage,
+            retrieval_runtime=retrieval_runtime,
+            redis=cache_redis,
+        )
         yield ProcessAnalysisHandler(
             SqlAlchemyAnalysisDocumentAdapter(session_factory, storage),
             orchestrator,
@@ -111,6 +143,10 @@ async def build_worker_runtime(
             lease_seconds=settings.analysis_lease_seconds,
         )
     finally:
+        if retrieval_runtime is not None:
+            await retrieval_runtime.aclose()
+        if cache_redis is not None:
+            await cache_redis.aclose()
         await engine.dispose()
 
 
@@ -174,7 +210,17 @@ def _build_judge(
 def _build_retriever(
     settings: Settings,
     session_factory: async_sessionmaker[AsyncSession],
+    *,
+    retrieval_runtime: RetrievalRuntime | None = None,
+    redis: Redis | None = None,
 ) -> RagContextPort:
+    if settings.hybrid_retrieval_enabled:
+        return _build_hybrid_retriever(
+            settings,
+            session_factory,
+            retrieval_runtime=retrieval_runtime,
+            redis=redis,
+        )
     fake = settings.rag_fake_embedder or not (
         settings.embedding_base_url.strip() and settings.embedding_model.strip()
     )
@@ -203,3 +249,43 @@ def _build_retriever(
     except Exception:
         return UnavailableRetriever()
     return KnowledgeRetriever(embedder, store)
+
+
+def _build_hybrid_retriever(
+    settings: Settings,
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    retrieval_runtime: RetrievalRuntime | None,
+    redis: Redis | None,
+) -> RagContextPort:
+    if retrieval_runtime is None or redis is None:
+        return UnavailableRetriever()
+    embedder = retrieval_runtime.embedder
+    if not embedder.status.loaded or not embedder.sparse_status.loaded:
+        _logger.warning("hybrid_retrieval_models_unavailable")
+        return UnavailableRetriever()
+    cached = CachedEmbedder(
+        embedder,
+        retrieval_runtime.sparse_embedder,
+        redis,
+        ttl_seconds=settings.query_embedding_cache_ttl_seconds,
+    )
+    try:
+        if settings.vector_store == "pinecone":
+            store: HybridVectorStorePort = PineconeHybridVectorStore.from_settings(settings)
+        else:
+            store = PGVectorHybridStore(session_factory)
+    except Exception:
+        _logger.warning("hybrid_retrieval_store_unavailable")
+        return UnavailableRetriever()
+    return HybridRetriever(
+        cached,
+        cached,
+        store,
+        hybrid_embedder=cached,
+        default_limit=settings.retrieval_top_k,
+        fusion=settings.hybrid_fusion,
+        rrf_k=settings.hybrid_rrf_k,
+        dense_weight=settings.hybrid_dense_weight,
+        sparse_weight=settings.hybrid_sparse_weight,
+    )

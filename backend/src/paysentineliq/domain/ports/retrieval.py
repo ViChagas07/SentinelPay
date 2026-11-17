@@ -2,6 +2,10 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Protocol
 
+from paysentineliq.domain.knowledge import KnowledgeChunk
+
+DENSE_EMBEDDING_DIMENSION = 1024
+
 
 @dataclass(frozen=True, slots=True)
 class SparseVector:
@@ -70,6 +74,19 @@ class RetrievalStatus:
             raise ValueError("disabled reranker must not expose a model status")
 
 
+@dataclass(frozen=True, slots=True)
+class HybridEmbeddedChunk:
+    chunk: KnowledgeChunk
+    dense_embedding: tuple[float, ...]
+    sparse_embedding: SparseVector
+
+    def __post_init__(self) -> None:
+        if not self.dense_embedding:
+            raise ValueError("dense embedding must not be empty")
+        if not all(isfinite(value) for value in self.dense_embedding):
+            raise ValueError("dense embedding must be finite")
+
+
 class Embedder(Protocol):
     @property
     def dimension(self) -> int: ...
@@ -78,6 +95,19 @@ class Embedder(Protocol):
     def model_id(self) -> str: ...
 
     async def embed(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]: ...
+
+
+class HybridEmbedder(Protocol):
+    @property
+    def dimension(self) -> int: ...
+
+    @property
+    def model_id(self) -> str: ...
+
+    async def embed_hybrid(
+        self,
+        texts: tuple[str, ...],
+    ) -> tuple[tuple[tuple[float, ...], ...], tuple[SparseVector, ...]]: ...
 
 
 class SparseEmbedder(Protocol):

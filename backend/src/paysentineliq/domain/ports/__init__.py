@@ -1,5 +1,8 @@
 from paysentineliq.domain.ports.retrieval import (
+    DENSE_EMBEDDING_DIMENSION,
     Embedder,
+    HybridEmbeddedChunk,
+    HybridEmbedder,
     ModelStatus,
     Reranker,
     RerankResult,
@@ -10,7 +13,10 @@ from paysentineliq.domain.ports.retrieval import (
 )
 
 __all__ = [
+    "DENSE_EMBEDDING_DIMENSION",
     "Embedder",
+    "HybridEmbeddedChunk",
+    "HybridEmbedder",
     "ModelStatus",
     "RerankResult",
     "Reranker",

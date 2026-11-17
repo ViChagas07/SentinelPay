@@ -2,7 +2,7 @@ POETRY ?= poetry
 COMPOSE ?= docker compose --env-file .env.example
 DB_REVISION_ID := $(shell python scripts/next_migration_id.py)
 
-.PHONY: install lint format format-check typecheck arch test test-docker coverage openapi load-check build train train-guardrails backup migrate db-migrate db-revision db-check ingest-knowledge compose-config observability-config observability-up observability-down observability-test up stop check audit bandit security
+.PHONY: install lint format format-check typecheck arch test test-docker coverage openapi load-check build train train-guardrails backup migrate db-migrate db-revision db-check ingest-knowledge reindex-kb compose-config observability-config observability-up observability-down observability-test up stop check audit bandit security
 
 install:
 	$(POETRY) -C backend install
@@ -54,6 +54,9 @@ train-guardrails:
 
 ingest-knowledge:
 	$(POETRY) -C backend run python -m paysentineliq.infrastructure.rag.ingest --env-file ../.env.example --knowledge-root ../knowledge
+
+reindex-kb:
+	$(POETRY) -C backend run python ../scripts/reindex_kb.py --env-file ../.env.example --knowledge-root ../knowledge
 
 backup:
 	python scripts/db_backup

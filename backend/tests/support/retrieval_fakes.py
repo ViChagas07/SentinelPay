@@ -6,6 +6,9 @@ from paysentineliq.domain.ports.retrieval import (
 
 
 class FakeEmbedder:
+    dimension = 2
+    model_id = "fake-embedder"
+
     def __init__(self, *, error: str | None = None) -> None:
         self.loads = 0
         self.closes = 0

@@ -5,7 +5,7 @@ from datetime import date
 from paysentineliq.application.errors import EmbeddingDimensionError
 from paysentineliq.application.ports.embedding import EmbeddingPort
 from paysentineliq.application.ports.vector_store import VectorStorePort
-from paysentineliq.domain.knowledge import KnowledgeFilter, Provenance
+from paysentineliq.domain.knowledge import KnowledgeFilter, Provenance, RetrievedChunk
 
 _logger = logging.getLogger("paysentineliq")
 
@@ -15,13 +15,13 @@ class KnowledgeQuery:
     text: str
     categories: tuple[str, ...] = ()
     as_of: date | None = None
-    limit: int = 5
+    limit: int = 0
 
     def __post_init__(self) -> None:
         if not self.text.strip():
             raise ValueError("query text is required")
-        if self.limit <= 0:
-            raise ValueError("limit must be positive")
+        if self.limit < 0:
+            raise ValueError("limit must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +42,11 @@ class RetrievedPassage:
     content: str
     citation: KnowledgeCitation
     score: float
+    dense_score: float | None = None
+    sparse_score: float | None = None
+    fused_score: float | None = None
+    dense_rank: int | None = None
+    sparse_rank: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +54,21 @@ class KnowledgeRetrievalResult:
     passages: tuple[RetrievedPassage, ...]
     rag_unavailable: bool
     reason: str | None
+    retrieval_mode: str = "dense"
+
+
+def citation_from_chunk(chunk: RetrievedChunk) -> KnowledgeCitation:
+    return KnowledgeCitation(
+        document_key=chunk.document_key,
+        path=chunk.path,
+        title=chunk.title,
+        category=chunk.category,
+        section=chunk.section,
+        provenance=chunk.provenance,
+        source=chunk.source,
+        version=chunk.version,
+        authoritative=chunk.authoritative,
+    )
 
 
 class KnowledgeRetriever:
@@ -85,17 +105,7 @@ class KnowledgeRetriever:
             passages = tuple(
                 RetrievedPassage(
                     content=row.content,
-                    citation=KnowledgeCitation(
-                        document_key=row.document_key,
-                        path=row.path,
-                        title=row.title,
-                        category=row.category,
-                        section=row.section,
-                        provenance=row.provenance,
-                        source=row.source,
-                        version=row.version,
-                        authoritative=row.authoritative,
-                    ),
+                    citation=citation_from_chunk(row),
                     score=row.score,
                 )
                 for row in rows

@@ -541,7 +541,11 @@ class LangGraphAnalysisOrchestrator:
                     KnowledgeQuery(
                         text=self._rag_query(state),
                         as_of=self._clock().date(),
-                        limit=5,
+                        limit=(
+                            self._settings.retrieval_top_k
+                            if self._settings.hybrid_retrieval_enabled
+                            else 5
+                        ),
                     ),
                 ),
                 timeout=self._node_timeout,
