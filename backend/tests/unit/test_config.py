@@ -138,3 +138,35 @@ def test_ocr_languages_are_parsed() -> None:
 def test_unsupported_ocr_language_is_rejected() -> None:
     with pytest.raises(ValidationError):
         Settings(app_env="local", ocr_langs="pt,de")
+
+
+def test_retrieval_defaults_are_local_and_cpu_only() -> None:
+    settings = Settings(app_env="local")
+
+    assert settings.retrieval_top_k == 25
+    assert settings.rerank_top_n == 4
+    assert settings.rerank_enabled is True
+    assert settings.embedder_backend == "onnx"
+    assert settings.reranker_backend == "onnx"
+    assert settings.rerank_max_length == 512
+    assert settings.batch_size == 16
+    assert settings.torch_num_threads == 0
+
+
+def test_rerank_top_n_must_not_exceed_top_k() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", retrieval_top_k=2, rerank_top_n=3)
+
+
+def test_retrieval_backend_rejects_non_cpu_values() -> None:
+    with pytest.raises(ValidationError):
+        Settings.model_validate({"app_env": "local", "embedder_backend": "cuda"})
+    with pytest.raises(ValidationError):
+        Settings.model_validate({"app_env": "local", "reranker_backend": "rocm"})
+
+
+def test_retrieval_batch_and_threads_must_be_valid() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", batch_size=0)
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", torch_num_threads=-1)

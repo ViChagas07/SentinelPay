@@ -512,6 +512,9 @@
       },
       "HealthResponse": {
         "properties": {
+          "retrieval": {
+            "$ref": "#/components/schemas/RetrievalHealth"
+          },
           "status": {
             "const": "ok",
             "title": "Status",
@@ -519,7 +522,8 @@
           }
         },
         "required": [
-          "status"
+          "status",
+          "retrieval"
         ],
         "title": "HealthResponse",
         "type": "object"
@@ -893,6 +897,86 @@
           "due_date"
         ],
         "title": "RescheduleRequest",
+        "type": "object"
+      },
+      "RetrievalHealth": {
+        "properties": {
+          "embedder": {
+            "$ref": "#/components/schemas/RetrievalModelHealth"
+          },
+          "rerank_enabled": {
+            "title": "Rerank Enabled",
+            "type": "boolean"
+          },
+          "rerank_top_n": {
+            "title": "Rerank Top N",
+            "type": "integer"
+          },
+          "reranker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RetrievalModelHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sparse_embedder": {
+            "$ref": "#/components/schemas/RetrievalModelHealth"
+          },
+          "top_k": {
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "top_k",
+          "rerank_top_n",
+          "rerank_enabled",
+          "embedder",
+          "sparse_embedder",
+          "reranker"
+        ],
+        "title": "RetrievalHealth",
+        "type": "object"
+      },
+      "RetrievalModelHealth": {
+        "properties": {
+          "backend": {
+            "enum": [
+              "onnx",
+              "pytorch"
+            ],
+            "title": "Backend",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "loaded": {
+            "title": "Loaded",
+            "type": "boolean"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "backend",
+          "loaded"
+        ],
+        "title": "RetrievalModelHealth",
         "type": "object"
       },
       "UnreadCountResponse": {

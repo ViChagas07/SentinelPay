@@ -152,6 +152,15 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 1200
     rag_chunk_overlap: int = 150
     rag_fake_embedder: bool = False
+    retrieval_model_dir: str = "models/retrieval"
+    retrieval_top_k: int = 25
+    rerank_top_n: int = 4
+    rerank_enabled: bool = True
+    embedder_backend: Literal["onnx", "pytorch"] = "onnx"
+    reranker_backend: Literal["onnx", "pytorch"] = "onnx"
+    rerank_max_length: int = 512
+    batch_size: int = 16
+    torch_num_threads: int = 0
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
@@ -315,6 +324,20 @@ class Settings(BaseSettings):
             raise ValueError("RAG_CHUNK_SIZE must be positive")
         if not 0 <= self.rag_chunk_overlap < self.rag_chunk_size:
             raise ValueError("RAG_CHUNK_OVERLAP must be between 0 and RAG_CHUNK_SIZE")
+        if not self.retrieval_model_dir.strip():
+            raise ValueError("RETRIEVAL_MODEL_DIR must not be empty")
+        if self.retrieval_top_k <= 0:
+            raise ValueError("RETRIEVAL_TOP_K must be positive")
+        if self.rerank_top_n <= 0:
+            raise ValueError("RERANK_TOP_N must be positive")
+        if self.rerank_top_n > self.retrieval_top_k:
+            raise ValueError("RERANK_TOP_N must not exceed RETRIEVAL_TOP_K")
+        if self.rerank_max_length <= 0:
+            raise ValueError("RERANK_MAX_LENGTH must be positive")
+        if self.batch_size <= 0:
+            raise ValueError("BATCH_SIZE must be positive")
+        if self.torch_num_threads < 0:
+            raise ValueError("TORCH_NUM_THREADS must be non-negative")
         if not 0.0 <= self.llm_temperature <= 1.0:
             raise ValueError("LLM_TEMPERATURE must be between 0 and 1")
         if self.llm_timeout_seconds <= 0:

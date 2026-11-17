@@ -1,11 +1,16 @@
 import secrets
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from paysentineliq.application.ports.readiness import ReadinessChecker
+from paysentineliq.domain.ports.retrieval import (
+    ModelStatus,
+    RetrievalStatus,
+    RetrievalStatusProvider,
+)
 from paysentineliq.infrastructure.observability.metrics import PlatformMetrics
 from paysentineliq.interface.api.dependencies import get_readiness_checker
 from paysentineliq.interface.api.problems import build_problem_response
@@ -13,13 +18,51 @@ from paysentineliq.interface.api.problems import build_problem_response
 router = APIRouter(tags=["ops"])
 
 
+class RetrievalModelHealth(BaseModel):
+    model: str
+    backend: Literal["onnx", "pytorch"]
+    loaded: bool
+    error: str | None = None
+
+
+class RetrievalHealth(BaseModel):
+    top_k: int
+    rerank_top_n: int
+    rerank_enabled: bool
+    embedder: RetrievalModelHealth
+    sparse_embedder: RetrievalModelHealth
+    reranker: RetrievalModelHealth | None
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+    retrieval: RetrievalHealth
+
+
+def _model_health(status: ModelStatus) -> RetrievalModelHealth:
+    return RetrievalModelHealth(
+        model=status.model_id,
+        backend=cast(Literal["onnx", "pytorch"], status.backend),
+        loaded=status.loaded,
+        error=status.error,
+    )
+
+
+def _retrieval_health(status: RetrievalStatus) -> RetrievalHealth:
+    return RetrievalHealth(
+        top_k=status.top_k,
+        rerank_top_n=status.rerank_top_n,
+        rerank_enabled=status.rerank_enabled,
+        embedder=_model_health(status.embedder),
+        sparse_embedder=_model_health(status.sparse_embedder),
+        reranker=_model_health(status.reranker) if status.reranker is not None else None,
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
-    return HealthResponse(status="ok")
+async def health(request: Request) -> HealthResponse:
+    provider = cast(RetrievalStatusProvider, request.app.state.retrieval_runtime)
+    return HealthResponse(status="ok", retrieval=_retrieval_health(provider.status))
 
 
 @router.get("/ready")

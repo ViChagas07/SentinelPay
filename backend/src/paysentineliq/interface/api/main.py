@@ -24,6 +24,7 @@ from paysentineliq.infrastructure.observability.tracing import (
     instrument_fastapi_app,
     instrument_sqlalchemy_engine,
 )
+from paysentineliq.infrastructure.retrieval.runtime import RetrievalRuntime
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.google_oidc import GoogleOIDCClient
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService
@@ -129,6 +130,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allowed_hosts=set(resolved_settings.ssrf_allowed_hosts_list),
         )
         application.state.safe_http_client = SafeHttpClient(application.state.ssrf_guard)
+        retrieval_runtime: RetrievalRuntime = application.state.retrieval_runtime
+        await retrieval_runtime.load()
         rabbitmq_user, rabbitmq_password = resolved_settings.rabbitmq_management_credentials
         queue_monitor = QueueDepthMonitor(
             RabbitMqQueueDepthProvider(
@@ -146,6 +149,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             queue_monitor_task.cancel()
             with suppress(asyncio.CancelledError):
                 await queue_monitor_task
+            await retrieval_runtime.aclose()
             await redis.aclose()
             await engine.dispose()
 
@@ -159,6 +163,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=("/openapi.json" if resolved_settings.app_env == "local" else None),
     )
     app.state.settings = resolved_settings
+    app.state.retrieval_runtime = RetrievalRuntime(resolved_settings)
     metrics = PlatformMetrics()
     app.state.metrics = metrics
     set_platform_metrics(metrics)

@@ -404,6 +404,10 @@ class EmbeddingUnavailableError(RuntimeError):
     pass
 
 
+class RetrievalUnavailableError(RuntimeError):
+    pass
+
+
 class AnalysisTimeoutError(RuntimeError):
     def __init__(self, node: str) -> None:
         super().__init__(f"analysis node timed out: {node}")

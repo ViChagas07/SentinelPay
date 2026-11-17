@@ -25,6 +25,7 @@ node_modules/
 data/private/
 uploads/
 models/artifacts/
+models/retrieval/
 *.joblib
 *.pkl
 backups/
