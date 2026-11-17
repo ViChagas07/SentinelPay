@@ -1,7 +1,9 @@
 "use client";
 
 import { Menu, Search } from "lucide-react";
+import Link from "next/link";
 
+import { Logo } from "@/components/brand/logo";
 import { LanguageSelector } from "@/components/language-selector";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,14 @@ export function ShellHeader({
         >
           <Menu aria-hidden="true" />
         </Button>
+
+        <Link
+          href="/painel"
+          aria-label={t("app.name")}
+          className="shrink-0 rounded-[6px] lg:hidden"
+        >
+          <Logo className="h-7 w-auto" title={t("app.name")} sizes="28px" />
+        </Link>
 
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{t(titleKey)}</p>

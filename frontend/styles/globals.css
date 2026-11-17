@@ -42,6 +42,10 @@
   --color-petrol-sidebar: var(--petrol-sidebar);
   --color-petrol-active: var(--petrol-active);
   --color-petrol-highlight: var(--petrol-highlight);
+  --color-brand-frame: var(--brand-frame);
+  --color-brand-mark: var(--brand-mark);
+  --color-brand-frame-on-dark: var(--brand-frame-on-dark);
+  --color-brand-mark-on-dark: var(--brand-mark-on-dark);
   --color-risk-low: var(--risk-low);
   --color-risk-medium: var(--risk-medium);
   --color-risk-high: var(--risk-high);
@@ -144,6 +148,32 @@
   }
 }
 
+.brand-logo-on-light {
+  display: inline-flex;
+}
+
+.brand-logo-on-dark {
+  display: none;
+}
+
+[data-theme="dark"] .brand-logo-on-light {
+  display: none;
+}
+
+[data-theme="dark"] .brand-logo-on-dark {
+  display: inline-flex;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand-logo-on-light {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .brand-logo-on-dark {
+    display: inline-flex;
+  }
+}
+
 [data-sonner-toast] {
   border-radius: 6px !important;
   border: 1px solid var(--border) !important;
@@ -151,7 +181,6 @@
   color: var(--foreground) !important;
   box-shadow: none !important;
 }
-
 [data-sonner-toast] [data-description] {
   color: var(--text-secondary) !important;
 }

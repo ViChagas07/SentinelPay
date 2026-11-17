@@ -1,3 +1,4 @@
+import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ export function EmptyState({ title, description, action, className }: EmptyState
     <section
       className={cn("flex flex-col items-start gap-3 border-t border-border pt-6", className)}
     >
+      <Logo className="size-6 opacity-70" />
       <h2 className="max-w-xl font-serif text-3xl leading-tight tracking-tight sm:text-4xl">
         {title}
       </h2>

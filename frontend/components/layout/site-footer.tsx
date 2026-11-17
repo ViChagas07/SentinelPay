@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { Logo } from "@/components/brand/logo";
 import { LanguageSelector } from "@/components/language-selector";
 import { useI18n } from "@/lib/i18n/provider";
 import { resolveSupportHref } from "@/lib/site/config";
@@ -14,9 +15,12 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8">
-        <p className="font-mono text-xs tabular-nums">
-          {t("landing.footer.copyright", { year: new Date().getFullYear() })}
-        </p>
+        <div className="flex items-center gap-3">
+          <Logo className="size-6 opacity-80" sizes="24px" />
+          <p className="font-mono text-xs tabular-nums">
+            {t("landing.footer.copyright", { year: new Date().getFullYear() })}
+          </p>
+        </div>
 
         <nav
           aria-label={t("landing.footer.nav")}

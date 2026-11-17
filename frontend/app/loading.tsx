@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandLoader } from "@/components/brand/brand-loader";
 import { useI18n } from "@/lib/i18n/provider";
 
 export default function Loading() {
@@ -13,6 +14,7 @@ export default function Loading() {
       aria-live="polite"
     >
       <span className="sr-only">{t("loading.label")}</span>
+      <BrandLoader className="size-10" />
       <div className="space-y-4">
         <div className="h-3 w-28 rounded-[6px] bg-surface-elevated" />
         <div className="h-14 w-full max-w-3xl rounded-[6px] bg-surface-elevated" />

@@ -1,5 +1,7 @@
 # SentinelPay Frontend
 
+<img src="public/brand/logo-symbol-128.png" alt="SentinelPay" width="72" height="72" />
+
 Interface do SentinelPay, SaaS antifraude para boletos, contracheques e recibos brasileiros.
 
 ## Stack

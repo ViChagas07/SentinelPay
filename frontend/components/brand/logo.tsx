@@ -1,38 +1,114 @@
-import type * as React from "react";
+import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 
-export type LogoProps = React.ComponentProps<"svg"> & {
+const LOGO_SOURCES = {
+  compact: "/brand/logo-compact-512.png",
+  compactLight: "/brand/logo-compact-light-512.png",
+  brand: "/brand/logo-symbol-512.png",
+  light: "/brand/logo-symbol-light-512.png",
+  white: "/brand/logo-symbol-on-white-512.png",
+} as const;
+
+export type LogoVariant = keyof typeof LOGO_SOURCES;
+
+export type LogoProps = {
+  className?: string;
   title?: string;
+  variant?: LogoVariant;
+  priority?: boolean;
+  sizes?: string;
 };
 
-export function Logo({ className, title, ...props }: LogoProps) {
+function LogoImage({
+  className,
+  title,
+  src,
+  priority,
+  sizes,
+}: {
+  className?: string;
+  title?: string;
+  src: string;
+  priority: boolean;
+  sizes: string;
+}) {
   return (
-    <svg
-      viewBox="0 0 40 40"
-      fill="none"
-      className={cn("size-8", className)}
-      role={title ? "img" : undefined}
-      aria-label={title}
-      aria-hidden={title ? undefined : true}
-      {...props}
-    >
-      <path d="M20 2.5 37.5 20 20 37.5 2.5 20Z" stroke="currentColor" strokeWidth="1.25" />
-      <path d="M8.5 20h23M13 16v8M20 13.5v13M27 16v8" stroke="currentColor" strokeWidth="1" />
-    </svg>
+    <Image
+      src={src}
+      alt={title ?? ""}
+      width={512}
+      height={512}
+      priority={priority}
+      sizes={sizes}
+      className={cn("h-full w-auto shrink-0 object-contain", className)}
+    />
+  );
+}
+
+export function Logo({
+  className,
+  title,
+  variant = "compact",
+  priority = false,
+  sizes = "32px",
+}: LogoProps) {
+  if (variant === "compact") {
+    return (
+      <>
+        <span className={cn("brand-logo-on-light shrink-0", className)}>
+          <LogoImage src={LOGO_SOURCES.compact} title={title} priority={priority} sizes={sizes} />
+        </span>
+        <span className={cn("brand-logo-on-dark shrink-0", className)}>
+          <LogoImage
+            src={LOGO_SOURCES.compactLight}
+            title={title}
+            priority={priority}
+            sizes={sizes}
+          />
+        </span>
+      </>
+    );
+  }
+
+  return (
+    <Image
+      src={LOGO_SOURCES[variant]}
+      alt={title ?? ""}
+      width={512}
+      height={512}
+      priority={priority}
+      sizes={sizes}
+      className={cn("shrink-0 object-contain", className)}
+    />
   );
 }
 
 export type WordmarkProps = {
   name: string;
   className?: string;
+  variant?: Extract<LogoVariant, "compact" | "compactLight">;
+  priority?: boolean;
 };
 
-export function Wordmark({ name, className }: WordmarkProps) {
+export function Wordmark({
+  name,
+  className,
+  variant = "compact",
+  priority = false,
+}: WordmarkProps) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <Logo className="size-6 text-primary" />
-      <span className="font-serif text-xl tracking-tight">{name}</span>
+      <Logo
+        className="h-7 w-auto"
+        variant={variant}
+        title={name}
+        priority={priority}
+        sizes="28px"
+      />
+      <span aria-hidden="true" className="font-serif text-xl tracking-tight">
+        {name}
+      </span>
     </span>
   );
 }

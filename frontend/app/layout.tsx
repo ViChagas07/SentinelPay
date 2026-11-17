@@ -19,18 +19,21 @@ const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
   variable: "--font-instrument-serif",
   display: "swap",
+  preload: true,
 });
 
 const geistSans = Geist({
   subsets: ["latin"],
   variable: "--font-geist-sans",
   display: "swap",
+  preload: true,
 });
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
   display: "swap",
+  preload: true,
 });
 
 export const viewport: Viewport = {
@@ -43,11 +46,43 @@ export const viewport: Viewport = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getServerLocale();
+  const title = serverTranslate(locale, "meta.title");
+  const description = serverTranslate(locale, "meta.description");
 
   return {
     metadataBase: new URL(getSiteUrl()),
-    title: serverTranslate(locale, "meta.title"),
-    description: serverTranslate(locale, "meta.description"),
+    title,
+    description,
+    applicationName: "SentinelPay",
+    manifest: "/manifest.webmanifest",
+    icons: {
+      icon: [
+        { url: "/icon.svg", type: "image/svg+xml" },
+        { url: "/icon.png", type: "image/png", sizes: "512x512" },
+        { url: "/favicon.ico", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+      ],
+      apple: [{ url: "/apple-icon.png", type: "image/png", sizes: "180x180" }],
+    },
+    openGraph: {
+      type: "website",
+      siteName: "SentinelPay",
+      title,
+      description,
+      images: [
+        {
+          url: "/opengraph-image",
+          width: 1200,
+          height: 630,
+          alt: "SentinelPay",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: ["/opengraph-image"],
+    },
   };
 }
 

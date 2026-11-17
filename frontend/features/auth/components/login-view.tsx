@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Wordmark } from "@/components/brand/logo";
+import { Logo, Wordmark } from "@/components/brand/logo";
 import { LanguageSelector } from "@/components/language-selector";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[1.1fr_0.9fr]">
       <aside className="relative hidden flex-col justify-between border-r border-border bg-petrol-sidebar p-10 text-on-petrol lg:flex xl:p-14">
         <Link href="/" aria-label={t("app.name")} className="w-fit rounded-[6px]">
-          <Wordmark name={t("app.name")} className="text-on-petrol" />
+          <Wordmark name={t("app.name")} className="text-on-petrol" variant="compactLight" />
         </Link>
         <div className="max-w-lg">
           <Eyebrow number="01" label={t("auth.login.eyebrow")} className="!text-on-petrol" />
@@ -84,6 +84,7 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
 
         <div className="flex flex-1 items-center px-5 pb-16 sm:px-8">
           <PageTransition className="mx-auto w-full max-w-sm">
+            <Logo className="mb-6 h-16 w-auto" title={t("app.name")} sizes="64px" />
             <Eyebrow number="02" label={t("auth.login.eyebrow")} className="lg:hidden" />
             <h2 className="mt-4 font-serif text-4xl leading-tight tracking-tight lg:mt-0">
               {t("auth.login.title")}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { Logo } from "@/components/brand/logo";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
         id="conteudo"
         className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-5 py-24 sm:px-8"
       >
+        <Logo className="mb-6 size-10" title={t("app.name")} />
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground tabular-nums">
           500
         </p>

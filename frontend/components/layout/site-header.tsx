@@ -35,7 +35,7 @@ export function SiteHeader({ sessionActive = false }: SiteHeaderProps) {
     <header className="sticky top-0 z-40 border-b border-border bg-background">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
         <Link href="/" className="rounded-[6px]" aria-label={t("app.name")}>
-          <Wordmark name={t("app.name")} />
+          <Wordmark name={t("app.name")} priority />
         </Link>
 
         <nav aria-label={t("landing.nav.primary")} className="hidden items-center gap-1 md:flex">

@@ -153,11 +153,22 @@ function SidebarContent({
           !onToggle && "pr-12",
         )}
       >
-        <Link href="/" aria-label={t("app.name")} className="rounded-[6px]">
+        <Link href="/painel" aria-label={t("app.name")} className="rounded-[6px]">
           {collapsed ? (
-            <Logo className="size-7 text-on-petrol" />
+            <Logo
+              className="size-7"
+              variant="compactLight"
+              title={t("app.name")}
+              priority
+              sizes="28px"
+            />
           ) : (
-            <Wordmark name={t("app.name")} className="text-on-petrol" />
+            <Wordmark
+              name={t("app.name")}
+              className="text-on-petrol"
+              variant="compactLight"
+              priority
+            />
           )}
         </Link>
         {onToggle ? (

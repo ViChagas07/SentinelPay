@@ -74,13 +74,13 @@ test.describe("authenticated shell", () => {
     );
   });
 
-  test("logo always lands on the public home", async ({ page }) => {
+  test("logo always lands on the dashboard", async ({ page }) => {
     await page.goto("/painel");
 
     const logo = page.locator('aside a[aria-label="SentinelPay"]');
-    await expect(logo).toHaveAttribute("href", "/", { timeout: 20_000 });
+    await expect(logo).toHaveAttribute("href", "/painel", { timeout: 20_000 });
     await logo.click();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/painel$/);
   });
 
   test("collapses to rail, shows tooltips and persists the choice", async ({ page }) => {

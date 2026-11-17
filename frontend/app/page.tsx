@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 
+import { Logo } from "@/components/brand/logo";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { Button } from "@/components/ui/button";
@@ -119,6 +120,14 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       locale: OG_LOCALE[locale],
       alternateLocale: [...OG_ALTERNATES[locale]],
+      images: [
+        {
+          url: "/opengraph-image",
+          width: 1200,
+          height: 630,
+          alt: "SentinelPay",
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
@@ -146,6 +155,7 @@ export default async function LandingPage() {
         <section className="border-b border-border bg-landing" aria-labelledby="hero-title">
           <div className="mx-auto grid max-w-6xl gap-12 px-5 pb-16 pt-14 sm:px-8 sm:pb-20 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16 lg:pb-24 lg:pt-24">
             <div className="min-w-0">
+              <Logo className="mb-6 size-14" title={t("app.name")} sizes="56px" />
               <Eyebrow number="01" label={t("landing.hero.eyebrow")} />
               <h1
                 id="hero-title"

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { ImageResponse } from "next/og";
 
 import { getServerLocale, serverTranslate } from "@/lib/i18n/server";
@@ -9,11 +12,13 @@ export const size = {
 };
 export const contentType = "image/png";
 
+const logo = `data:image/png;base64,${readFileSync(
+  join(process.cwd(), "public", "brand", "logo-symbol-light-512.png"),
+).toString("base64")}`;
+
 export default async function OpenGraphImage() {
   const locale = await getServerLocale();
   const eyebrow = serverTranslate(locale, "landing.meta.ogEyebrow");
-  const title = serverTranslate(locale, "landing.meta.ogTitle");
-  const description = serverTranslate(locale, "landing.meta.ogDescription");
   const tagline = serverTranslate(locale, "landing.meta.ogTagline");
 
   return new ImageResponse(
@@ -23,77 +28,56 @@ export default async function OpenGraphImage() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        backgroundColor: "#0E413A",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#0F4138",
         color: "#F1F5F2",
-        padding: "72px",
+        padding: "64px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-        <div
-          style={{
-            width: "44px",
-            height: "44px",
-            border: "2px solid #499484",
-            transform: "rotate(45deg)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div style={{ width: "18px", height: "2px", backgroundColor: "#499484" }} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <div style={{ fontSize: "28px", fontWeight: 600, letterSpacing: "-0.02em" }}>
-            SentinelPay
-          </div>
-          <div
-            style={{
-              fontSize: "16px",
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              color: "#A7D2CA",
-            }}
-          >
-            {eyebrow}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-        <div
-          style={{
-            fontSize: "72px",
-            lineHeight: 1.02,
-            letterSpacing: "-0.03em",
-            maxWidth: "940px",
-          }}
-        >
-          {title}
-        </div>
-        <div
-          style={{
-            fontSize: "28px",
-            lineHeight: 1.3,
-            color: "#D2E8E4",
-            maxWidth: "820px",
-          }}
-        >
-          {description}
-        </div>
-      </div>
-
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          borderTop: "1px solid rgba(241,245,242,0.22)",
-          paddingTop: "24px",
+          justifyContent: "center",
+          width: "100%",
+          flex: 1,
         }}
       >
-        <div style={{ fontSize: "18px", color: "#A7D2CA" }}>{tagline}</div>
-        <div style={{ fontSize: "18px", color: "#A7D2CA" }}>SentinelPay</div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logo} width={208} height={208} alt="SentinelPay" />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "18px",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ fontSize: "92px", fontWeight: 600, letterSpacing: "-0.04em", lineHeight: 1 }}>
+          SentinelPay
+        </div>
+        <div style={{ fontSize: "28px", lineHeight: 1.3, color: "#D2E8E4", maxWidth: "840px" }}>
+          {tagline}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            fontSize: "18px",
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "#A7D2CA",
+            marginTop: "12px",
+          }}
+        >
+          <div style={{ width: "40px", height: "1px", backgroundColor: "#7BBCB0" }} />
+          {eyebrow}
+          <div style={{ width: "40px", height: "1px", backgroundColor: "#7BBCB0" }} />
+        </div>
       </div>
     </div>,
     {
