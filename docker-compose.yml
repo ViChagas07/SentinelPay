@@ -150,6 +150,7 @@ services:
       PROMETHEUS_MULTIPROC_DIR: /var/run/prometheus/api
       PROMETHEUS_MULTIPROC_SCRAPE_DIRS: /var/run/prometheus/api,/var/run/prometheus/worker,/var/run/prometheus/beat
     volumes:
+      - ./models:/app/models:ro
       - prometheus_multiproc:/var/run/prometheus
     ports:
       - "${API_PORT}:8000"

@@ -45,6 +45,7 @@ onnxruntime = "^1.32.0"
 tokenizers = "^0.23.3"
 numpy = "^2.3.5"
 huggingface-hub = "^2.4.0"
+ftfy = "^6.3.1"
 onnx = "^1.19.0"
 
 [build-system]
@@ -90,7 +91,7 @@ plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["boto3", "boto3.*", "botocore", "botocore.*", "celery", "celery.*", "kombu", "kombu.*", "crewai", "crewai.*", "cv2", "joblib", "joblib.*", "langchain", "langchain.*", "langchain_core", "langchain_core.*", "langgraph", "langgraph.*", "onnx", "onnx.*", "onnxruntime", "onnxruntime.*", "paddleocr", "paddleocr.*", "paddle", "paddle.*", "paddlex", "paddlex.*", "pymupdf", "pymupdf.*", "fitz", "sklearn", "sklearn.*", "tokenizers", "tokenizers.*", "torch", "torch.*", "transformers", "transformers.*"]
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "celery", "celery.*", "kombu", "kombu.*", "crewai", "crewai.*", "cv2", "ftfy", "ftfy.*", "joblib", "joblib.*", "langchain", "langchain.*", "langchain_core", "langchain_core.*", "langgraph", "langgraph.*", "onnx", "onnx.*", "onnxruntime", "onnxruntime.*", "paddleocr", "paddleocr.*", "paddle", "paddle.*", "paddlex", "paddlex.*", "pymupdf", "pymupdf.*", "fitz", "sklearn", "sklearn.*", "tokenizers", "tokenizers.*", "torch", "torch.*", "transformers", "transformers.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

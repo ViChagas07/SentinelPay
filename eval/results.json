@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-17T02:23:53.120157+00:00",
+  "generated_at": "2026-11-17T04:12:16.895146+00:00",
   "dataset_size": 30,
   "top_k": 25,
   "eval_k": 5,
@@ -10,90 +10,65 @@
     "Denso (BGE-M3)": {
       "recall_at_5": 0.9333333333333333,
       "mrr": 0.8916666666666667,
-      "p50_ms": 80.189799999971,
-      "p95_ms": 87.16539999977613,
+      "p50_ms": 90.11060000011639,
+      "p95_ms": 96.16039999946224,
       "queries": 30
     },
-    "Hibrido (RRF)": {
+    "Denso + rerank": {
+      "recall_at_5": 0.9666666666666667,
+      "mrr": 0.961111111111111,
+      "p50_ms": 14244.383799999923,
+      "p95_ms": 15180.268800000704,
+      "queries": 30
+    },
+    "Hibrido RRF": {
       "recall_at_5": 0.8666666666666667,
       "mrr": 0.8011111111111112,
-      "p50_ms": 84.20770000020639,
-      "p95_ms": 91.96179999980814,
+      "p50_ms": 84.4028999999864,
+      "p95_ms": 457.66509999975824,
       "queries": 30
     },
-    "Hibrido + rerank": {
+    "Hibrido ponderado 0.7/0.3": {
+      "recall_at_5": 0.8666666666666667,
+      "mrr": 0.8344444444444445,
+      "p50_ms": 84.54499999970722,
+      "p95_ms": 92.34209999976883,
+      "queries": 30
+    },
+    "Hibrido RRF + rerank": {
+      "recall_at_5": 0.9666666666666667,
+      "mrr": 0.9416666666666667,
+      "p50_ms": 12814.01150000056,
+      "p95_ms": 14333.887900000263,
+      "queries": 30
+    },
+    "Hibrido ponderado + rerank": {
       "recall_at_5": 0.9666666666666667,
       "mrr": 0.9583333333333334,
-      "p50_ms": 12076.738300000216,
-      "p95_ms": 13440.356300000076,
+      "p50_ms": 13015.213399999993,
+      "p95_ms": 13580.807600001208,
       "queries": 30
     }
   },
   "corrections": [
     {
-      "id": "pt-febraban-01",
-      "language": "pt",
-      "question": "Qual e o tamanho da linha digitavel de um boleto bancario e quantos digitos tem o codigo de barras?",
+      "id": "en-clt-01",
+      "language": "en",
+      "question": "What are common indicators of a forged payslip under CLT rules?",
       "expected_documents": [
-        "febraban/manual_febraban_v1.pdf"
-      ],
-      "before_document": "glossary/glossary.pdf",
-      "before_rank": 2,
-      "before_score": 0.03278688524590164,
-      "after_document": "febraban/manual_febraban_v1.pdf",
-      "after_rank": 1,
-      "after_score": 0.9993058923463662,
-      "before_snippet": "de 4 dígitos representando os dias corridos desde 07/10/1997. Usado para calcular a data de vencimento a partir do código de barras. Código de Barras Representação gráfica dos 44 dígitos do boleto em barras verticais (padrão Interleaved 2 of 5). Lido por scanners nos bancos. Linha Digitável Represen",
-      "after_snippet": "ira / Modalidade Tipo de cobrança bancária MÉDIO Instrução de Cobrança Juros, multa, desconto, protesto MÉDIO 1.2 Linha Digitável, Estrutura Completa A linha digitável é a representação numérica do código de barras. Deve ter exatamente 47 dígitos (boleto comum) ou 48 dígitos (boleto de tributos/gui"
-    },
-    {
-      "id": "pt-fraud-01",
-      "language": "pt",
-      "question": "Quais codigos de banco inexistentes indicam boleto falso?",
-      "expected_documents": [
-        "fraud_patterns/banco_inexistente.pdf",
-        "bacen/instituicoes.pdf"
-      ],
-      "before_document": "faq/antifraud_faq.pdf",
-      "before_rank": 2,
-      "before_score": 0.03225806451612903,
-      "after_document": "fraud_patterns/banco_inexistente.pdf",
-      "after_rank": 1,
-      "after_score": 0.9778861490725923,
-      "before_snippet": "FAQ Antifraude, Perguntas e Respostas Técnicas Base de conh P01: Multa de 5% ao dia é válida em boleto? R: NÃO. A legislação brasileira limita a multa de mora a 2% sobre o valor (Art. 52 do CDC e jurisprudência do STJ). Juros máximos: 1% ao mês (taxa Selic). Boleto com multa de 5% ao dia é ilegal e",
-      "after_snippet": "0 Banco Inexistente / Código Inválido Identificação 1. Códigos de Banco Fraudulentos Mais Comuns Boletos fraudulentos frequentemente usam códigos de banco inválidos, seja por descuido do fraudador ou para dificultar a verificação manual. Código Situação 000 Código nulo, banco inexistente 999 Código"
-    },
-    {
-      "id": "es-inss-02",
-      "language": "es",
-      "question": "Que indicadores de fraude aparecen cuando el FGTS o el INSS no se recolle en la nomina?",
-      "expected_documents": [
+        "fraud_patterns/holerite.pdf",
         "fraud_patterns/folha_pagamento.pdf"
       ],
-      "before_document": "glossary/glossary.pdf",
-      "before_rank": null,
-      "before_score": 0.031746031746031744,
+      "stage1_mode": "Denso (BGE-M3)",
+      "rerank_mode": "Denso + rerank",
+      "before_document": "fraud_patterns/boleto_falso.pdf",
+      "before_rank": 2,
+      "before_score": 0.5116392678999464,
       "after_document": "fraud_patterns/folha_pagamento.pdf",
       "after_rank": 1,
-      "after_score": 0.7986912813992404,
-      "before_snippet": "lerite. FGTS Fundo de Garantia por Tempo de Serviço. Encargo patronal de 8% do salário bruto. Não é descontado do empregado, é custo da empresa. INSS Instituto Nacional do Seguro Social. Desconto obrigatório do empregado calculado progressivamente sobre o salário. IRRF Imposto de Renda Retido na Fo",
+      "after_score": 0.039440018351610595,
+      "before_snippet": "i o PDF antes de reencaminhar. CRÍTICO Boleto de Segunda Via Falsa Site falso simula portal do fornecedor/banco. Emite 'segunda via' fraudulenta. ALTO 1.2 Indicadores de Fraude, Checklist [CRÍTICO] DAC da linha digitável não confere matematicamente [CRÍTICO] Banco emissor (3 primeiros dígitos) não e",
       "after_snippet": "0 Fraude em Folha de Pagamento Padrões de adulte 1. Modalidades de Fraude em Folha Modalidade Descrição Risco Funcionário Fantasma Inclusão de empregado inexistente na folha para desvio do salário. CRÍTICO Salário Inflado Salário real é X, mas folha registra X + Y para desviar a diferença Y. CRÍTICO"
-    },
-    {
-      "id": "es-clt-01",
-      "language": "es",
-      "question": "Que datos del empleador y del empleado son obligatorios en el recibo de nomina?",
-      "expected_documents": [
-        "fraud_patterns/holerite.pdf"
-      ],
-      "before_document": "bacen/boletos.pdf",
-      "before_rank": null,
-      "before_score": 0.031544957774465976,
-      "after_document": "fraud_patterns/holerite.pdf",
-      "after_rank": 1,
-      "after_score": 0.004527170200169981,
-      "before_snippet": "elIQ v1.0 Regulação BACEN, Boletos e Cobrança Normas de regi 1. Registro Obrigatório de Boletos (desde 2018) Desde novembro de 2018 (Resolução BACEN 4.569/2017), TODOS os boletos de cobrança devem ser registrados na CIP, Câmara Interbancária de Pagamentos. Boletos não registrados são recusados pel",
-      "after_snippet": "0 Holerite / Contracheque, Validação Técnica Estrutura, campo 1. Campos Obrigatórios do Holerite (CLT, Art. 464) Campo Conteúdo Prioridade Identificação do Empregador Razão social, CNPJ, endereço CRÍTICO Identificação do Empregado Nome, CPF, matrícula, cargo, CBO, departamento CRÍTICO Período de R"
     },
     {
       "id": "en-clt-01",
@@ -103,13 +78,15 @@
         "fraud_patterns/holerite.pdf",
         "fraud_patterns/folha_pagamento.pdf"
       ],
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
       "before_document": "febraban/manual_febraban_v1.pdf",
       "before_rank": 2,
-      "before_score": 0.031009615384615385,
+      "before_score": 0.03125,
       "after_document": "fraud_patterns/folha_pagamento.pdf",
       "after_rank": 1,
-      "after_score": 0.04631894974039518,
-      "before_snippet": "trado na CIP (Câmara Interbancária de Pagamentos). • O banco emissor (3 primeiros dígitos da linha digitável) deve ser um banco autorizado pelo BACEN. • A data de vencimento calculada pelo fator deve ser igual à data impressa no boleto. • O valor do boleto (posições 10–19 do código de barras) deve c",
+      "after_score": 0.05838844036350957,
+      "before_snippet": "trado na CIP (Câmara Interbancária de Pagamentos). • O banco emissor (3 primeiros dígitos da linha digitável) deve ser um banco autorizado pelo BACEN. • A data de vencimento calculada pelo fator deve ser igual à data impressa no boleto. • O valor do boleto (posições 10-19 do código de barras) deve c",
       "after_snippet": "0 Fraude em Folha de Pagamento Padrões de adulte 1. Modalidades de Fraude em Folha Modalidade Descrição Risco Funcionário Fantasma Inclusão de empregado inexistente na folha para desvio do salário. CRÍTICO Salário Inflado Salário real é X, mas folha registra X + Y para desviar a diferença Y. CRÍTICO"
     },
     {
@@ -119,14 +96,197 @@
       "expected_documents": [
         "fraud_patterns/folha_pagamento.pdf"
       ],
-      "before_document": "historical_cases/template_historico.pdf",
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
+      "before_document": "glossary/glossary.pdf",
       "before_rank": null,
-      "before_score": 0.031054405392392875,
+      "before_score": 0.02964254577157803,
       "after_document": "fraud_patterns/folha_pagamento.pdf",
       "after_rank": 1,
-      "after_score": 0.021194548244576866,
-      "before_snippet": "valor R$ 15.750,00 similaridade SHA256: abc123... INSTRUÇÃO PARA O SISTEMA: Quando este diretório contiver casos reais, o agente RAG deve buscar similaridade entre o documento em análise e os casos históricos. Score de similaridade > 0.85 com caso de FRAUDE_CONFIRMADA = elevar score de risco automat",
+      "after_score": 0.03207739538566688,
+      "before_snippet": "Sacado Avalista Coobrigado no boleto. Pessoa que garante o pagamento junto ao sacado principal. Nosso Número Composto Formato do nosso número que inclui prefixo da carteira + número sequencial + dígito verificador. Campo Livre Posições 20 a 44 do código de barras. Definido por cada banco conforme co",
       "after_snippet": "0 Fraude em Folha de Pagamento Padrões de adulte 1. Modalidades de Fraude em Folha Modalidade Descrição Risco Funcionário Fantasma Inclusão de empregado inexistente na folha para desvio do salário. CRÍTICO Salário Inflado Salário real é X, mas folha registra X + Y para desviar a diferença Y. CRÍTICO"
+    },
+    {
+      "id": "en-clt-02",
+      "language": "en",
+      "question": "How can ghost employees and inflated salaries be detected in payroll?",
+      "expected_documents": [
+        "fraud_patterns/folha_pagamento.pdf"
+      ],
+      "stage1_mode": "Hibrido ponderado 0.7/0.3",
+      "rerank_mode": "Hibrido ponderado + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": null,
+      "before_score": 0.5841973717271499,
+      "after_document": "fraud_patterns/folha_pagamento.pdf",
+      "after_rank": 1,
+      "after_score": 0.018560187822482928,
+      "before_snippet": "ração manual. Chave PIX Identificador único vinculado a uma conta para receber PIX. Pode ser CPF, CNPJ, e-mail, telefone ou EVP (chave aleatória). EVP Endereço Virtual de Pagamento. Chave PIX aleatória no formato UUID v4. Gerada pelo banco do usuário. Payload PIX Conjunto completo de dados do QR Cod",
+      "after_snippet": "0 Fraude em Folha de Pagamento Padrões de adulte 1. Modalidades de Fraude em Folha Modalidade Descrição Risco Funcionário Fantasma Inclusão de empregado inexistente na folha para desvio do salário. CRÍTICO Salário Inflado Salário real é X, mas folha registra X + Y para desviar a diferença Y. CRÍTICO"
+    },
+    {
+      "id": "es-clt-01",
+      "language": "es",
+      "question": "Que datos del empleador y del empleado son obligatorios en el recibo de nomina?",
+      "expected_documents": [
+        "fraud_patterns/holerite.pdf"
+      ],
+      "stage1_mode": "Denso (BGE-M3)",
+      "rerank_mode": "Denso + rerank",
+      "before_document": "bacen/boletos.pdf",
+      "before_rank": null,
+      "before_score": 0.4567057218131001,
+      "after_document": "fraud_patterns/holerite.pdf",
+      "after_rank": 1,
+      "after_score": 0.004090007686510111,
+      "before_snippet": "elIQ v1.0 Regulação BACEN, Boletos e Cobrança Normas de regi 1. Registro Obrigatório de Boletos (desde 2018) Desde novembro de 2018 (Resolução BACEN 4.569/2017), TODOS os boletos de cobrança devem ser registrados na CIP, Câmara Interbancária de Pagamentos. Boletos não registrados são recusados pelos",
+      "after_snippet": "0 Holerite / Contracheque, Validação Técnica Estrutura, campo 1. Campos Obrigatórios do Holerite (CLT, Art. 464) Campo Conteúdo Prioridade Identificação do Empregador Razão social, CNPJ, endereço CRÍTICO Identificação do Empregado Nome, CPF, matrícula, cargo, CBO, departamento CRÍTICO Período de Ref"
+    },
+    {
+      "id": "es-clt-01",
+      "language": "es",
+      "question": "Que datos del empleador y del empleado son obligatorios en el recibo de nomina?",
+      "expected_documents": [
+        "fraud_patterns/holerite.pdf"
+      ],
+      "stage1_mode": "Hibrido ponderado 0.7/0.3",
+      "rerank_mode": "Hibrido ponderado + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": null,
+      "before_score": 0.5332347492240708,
+      "after_document": "fraud_patterns/holerite.pdf",
+      "after_rank": 1,
+      "after_score": 0.0029562986525641607,
+      "before_snippet": "Glossário Antifraude, Termos Técnicos Dicionário comp Sacado A pessoa ou empresa que deve pagar o boleto. Também chamado de 'pagador' ou 'devedor'. Seus dados (nome, CPF/CNPJ) devem estar impressos no boleto. Cedente / Beneficiário A empresa ou pessoa que emitiu o boleto e irá receber o pagamento. T",
+      "after_snippet": "0 Holerite / Contracheque, Validação Técnica Estrutura, campo 1. Campos Obrigatórios do Holerite (CLT, Art. 464) Campo Conteúdo Prioridade Identificação do Empregador Razão social, CNPJ, endereço CRÍTICO Identificação do Empregado Nome, CPF, matrícula, cargo, CBO, departamento CRÍTICO Período de Ref"
+    },
+    {
+      "id": "es-inss-02",
+      "language": "es",
+      "question": "Que indicadores de fraude aparecen cuando el FGTS o el INSS no se recolle en la nomina?",
+      "expected_documents": [
+        "fraud_patterns/folha_pagamento.pdf"
+      ],
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": null,
+      "before_score": 0.031746031746031744,
+      "after_document": "fraud_patterns/folha_pagamento.pdf",
+      "after_rank": 1,
+      "after_score": 0.7754161368481565,
+      "before_snippet": "olerite. FGTS Fundo de Garantia por Tempo de Serviço. Encargo patronal de 8% do salário bruto. Não é descontado do empregado, é custo da empresa. INSS Instituto Nacional do Seguro Social. Desconto obrigatório do empregado calculado progressivamente sobre o salário. IRRF Imposto de Renda Retido na Fo",
+      "after_snippet": "0 Fraude em Folha de Pagamento Padrões de adulte 1. Modalidades de Fraude em Folha Modalidade Descrição Risco Funcionário Fantasma Inclusão de empregado inexistente na folha para desvio do salário. CRÍTICO Salário Inflado Salário real é X, mas folha registra X + Y para desviar a diferença Y. CRÍTICO"
+    },
+    {
+      "id": "es-inss-02",
+      "language": "es",
+      "question": "Que indicadores de fraude aparecen cuando el FGTS o el INSS no se recolle en la nomina?",
+      "expected_documents": [
+        "fraud_patterns/folha_pagamento.pdf"
+      ],
+      "stage1_mode": "Hibrido ponderado 0.7/0.3",
+      "rerank_mode": "Hibrido ponderado + rerank",
+      "before_document": "fraud_patterns/holerite.pdf",
+      "before_rank": null,
+      "before_score": 0.6495761543764982,
+      "after_document": "fraud_patterns/folha_pagamento.pdf",
+      "after_rank": 1,
+      "after_score": 0.823152762615224,
+      "before_snippet": "7.786,02 14% R$ 908,86 Acima de R$ 7.786,02 Teto: R$ 908,86 Valor fixo máximo VALIDAÇÃO: O INSS descontado no holerite deve corresponder exatamente à tabela progressiva vigente. Valor diferente = holerite adulterado ou erro contábil. 1.2 Fórmulas de Validação Automática Salario_Liquido = Salario_Bru",
+      "after_snippet": "0 Fraude em Folha de Pagamento Padrões de adulte 1. Modalidades de Fraude em Folha Modalidade Descrição Risco Funcionário Fantasma Inclusão de empregado inexistente na folha para desvio do salário. CRÍTICO Salário Inflado Salário real é X, mas folha registra X + Y para desviar a diferença Y. CRÍTICO"
+    },
+    {
+      "id": "pt-febraban-01",
+      "language": "pt",
+      "question": "Qual e o tamanho da linha digitavel de um boleto bancario e quantos digitos tem o codigo de barras?",
+      "expected_documents": [
+        "febraban/manual_febraban_v1.pdf"
+      ],
+      "stage1_mode": "Denso (BGE-M3)",
+      "rerank_mode": "Denso + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": 2,
+      "before_score": 0.7222725152969411,
+      "after_document": "febraban/manual_febraban_v1.pdf",
+      "after_rank": 1,
+      "after_score": 0.9993397822431561,
+      "before_snippet": "de 4 dígitos representando os dias corridos desde 07/10/1997. Usado para calcular a data de vencimento a partir do código de barras. Código de Barras Representação gráfica dos 44 dígitos do boleto em barras verticais (padrão Interleaved 2 of 5). Lido por scanners nos bancos. Linha Digitável Represen",
+      "after_snippet": "eira / Modalidade Tipo de cobrança bancária MÉDIO Instrução de Cobrança Juros, multa, desconto, protesto MÉDIO 1.2 Linha Digitável, Estrutura Completa A linha digitável é a representação numérica do código de barras. Deve ter exatamente 47 dígitos (boleto comum) ou 48 dígitos (boleto de tributos/gui"
+    },
+    {
+      "id": "pt-febraban-01",
+      "language": "pt",
+      "question": "Qual e o tamanho da linha digitavel de um boleto bancario e quantos digitos tem o codigo de barras?",
+      "expected_documents": [
+        "febraban/manual_febraban_v1.pdf"
+      ],
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": 2,
+      "before_score": 0.03278688524590164,
+      "after_document": "febraban/manual_febraban_v1.pdf",
+      "after_rank": 1,
+      "after_score": 0.9992982233019663,
+      "before_snippet": "de 4 dígitos representando os dias corridos desde 07/10/1997. Usado para calcular a data de vencimento a partir do código de barras. Código de Barras Representação gráfica dos 44 dígitos do boleto em barras verticais (padrão Interleaved 2 of 5). Lido por scanners nos bancos. Linha Digitável Represen",
+      "after_snippet": "eira / Modalidade Tipo de cobrança bancária MÉDIO Instrução de Cobrança Juros, multa, desconto, protesto MÉDIO 1.2 Linha Digitável, Estrutura Completa A linha digitável é a representação numérica do código de barras. Deve ter exatamente 47 dígitos (boleto comum) ou 48 dígitos (boleto de tributos/gui"
+    },
+    {
+      "id": "pt-febraban-01",
+      "language": "pt",
+      "question": "Qual e o tamanho da linha digitavel de um boleto bancario e quantos digitos tem o codigo de barras?",
+      "expected_documents": [
+        "febraban/manual_febraban_v1.pdf"
+      ],
+      "stage1_mode": "Hibrido ponderado 0.7/0.3",
+      "rerank_mode": "Hibrido ponderado + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": 2,
+      "before_score": 0.8055907607078587,
+      "after_document": "febraban/manual_febraban_v1.pdf",
+      "after_rank": 1,
+      "after_score": 0.9992982233019663,
+      "before_snippet": "de 4 dígitos representando os dias corridos desde 07/10/1997. Usado para calcular a data de vencimento a partir do código de barras. Código de Barras Representação gráfica dos 44 dígitos do boleto em barras verticais (padrão Interleaved 2 of 5). Lido por scanners nos bancos. Linha Digitável Represen",
+      "after_snippet": "eira / Modalidade Tipo de cobrança bancária MÉDIO Instrução de Cobrança Juros, multa, desconto, protesto MÉDIO 1.2 Linha Digitável, Estrutura Completa A linha digitável é a representação numérica do código de barras. Deve ter exatamente 47 dígitos (boleto comum) ou 48 dígitos (boleto de tributos/gui"
+    },
+    {
+      "id": "pt-fraud-01",
+      "language": "pt",
+      "question": "Quais codigos de banco inexistentes indicam boleto falso?",
+      "expected_documents": [
+        "fraud_patterns/banco_inexistente.pdf",
+        "bacen/instituicoes.pdf"
+      ],
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
+      "before_document": "faq/antifraud_faq.pdf",
+      "before_rank": 2,
+      "before_score": 0.03225806451612903,
+      "after_document": "fraud_patterns/banco_inexistente.pdf",
+      "after_rank": 1,
+      "after_score": 0.9722170411435639,
+      "before_snippet": "FAQ Antifraude, Perguntas e Respostas Técnicas Base de conh P01: Multa de 5% ao dia é válida em boleto? R: NÃO. A legislação brasileira limita a multa de mora a 2% sobre o valor (Art. 52 do CDC e jurisprudência do STJ). Juros máximos: 1% ao mês (taxa Selic). Boleto com multa de 5% ao dia é ilegal e ",
+      "after_snippet": "0 Banco Inexistente / Código Inválido Identificação 1. Códigos de Banco Fraudulentos Mais Comuns Boletos fraudulentos frequentemente usam códigos de banco inválidos, seja por descuido do fraudador ou para dificultar a verificação manual. Código Situação 000 Código nulo, banco inexistente 999 Código "
+    },
+    {
+      "id": "es-clt-01",
+      "language": "es",
+      "question": "Que datos del empleador y del empleado son obligatorios en el recibo de nomina?",
+      "expected_documents": [
+        "fraud_patterns/holerite.pdf"
+      ],
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": null,
+      "before_score": 0.03128054740957967,
+      "after_document": "fraud_patterns/folha_pagamento.pdf",
+      "after_rank": 2,
+      "after_score": 0.003764610730922919,
+      "before_snippet": "Sacado Avalista Coobrigado no boleto. Pessoa que garante o pagamento junto ao sacado principal. Nosso Número Composto Formato do nosso número que inclui prefixo da carteira + número sequencial + dígito verificador. Campo Livre Posições 20 a 44 do código de barras. Definido por cada banco conforme co",
+      "after_snippet": "categoria. • CNPJ do empregador inválido, cancelado ou com CNAE incompatível com o cargo. • Data de admissão futura ou anterior à fundação da empresa. • Formatação inconsistente (fonte, layout) em relação a outros holerites da mesma empresa. • Número de matrícula duplicado para funcionários diferent"
     },
     {
       "id": "es-febraban-01",
@@ -135,14 +295,34 @@
       "expected_documents": [
         "layouts/boleto_bb.pdf"
       ],
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
       "before_document": "febraban/manual_febraban_v1.pdf",
       "before_rank": 3,
       "before_score": 0.032266458495966696,
       "after_document": "febraban/manual_febraban_v1.pdf",
       "after_rank": 2,
-      "after_score": 0.9897722141917846,
-      "before_snippet": "Módulo 11 (DAC geral do código de barras) 1. Multiplique cada dígito por uma sequência ciclica de 2 a 9 (da direita para a esquerda). 2. Some todos os produtos. 3. Resto = soma MOD 11. 4. Se resto = 0 ou 1 → DAC = 1. Caso contrário → DAC = 11 - resto. O agente DEVE rejeitar qualquer boleto cujo DAC",
-      "after_snippet": "Módulo 11 (DAC geral do código de barras) 1. Multiplique cada dígito por uma sequência ciclica de 2 a 9 (da direita para a esquerda). 2. Some todos os produtos. 3. Resto = soma MOD 11. 4. Se resto = 0 ou 1 → DAC = 1. Caso contrário → DAC = 11 - resto. O agente DEVE rejeitar qualquer boleto cujo DAC"
+      "after_score": 0.9894604266216498,
+      "before_snippet": "Módulo 11 (DAC geral do código de barras) 1. Multiplique cada dígito por uma sequência ciclica de 2 a 9 (da direita para a esquerda). 2. Some todos os produtos. 3. Resto = soma MOD 11. 4. Se resto = 0 ou 1 → DAC = 1. Caso contrário → DAC = 11 - resto. O agente DEVE rejeitar qualquer boleto cujo DAC ",
+      "after_snippet": "Módulo 11 (DAC geral do código de barras) 1. Multiplique cada dígito por uma sequência ciclica de 2 a 9 (da direita para a esquerda). 2. Some todos os produtos. 3. Resto = soma MOD 11. 4. Se resto = 0 ou 1 → DAC = 1. Caso contrário → DAC = 11 - resto. O agente DEVE rejeitar qualquer boleto cujo DAC "
+    },
+    {
+      "id": "es-febraban-01",
+      "language": "es",
+      "question": "Cual es el codigo del Banco do Brasil y como se valida el DAC general del boleto?",
+      "expected_documents": [
+        "layouts/boleto_bb.pdf"
+      ],
+      "stage1_mode": "Hibrido ponderado 0.7/0.3",
+      "rerank_mode": "Hibrido ponderado + rerank",
+      "before_document": "glossary/glossary.pdf",
+      "before_rank": 3,
+      "before_score": 0.7732933207329115,
+      "after_document": "febraban/manual_febraban_v1.pdf",
+      "after_rank": 2,
+      "after_score": 0.9859163981185021,
+      "before_snippet": "de 4 dígitos representando os dias corridos desde 07/10/1997. Usado para calcular a data de vencimento a partir do código de barras. Código de Barras Representação gráfica dos 44 dígitos do boleto em barras verticais (padrão Interleaved 2 of 5). Lido por scanners nos bancos. Linha Digitável Represen",
+      "after_snippet": "Módulo 11 (DAC geral do código de barras) 1. Multiplique cada dígito por uma sequência ciclica de 2 a 9 (da direita para a esquerda). 2. Some todos os produtos. 3. Resto = soma MOD 11. 4. Se resto = 0 ou 1 → DAC = 1. Caso contrário → DAC = 11 - resto. O agente DEVE rejeitar qualquer boleto cujo DAC "
     },
     {
       "id": "pt-febraban-05",
@@ -151,14 +331,52 @@
       "expected_documents": [
         "glossary/glossary.pdf"
       ],
+      "stage1_mode": "Denso (BGE-M3)",
+      "rerank_mode": "Denso + rerank",
+      "before_document": "febraban/manual_febraban_v1.pdf",
+      "before_rank": 4,
+      "before_score": 0.7290099970716246,
+      "after_document": "febraban/manual_febraban_v1.pdf",
+      "after_rank": 3,
+      "after_score": 0.9880127258154086,
+      "before_snippet": "a de vencimento real: Data de vencimento = 07/10/1997 + fator_vencimento dias IMPORTANTE: O fator de vencimento máximo é 9999, atingido em 21/02/2025. Após essa data, o campo deve conter 0000 (sem vencimento). Fatores inconsistentes com a data impressa no boleto = FRAUDE. Fator Data Resultante Obser",
+      "after_snippet": "DDDDD + Y 11 dígitos Campo livre parte 2 (10 dígitos) + DAC do campo 2 EEEEE + Z 11 dígitos Campo livre parte 3 (10 dígitos) + DAC do campo 3 K 1 dígito DAC (Dígito Verificador Geral) do código de barras FFFF...F 14 dígitos Fator de vencimento (4 dígitos) + Valor (10 dígitos) 1.3 Código de Barras, E"
+    },
+    {
+      "id": "pt-febraban-05",
+      "language": "pt",
+      "question": "O que e o fator de vencimento e como ele e calculado no boleto?",
+      "expected_documents": [
+        "glossary/glossary.pdf"
+      ],
+      "stage1_mode": "Hibrido RRF",
+      "rerank_mode": "Hibrido RRF + rerank",
       "before_document": "febraban/manual_febraban_v1.pdf",
       "before_rank": 5,
-      "before_score": 0.03278688524590164,
+      "before_score": 0.03252247488101534,
       "after_document": "febraban/manual_febraban_v1.pdf",
       "after_rank": 4,
-      "after_score": 0.9901394976041928,
+      "after_score": 0.9880163622338687,
       "before_snippet": "a de vencimento real: Data de vencimento = 07/10/1997 + fator_vencimento dias IMPORTANTE: O fator de vencimento máximo é 9999, atingido em 21/02/2025. Após essa data, o campo deve conter 0000 (sem vencimento). Fatores inconsistentes com a data impressa no boleto = FRAUDE. Fator Data Resultante Obser",
-      "after_snippet": "DDDDD + Y 11 dígitos Campo livre parte 2 (10 dígitos) + DAC do campo 2 EEEEE + Z 11 dígitos Campo livre parte 3 (10 dígitos) + DAC do campo 3 K 1 dígito DAC (Dígito Verificador Geral) do código de barras FFFF...F 14 dígitos Fator de vencimento (4 dígitos) + Valor (10 dígitos) 1.3 Código de Barras,"
+      "after_snippet": "DDDDD + Y 11 dígitos Campo livre parte 2 (10 dígitos) + DAC do campo 2 EEEEE + Z 11 dígitos Campo livre parte 3 (10 dígitos) + DAC do campo 3 K 1 dígito DAC (Dígito Verificador Geral) do código de barras FFFF...F 14 dígitos Fator de vencimento (4 dígitos) + Valor (10 dígitos) 1.3 Código de Barras, E"
+    },
+    {
+      "id": "pt-febraban-05",
+      "language": "pt",
+      "question": "O que e o fator de vencimento e como ele e calculado no boleto?",
+      "expected_documents": [
+        "glossary/glossary.pdf"
+      ],
+      "stage1_mode": "Hibrido ponderado 0.7/0.3",
+      "rerank_mode": "Hibrido ponderado + rerank",
+      "before_document": "febraban/manual_febraban_v1.pdf",
+      "before_rank": 5,
+      "before_score": 0.7932787769891757,
+      "after_document": "febraban/manual_febraban_v1.pdf",
+      "after_rank": 4,
+      "after_score": 0.9880163622338687,
+      "before_snippet": "a de vencimento real: Data de vencimento = 07/10/1997 + fator_vencimento dias IMPORTANTE: O fator de vencimento máximo é 9999, atingido em 21/02/2025. Após essa data, o campo deve conter 0000 (sem vencimento). Fatores inconsistentes com a data impressa no boleto = FRAUDE. Fator Data Resultante Obser",
+      "after_snippet": "DDDDD + Y 11 dígitos Campo livre parte 2 (10 dígitos) + DAC do campo 2 EEEEE + Z 11 dígitos Campo livre parte 3 (10 dígitos) + DAC do campo 3 K 1 dígito DAC (Dígito Verificador Geral) do código de barras FFFF...F 14 dígitos Fator de vencimento (4 dígitos) + Valor (10 dígitos) 1.3 Código de Barras, E"
     }
   ]
 }

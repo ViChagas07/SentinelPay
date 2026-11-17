@@ -9,6 +9,7 @@ from paysentineliq.domain.knowledge_metadata import (
     compute_document_hash,
     extract_metadata,
 )
+from paysentineliq.infrastructure.rag.text_cleanup import repair_text
 
 _ALLOWED_SUFFIXES = {".pdf", ".md"}
 
@@ -88,12 +89,12 @@ class KnowledgeFileSource:
         path: Path,
     ) -> tuple[tuple[SourcePage, ...], Literal["pdf", "markdown"]]:
         if path.suffix.lower() == ".md":
-            text = path.read_text(encoding="utf-8", errors="replace")
+            text = repair_text(path.read_text(encoding="utf-8", errors="replace"))
             return (SourcePage(number=1, text=text),), "markdown"
         document = pymupdf.open(path)
         try:
             pages = tuple(
-                SourcePage(number=index, text=page.get_text())
+                SourcePage(number=index, text=repair_text(page.get_text()))
                 for index, page in enumerate(document, start=1)
             )
         finally:

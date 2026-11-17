@@ -6,6 +6,7 @@ import os
 import platform
 import statistics
 import sys
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from math import ceil
@@ -19,8 +20,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend" / "src"))
 
+from paysentineliq.application.ports.rag import RagContextPort  # noqa: E402
 from paysentineliq.application.queries.hybrid_retrieval import HybridRetriever  # noqa: E402
-from paysentineliq.application.queries.knowledge_retrieval import KnowledgeQuery  # noqa: E402
+from paysentineliq.application.queries.knowledge_retrieval import (  # noqa: E402
+    KnowledgeQuery,
+    KnowledgeRetrievalResult,
+    RetrievedPassage,
+    citation_from_chunk,
+)
 from paysentineliq.application.queries.two_stage_retrieval import TwoStageRetriever  # noqa: E402
 from paysentineliq.domain.knowledge import KnowledgeFilter  # noqa: E402
 from paysentineliq.infrastructure.config import Settings  # noqa: E402
@@ -47,6 +54,54 @@ class Retrieved:
     document_key: str
     content: str
     score: float
+
+
+@dataclass(frozen=True)
+class ModeSpec:
+    name: str
+    retrieve: Callable[[KnowledgeQuery], Awaitable[KnowledgeRetrievalResult]]
+    stage1_name: str | None = None
+
+
+class DenseStage1:
+    def __init__(
+        self,
+        embedder: BgeM3Embedder,
+        store: PGVectorHybridStore,
+        *,
+        default_limit: int,
+    ) -> None:
+        self._embedder = embedder
+        self._store = store
+        self._default_limit = default_limit
+
+    async def retrieve(self, query: KnowledgeQuery) -> KnowledgeRetrievalResult:
+        limit = query.limit or self._default_limit
+        vectors = await self._embedder.embed((query.text,))
+        chunks = await self._store.dense_query(
+            vectors[0],
+            limit=limit,
+            filters=KnowledgeFilter(
+                categories=query.categories,
+                as_of=query.as_of,
+            ),
+        )
+        passages = tuple(
+            RetrievedPassage(
+                content=chunk.content,
+                citation=citation_from_chunk(chunk),
+                score=chunk.score,
+                dense_score=chunk.score,
+                fused_score=chunk.score,
+            )
+            for chunk in chunks
+        )
+        return KnowledgeRetrievalResult(
+            passages=passages,
+            rag_unavailable=False,
+            reason=None,
+            retrieval_mode="dense",
+        )
 
 
 @dataclass
@@ -170,7 +225,7 @@ def build_result_markdown(
     lines = [
         "# Resultados da avaliacao de retrieval",
         "",
-        "Avaliacao local em CPU dos tres modos de retrieval planejados na P17.1.",
+        "Avaliacao local em CPU dos seis modos de retrieval planejados na P17.1.",
         "",
         "## Configuracao",
         "",
@@ -183,6 +238,7 @@ def build_result_markdown(
             f"clt={domains['clt']}, fraud={domains['fraud']}"
         ),
         f"- Top-K do estagio 1: {settings.retrieval_top_k}",
+        "- Fusao ponderada: dense=0.7, sparse=0.3",
         "- K da metrica: 5 (Recall@5 e MRR)",
         "- Top-N do reranker na avaliacao: 5 (producao usa RERANK_TOP_N=4)",
         f"- Timeout do reranker: {rerank_timeout:g} s",
@@ -222,13 +278,15 @@ def build_result_markdown(
                     f"Documentos esperados: {', '.join(example['expected_documents'])}",
                     "",
                     (
-                        f"Estagio 1: top1=`{example['before_document']}` "
+                        f"Estagio 1 ({example['stage1_mode']}): "
+                        f"top1=`{example['before_document']}` "
                         f"(rank esperado={example['before_rank']}, "
                         f"score={example['before_score']:.4f})"
                     ),
                     "",
                     (
-                        f"Depois do rerank: top1=`{example['after_document']}` "
+                        f"Depois ({example['rerank_mode']}): "
+                        f"top1=`{example['after_document']}` "
                         f"(rank esperado={example['after_rank']}, "
                         f"score={example['after_score']:.4f})"
                     ),
@@ -257,13 +315,23 @@ def build_result_markdown(
             "poetry -C backend run python ../scripts/eval_retrieval.py",
             "```",
             "",
-            "## Limitacoes",
+            "## Limitacoes e nao validado",
             "",
             "- 30 perguntas e 21 documentos: os numeros sao indicativos, "
             "nao um benchmark estatistico.",
             "- Os modelos usados sao conversoes int8 da comunidade para ONNX "
             "(`onnx-community/bge-m3-ONNX` e `onnx-community/bge-reranker-v2-m3-ONNX`), "
             "com os pesos BAAI e o `sparse_linear.pt` oficial.",
+            "- A conversao oficial pelo `warmup_models.py` e o fallback PyTorch CPU "
+            "nao foram exercitados neste eval.",
+            "- O benchmark de latencia usa 3 consultas; p50/p95 sao indicativos e "
+            "nao substituem uma medicao maior.",
+            "- O modelo fp32 do benchmark e uma conversao da comunidade; o caminho "
+            "oficial fp32/quantizacao propria NAO VALIDADO.",
+            "- A escolha de max_length usa cobertura de tokens; a qualidade por "
+            "max_length nao foi reavaliada individualmente.",
+            "- Pinecone real com dimensao 1024 e metrica `dotproduct` NAO VALIDADO.",
+            "- `RemoteReranker` real, autenticacao e disponibilidade do provedor NAO VALIDADOS.",
             "- A avaliacao usa top-N 5 para calcular Recall@5; a producao entrega top-N 4 ao Qwen.",
             "- Latencia de CPU varia com a maquina, carga do sistema e comprimento das consultas.",
             "- O dataset cobre FEBRABAN, INSS, CLT e padroes de fraude, mas nao substitui "
@@ -330,95 +398,100 @@ async def run(args: argparse.Namespace) -> int:
         print(f"hybrid chunks: {count}")
 
         store = PGVectorHybridStore(factory)
-        stage1 = HybridRetriever(
+        dense_stage1 = DenseStage1(
+            embedder,
+            store,
+            default_limit=settings.retrieval_top_k,
+        )
+        rrf_stage1 = HybridRetriever(
             embedder,
             embedder,
             store,
             hybrid_embedder=embedder,
             default_limit=settings.retrieval_top_k,
-            fusion=settings.hybrid_fusion,
+            fusion="rrf",
             rrf_k=settings.hybrid_rrf_k,
-            dense_weight=settings.hybrid_dense_weight,
-            sparse_weight=settings.hybrid_sparse_weight,
+        )
+        weighted_stage1 = HybridRetriever(
+            embedder,
+            embedder,
+            store,
+            hybrid_embedder=embedder,
+            default_limit=settings.retrieval_top_k,
+            fusion="weighted",
+            dense_weight=0.7,
+            sparse_weight=0.3,
         )
         rerank_timeout = (
             args.rerank_timeout
             if args.rerank_timeout is not None
             else settings.rerank_timeout_seconds
         )
-        rerank = TwoStageRetriever(
-            stage1,
-            reranker=reranker,
-            rerank_enabled=True,
-            top_n=args.eval_k,
-            timeout_seconds=rerank_timeout,
+
+        def reranked(stage1: RagContextPort) -> TwoStageRetriever:
+            return TwoStageRetriever(
+                stage1,
+                reranker=reranker,
+                rerank_enabled=True,
+                top_n=args.eval_k,
+                timeout_seconds=rerank_timeout,
+            )
+
+        dense_rerank = reranked(dense_stage1)
+        rrf_rerank = reranked(rrf_stage1)
+        weighted_rerank = reranked(weighted_stage1)
+        modes = (
+            ModeSpec("Denso (BGE-M3)", dense_stage1.retrieve),
+            ModeSpec("Denso + rerank", dense_rerank.retrieve, "Denso (BGE-M3)"),
+            ModeSpec("Hibrido RRF", rrf_stage1.retrieve),
+            ModeSpec(
+                "Hibrido ponderado 0.7/0.3",
+                weighted_stage1.retrieve,
+            ),
+            ModeSpec("Hibrido RRF + rerank", rrf_rerank.retrieve, "Hibrido RRF"),
+            ModeSpec(
+                "Hibrido ponderado + rerank",
+                weighted_rerank.retrieve,
+                "Hibrido ponderado 0.7/0.3",
+            ),
         )
-
-        async def dense(item: EvalItem) -> list[Retrieved]:
-            dense_vector = await embedder.embed((item.question,))
-            chunks = await store.dense_query(
-                dense_vector[0],
-                limit=settings.retrieval_top_k,
-                filters=KnowledgeFilter(),
-            )
-            return [
-                Retrieved(
-                    document_key=chunk.document_key,
-                    content=chunk.content,
-                    score=chunk.score,
-                )
-                for chunk in chunks
-            ]
-
-        async def hybrid(item: EvalItem) -> list[Retrieved]:
-            result = await stage1.retrieve(
-                KnowledgeQuery(
-                    text=item.question,
-                    limit=settings.retrieval_top_k,
-                ),
-            )
-            return to_retrieved(list(result.passages))
-
-        async def reranked(item: EvalItem) -> list[Retrieved]:
-            result = await rerank.retrieve(
-                KnowledgeQuery(
-                    text=item.question,
-                    limit=settings.retrieval_top_k,
-                ),
-            )
-            return to_retrieved(list(result.passages))
 
         print("warmup")
-        await dense(items[0])
-        await hybrid(items[0])
-        await reranked(items[0])
+        for spec in modes:
+            await spec.retrieve(
+                KnowledgeQuery(
+                    text=items[0].question,
+                    limit=settings.retrieval_top_k,
+                ),
+            )
 
-        modes = (
-            ("Denso (BGE-M3)", dense),
-            ("Hibrido (RRF)", hybrid),
-            ("Hibrido + rerank", reranked),
-        )
         runs: list[ModeRun] = []
-        hybrid_by_id: dict[str, list[str]] = {}
-        reranked_by_id: dict[str, list[str]] = {}
-        hybrid_scores: dict[str, float] = {}
-        rerank_scores: dict[str, float] = {}
-        hybrid_content: dict[str, str] = {}
-        rerank_content: dict[str, str] = {}
-        for name, function in modes:
+        documents_by_mode: dict[str, dict[str, list[str]]] = {}
+        scores_by_mode: dict[str, dict[str, float]] = {}
+        content_by_mode: dict[str, dict[str, str]] = {}
+        for spec in modes:
             run_result = ModeRun(
-                name=name,
+                name=spec.name,
                 recalls=[],
                 rrs=[],
                 latencies_ms=[],
                 per_query=[],
                 corrections=[],
             )
-            print(f"running {name}")
+            documents_by_mode[spec.name] = {}
+            scores_by_mode[spec.name] = {}
+            content_by_mode[spec.name] = {}
+            print(f"running {spec.name}")
             for item in items:
                 started = perf_counter()
-                retrieved = await function(item)
+                result = await spec.retrieve(
+                    KnowledgeQuery(
+                        text=item.question,
+                        limit=settings.retrieval_top_k,
+                    ),
+                )
                 latency_ms = (perf_counter() - started) * 1000.0
+                retrieved = to_retrieved(list(result.passages))
                 recall, reciprocal_rank, documents = score_result(
                     item,
                     retrieved,
@@ -434,64 +507,84 @@ async def run(args: argparse.Namespace) -> int:
                         "recall": recall,
                         "rr": reciprocal_rank,
                         "latency_ms": latency_ms,
+                        "retrieval_mode": result.retrieval_mode,
+                        "rerank_applied": result.rerank_applied,
+                        "rerank_fallback": result.rerank_fallback,
                     },
                 )
-                if name == "Hibrido (RRF)":
-                    hybrid_by_id[item.id] = documents[: args.eval_k]
-                    hybrid_scores[item.id] = retrieved[0].score if retrieved else 0.0
-                    hybrid_content[item.id] = retrieved[0].content if retrieved else ""
-                elif name == "Hibrido + rerank":
-                    reranked_by_id[item.id] = documents[: args.eval_k]
-                    rerank_scores[item.id] = retrieved[0].score if retrieved else 0.0
-                    rerank_content[item.id] = retrieved[0].content if retrieved else ""
+                documents_by_mode[spec.name][item.id] = documents[: args.eval_k]
+                scores_by_mode[spec.name][item.id] = retrieved[0].score if retrieved else 0.0
+                content_by_mode[spec.name][item.id] = retrieved[0].content if retrieved else ""
             runs.append(run_result)
 
         corrections: list[dict[str, object]] = []
-        for item in items:
-            before_docs = hybrid_by_id.get(item.id, [])
-            after_docs = reranked_by_id.get(item.id, [])
-            before_rank = first_expected_rank(item, before_docs)
-            after_rank = first_expected_rank(item, after_docs)
-            before_top = before_docs[0] if before_docs else ""
-            after_top = after_docs[0] if after_docs else ""
-            if not after_rank:
+        for spec in modes:
+            if spec.stage1_name is None:
                 continue
-            top_changed_to_expected = (
-                after_top in item.expected_documents and before_top not in item.expected_documents
-            )
-            improved = before_rank is None or after_rank < before_rank or top_changed_to_expected
-            if not improved:
-                continue
-            corrections.append(
-                {
-                    "id": item.id,
-                    "language": item.language,
-                    "question": item.question,
-                    "expected_documents": item.expected_documents,
-                    "before_document": before_top,
-                    "before_rank": before_rank,
-                    "before_score": hybrid_scores.get(item.id, 0.0),
-                    "after_document": after_top,
-                    "after_rank": after_rank,
-                    "after_score": rerank_scores.get(item.id, 0.0),
-                    "before_snippet": clean_text(
-                        hybrid_content.get(item.id, ""),
-                    )[:300],
-                    "after_snippet": clean_text(
-                        rerank_content.get(item.id, ""),
-                    )[:300],
-                },
-            )
+            before_mode = spec.stage1_name
+            for item in items:
+                before_docs = documents_by_mode[before_mode].get(item.id, [])
+                after_docs = documents_by_mode[spec.name].get(item.id, [])
+                before_rank = first_expected_rank(item, before_docs)
+                after_rank = first_expected_rank(item, after_docs)
+                before_top = before_docs[0] if before_docs else ""
+                after_top = after_docs[0] if after_docs else ""
+                if not after_rank:
+                    continue
+                top_changed_to_expected = (
+                    after_top in item.expected_documents
+                    and before_top not in item.expected_documents
+                )
+                improved = (
+                    before_rank is None or after_rank < before_rank or top_changed_to_expected
+                )
+                if not improved:
+                    continue
+                corrections.append(
+                    {
+                        "id": item.id,
+                        "language": item.language,
+                        "question": item.question,
+                        "expected_documents": item.expected_documents,
+                        "stage1_mode": before_mode,
+                        "rerank_mode": spec.name,
+                        "before_document": before_top,
+                        "before_rank": before_rank,
+                        "before_score": scores_by_mode[before_mode].get(item.id, 0.0),
+                        "after_document": after_top,
+                        "after_rank": after_rank,
+                        "after_score": scores_by_mode[spec.name].get(item.id, 0.0),
+                        "before_snippet": clean_text(
+                            content_by_mode[before_mode].get(item.id, ""),
+                        )[:300],
+                        "after_snippet": clean_text(
+                            content_by_mode[spec.name].get(item.id, ""),
+                        )[:300],
+                    },
+                )
         corrections.sort(
             key=lambda item: (
                 0 if item["after_rank"] == 1 and item["before_rank"] != 1 else 1,
                 item["after_rank"] or 99,
+                str(item["id"]),
             ),
         )
-
-        examples = corrections[:3]
+        seen_items: set[str] = set()
+        examples: list[dict[str, object]] = []
+        for correction in corrections:
+            item_id = str(correction["id"])
+            if item_id in seen_items:
+                continue
+            seen_items.add(item_id)
+            examples.append(correction)
+            if len(examples) == 3:
+                break
         for run_result in runs:
-            if run_result.name == "Hibrido + rerank":
+            if run_result.name in {
+                "Denso + rerank",
+                "Hibrido RRF + rerank",
+                "Hibrido ponderado + rerank",
+            }:
                 run_result.corrections = corrections
         try:
             display_model_dir = model_root.relative_to(ROOT)

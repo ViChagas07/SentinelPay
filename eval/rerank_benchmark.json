@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-11-17T04:27:09.136034+00:00",
+  "queries": [
+    "pt-febraban-01",
+    "es-febraban-01",
+    "en-inss-02"
+  ],
+  "candidate_recall": {
+    "10": 0.9666666666666667,
+    "15": 0.9666666666666667,
+    "25": 1.0
+  },
+  "truncation_coverage": {
+    "256": 0.30933333333333335,
+    "384": 0.976,
+    "512": 1.0
+  },
+  "latency": [
+    {
+      "precision": "int8",
+      "max_length": 256,
+      "k": 10,
+      "p50_ms": 3057.4016999999003,
+      "p95_ms": 3240.86460000035,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 256,
+      "k": 15,
+      "p50_ms": 4662.273199999618,
+      "p95_ms": 4734.130900000309,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 256,
+      "k": 25,
+      "p50_ms": 7438.860600001135,
+      "p95_ms": 7613.033199999336,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 384,
+      "k": 10,
+      "p50_ms": 5372.143700000379,
+      "p95_ms": 5450.138000000152,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 384,
+      "k": 15,
+      "p50_ms": 8233.790300000692,
+      "p95_ms": 8236.629899998661,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 384,
+      "k": 25,
+      "p50_ms": 13220.49330000118,
+      "p95_ms": 13611.18820000047,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 512,
+      "k": 10,
+      "p50_ms": 5243.280700000469,
+      "p95_ms": 5492.5845000016125,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 512,
+      "k": 15,
+      "p50_ms": 7789.962799999557,
+      "p95_ms": 7963.982999999644,
+      "queries": 3
+    },
+    {
+      "precision": "int8",
+      "max_length": 512,
+      "k": 25,
+      "p50_ms": 12570.10050000099,
+      "p95_ms": 13233.896099998674,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 256,
+      "k": 10,
+      "p50_ms": 5676.395799999227,
+      "p95_ms": 5799.714499999027,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 256,
+      "k": 15,
+      "p50_ms": 8317.373099998804,
+      "p95_ms": 8937.512800001059,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 256,
+      "k": 25,
+      "p50_ms": 13340.811300000496,
+      "p95_ms": 13808.339699999124,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 384,
+      "k": 10,
+      "p50_ms": 8532.071499999802,
+      "p95_ms": 8655.256000000008,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 384,
+      "k": 15,
+      "p50_ms": 12745.821200000137,
+      "p95_ms": 12944.88530000126,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 384,
+      "k": 25,
+      "p50_ms": 20591.501799999605,
+      "p95_ms": 21251.512800001365,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 512,
+      "k": 10,
+      "p50_ms": 8912.722799999756,
+      "p95_ms": 8958.691900001213,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 512,
+      "k": 15,
+      "p50_ms": 13065.441799999462,
+      "p95_ms": 13387.068,
+      "queries": 3
+    },
+    {
+      "precision": "fp32",
+      "max_length": 512,
+      "k": 25,
+      "p50_ms": 21066.99050000134,
+      "p95_ms": 21939.28650000089,
+      "queries": 3
+    }
+  ],
+  "recommendation": {
+    "precision": "int8",
+    "max_length": 512,
+    "k": 25,
+    "p50_ms": 12570.10050000099,
+    "p95_ms": 13233.896099998674,
+    "rationale": "int8 pelo custo e pela regra de CPU; K escolhido como o menor com recall de candidatos a no maximo 1 ponto do melhor; entre os max_length com cobertura de tokens >= 95%, escolhido o de menor p50 (512)."
+  }
+}

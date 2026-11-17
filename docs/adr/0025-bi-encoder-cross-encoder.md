@@ -32,6 +32,35 @@ Dataset: 30 perguntas, 10 por idioma, cobrindo FEBRABAN, INSS, CLT e padroes de 
 
 Detalhes, consultas e trechos em `eval/RESULTS.md`.
 
+### Segunda rodada (ETAPA E)
+Depois do reparo de extracao e da reindexacao, o eval passou a comparar seis modos. O conjunto e o mesmo de 30 perguntas, top-K 25, top-N 5 para a metrica e CPU int8:
+
+| Modo | Recall@5 | MRR | p50 | p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Denso BGE-M3 | 0,9333 | 0,8917 | 90,11 ms | 96,16 ms |
+| Denso + rerank | 0,9667 | 0,9611 | 14.244,38 ms | 15.180,27 ms |
+| Hibrido RRF | 0,8667 | 0,8011 | 84,40 ms | 457,67 ms |
+| Hibrido ponderado 0,7/0,3 | 0,8667 | 0,8344 | 84,54 ms | 92,34 ms |
+| Hibrido RRF + rerank | 0,9667 | 0,9417 | 12.814,01 ms | 14.333,89 ms |
+| Hibrido ponderado + rerank | 0,9667 | 0,9583 | 13.015,21 ms | 13.580,81 ms |
+
+Achados:
+- O hibrido RRF continuou abaixo do denso no top-5, confirmando o resultado da primeira rodada. A fusao ponderada 0,7/0,3 melhorou o MRR do estagio 1 de 0,8011 para 0,8344, sem mudar o Recall@5.
+- Rerankar o denso deu o melhor MRR (0,9611), mas com o maior p50 (14,2 s). O hibrido ponderado + rerank ficou proximo (0,9583) com p50 menor (13,0 s).
+- O ganho de MRR do rerank sobre o estagio 1 foi grande: +0,127 no ponderado e +0,141 no RRF. O rerank continua sendo o estagio que define a precisao do topo.
+- A extracao dos PDFs nao tinha mojibake real na camada de texto; o defeito visivel era encoding dos artefatos. A normalizeacao removeu 78 travessoes longos e 10 medios, e a reindexacao passou de 56 para 53 chunks por causa dos limites de chunk.
+
+### Benchmark de K, max_length e precisao (ETAPA E)
+O benchmark usou 3 consultas, candidatos top-25 do RRF, e mediu apenas o rerank em CPU. A tabela completa, com 18 configuracoes, esta em `eval/RESULTS.md`.
+
+- Recall de candidatos do estagio 1: K=10 em 0,9667, K=15 em 0,9667 e K=25 em 1,0000. Reduzir K perde documentos esperados, entao K=25 foi mantido.
+- Cobertura de tokens dos pares: max_length 256 cobre 30,93%, 384 cobre 97,60% e 512 cobre 100%.
+- Latencia int8 com K=25: 256 em 7.438,86 ms, 384 em 13.220,49 ms e 512 em 12.570,10 ms. A variacao de 384/512 esta dentro do ruido de uma medicao curta, mas 512 garante cobertura total.
+- Latencia fp32 com K=25: 256 em 13.340,81 ms, 384 em 20.591,50 ms e 512 em 21.066,99 ms. O int8 foi cerca de 1,7 a 2 vezes mais rapido.
+- Recomendacao final: **int8, K=25, max_length=512**. O int8 e obrigatorio pela regra de CPU e mais rapido; K=25 preserva o recall de candidatos; 512 cobre 100% dos pares e teve p50 menor do que 384 nesta execucao. `RERANK_MAX_LENGTH` permanece 512; `RETRIEVAL_TOP_K` permanece 25; `RERANK_TOP_N` de producao permanece 4.
+
+O servico `api` passou a montar `./models` como somente leitura e o `/health` do container confirmou `loaded=true` para embedder, sparse embedder e reranker.
+
 ## Alternativas consideradas
 - **Somente denso:** tem boa recall neste corpus, mas nao aproveita termos raros, codigos e nomes de campos que o sinal esparso captura, e nao melhora a precisao do topo.
 - **Somente BM25 ou esparso:** e barato, mas fraco para parafrases e consultas multilíngues.
