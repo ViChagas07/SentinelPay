@@ -101,6 +101,10 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
         self._timeout_seconds = timeout_seconds
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if request.url.path.startswith("/api/v1/analyses/") and request.url.path.endswith(
+            "/events",
+        ):
+            return await call_next(request)
         try:
             return await asyncio.wait_for(
                 call_next(request),

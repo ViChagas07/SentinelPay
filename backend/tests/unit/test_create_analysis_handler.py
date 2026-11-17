@@ -220,6 +220,9 @@ class FakeDispatcher:
     def dispatch_notification(self, notification_id: UUID) -> None:
         return None
 
+    def revoke_analysis(self, task_id: str) -> None:
+        return None
+
 
 def _request_hash(data: bytes) -> str:
     return hashlib.sha256(f"bank_slip:{hashlib.sha256(data).hexdigest()}".encode()).hexdigest()

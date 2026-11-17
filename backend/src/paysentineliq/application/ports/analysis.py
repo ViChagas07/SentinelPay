@@ -12,6 +12,7 @@ from paysentineliq.domain.analysis import (
     AnalysisStatus,
     DegradationFlag,
 )
+from paysentineliq.domain.analysis_progress import AnalysisStage
 from paysentineliq.domain.document import DocumentKind
 from paysentineliq.domain.notification import Notification
 from paysentineliq.domain.payables import Payable
@@ -59,6 +60,23 @@ class AnalysisRepositoryPort(AnalysisLookupPort, Protocol):
         status: AnalysisStatus,
         state: Mapping[str, object],
         degradation_flags: tuple[DegradationFlag, ...],
+        event: AnalysisEvent | None = None,
+    ) -> bool: ...
+
+    async def report_progress(
+        self,
+        analysis_id: UUID,
+        *,
+        stage: AnalysisStage,
+        percent: int,
+        detail: str | None,
+        event: AnalysisEvent | None = None,
+    ) -> bool: ...
+
+    async def finalize_cancelled(
+        self,
+        analysis_id: UUID,
+        *,
         event: AnalysisEvent | None = None,
     ) -> bool: ...
 

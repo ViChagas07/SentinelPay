@@ -146,7 +146,7 @@ export function hasActiveLibraryFilters(params: LibraryParams): boolean {
 }
 
 export function statusGroupOf(status: AnalysisStatus): Exclude<LibraryStatusFilter, "all"> {
-  if (status === "failed") {
+  if (status === "failed" || status === "cancelled") {
     return "failed";
   }
 

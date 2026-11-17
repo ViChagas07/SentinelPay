@@ -19,6 +19,8 @@ export const endpoints = {
     list: `${API_V1_PREFIX}/analyses`,
     create: `${API_V1_PREFIX}/analyses`,
     detail: (analysisId: string) => withId(`${API_V1_PREFIX}/analyses`, analysisId),
+    events: (analysisId: string) => withId(`${API_V1_PREFIX}/analyses`, analysisId, "/events"),
+    cancel: (analysisId: string) => withId(`${API_V1_PREFIX}/analyses`, analysisId, "/cancel"),
   },
   documents: {
     upload: `${API_V1_PREFIX}/documents/upload`,

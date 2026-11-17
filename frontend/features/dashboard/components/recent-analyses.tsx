@@ -23,7 +23,10 @@ const KIND_KEYS: Record<AnalysisKind, TranslationKey> = {
 
 const STATUS_KEYS: Record<AnalysisStatus, TranslationKey> = {
   queued: "dashboard.status.queued",
+  running: "dashboard.status.running",
   processing: "dashboard.status.processing",
+  cancelling: "dashboard.status.cancelling",
+  cancelled: "dashboard.status.cancelled",
   completed: "dashboard.status.completed",
   degraded: "dashboard.status.degraded",
   failed: "dashboard.status.failed",

@@ -149,10 +149,13 @@ describe("serializeLibraryParams and libraryHref", () => {
 describe("statusGroupOf", () => {
   it("groups the job statuses used by the filter", () => {
     expect(statusGroupOf("queued")).toBe("active");
+    expect(statusGroupOf("running")).toBe("active");
     expect(statusGroupOf("processing")).toBe("active");
+    expect(statusGroupOf("cancelling")).toBe("active");
     expect(statusGroupOf("completed")).toBe("done");
     expect(statusGroupOf("degraded")).toBe("done");
     expect(statusGroupOf("failed")).toBe("failed");
+    expect(statusGroupOf("cancelled")).toBe("failed");
   });
 });
 

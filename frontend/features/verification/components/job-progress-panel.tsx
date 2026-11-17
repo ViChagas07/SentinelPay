@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { Ban, CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { BrandLoader } from "@/components/brand/brand-loader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RiskRuler } from "@/components/ui/risk-ruler";
@@ -19,31 +20,30 @@ import {
   isActiveStatus,
   isLongRunning,
 } from "@/lib/verification/polling";
+import {
+  ANALYSIS_STAGES,
+  STAGE_LABEL_KEYS,
+  displayPercent,
+  isLongStage,
+  progressOf,
+  stageStateLabelKey,
+  stageStates,
+  type AnalysisStreamState,
+  type StageState,
+} from "@/lib/verification/progress";
 import { cn } from "@/lib/utils";
+
+import { CancelAnalysisButton } from "./cancel-analysis-button";
 
 const STATUS_KEYS: Record<AnalysisStatus, TranslationKey> = {
   queued: "dashboard.status.queued",
+  running: "dashboard.status.running",
   processing: "dashboard.status.processing",
+  cancelling: "dashboard.status.cancelling",
+  cancelled: "dashboard.status.cancelled",
   completed: "dashboard.status.completed",
   degraded: "dashboard.status.degraded",
   failed: "dashboard.status.failed",
-};
-
-type StageState = "pending" | "active" | "done" | "failed";
-
-const STAGE_LABEL_KEYS: TranslationKey[] = [
-  "verification.job.stage.document",
-  "verification.job.stage.extraction",
-  "verification.job.stage.rules",
-  "verification.job.stage.classification",
-  "verification.job.stage.justification",
-];
-
-const STAGE_STATE_KEYS: Record<StageState, TranslationKey> = {
-  pending: "verification.job.stage.pending",
-  active: "verification.job.stage.active",
-  done: "verification.job.stage.done",
-  failed: "verification.job.stage.failed",
 };
 
 function StageIcon({ state }: Readonly<{ state: StageState }>) {
@@ -55,23 +55,26 @@ function StageIcon({ state }: Readonly<{ state: StageState }>) {
     return <XCircle className="size-4 text-risk-high" aria-hidden="true" />;
   }
 
-  if (state === "active") {
+  if (state === "cancelled") {
+    return <Ban className="size-4 text-risk-high" aria-hidden="true" />;
+  }
+
+  if (state === "active" || state === "cancelling") {
     return <Loader2 className="size-4 animate-spin text-petrol-600" aria-hidden="true" />;
   }
 
   return <Circle className="size-4 text-muted-foreground" aria-hidden="true" />;
 }
 
-function IndeterminateBar() {
+function StageIndeterminateBar() {
   const { t } = useI18n();
   const reduceMotion = useReducedMotion() ?? false;
 
   return (
     <div
-      role="progressbar"
-      aria-label={t("verification.job.progress.aria")}
-      aria-valuetext={t("verification.job.progress.indeterminate")}
-      className="h-1.5 w-full overflow-hidden rounded-full border border-border bg-surface-elevated"
+      className="mt-1.5 h-1 w-full max-w-40 overflow-hidden rounded-full bg-surface-elevated"
+      aria-hidden="true"
+      title={t("verification.job.progress.indeterminate")}
     >
       <motion.div
         className="h-full w-1/3 rounded-full bg-petrol-500"
@@ -87,71 +90,56 @@ function IndeterminateBar() {
   );
 }
 
-function jobState(status: AnalysisStatus): StageState {
-  if (status === "queued") {
-    return "pending";
-  }
-
-  if (status === "processing") {
-    return "active";
-  }
-
-  if (status === "failed") {
-    return "failed";
-  }
-
-  return "done";
-}
-
-function stageStates(status: AnalysisStatus): StageState[] {
-  if (status === "completed" || status === "degraded") {
-    return STAGE_LABEL_KEYS.map(() => "done");
-  }
-
-  return STAGE_LABEL_KEYS.map(() => "pending");
-}
-
 export type AnalysisPipelineProps = {
-  status: AnalysisStatus;
+  analysis: AnalysisDetail;
 };
 
-export function AnalysisPipeline({ status }: AnalysisPipelineProps) {
+export function AnalysisPipeline({ analysis }: AnalysisPipelineProps) {
   const { t } = useI18n();
-  const stages = stageStates(status);
-  const overall = jobState(status);
+  const progress = progressOf(analysis.progress, analysis.status);
+  const stages = stageStates(progress, analysis.status);
 
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-medium">{t("verification.job.stagesTitle")}</h3>
-        <Badge variant="outline">
-          <StageIcon state={overall} />
-          {t(STAGE_STATE_KEYS[overall])}
-        </Badge>
+        <Badge variant="outline">{t(STATUS_KEYS[analysis.status])}</Badge>
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        {t("verification.job.stagesNote")}
-      </p>
-      <ol className="mt-4 space-y-2" aria-label={t("verification.job.stagesTitle")}>
-        <li className="flex items-start gap-3 rounded-[6px] border border-border bg-surface-elevated px-3 py-2">
-          <StageIcon state={overall} />
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-            <span className="text-sm font-medium">{t("verification.job.stage.job")}</span>
-            <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-muted-foreground">
-              {t(STAGE_STATE_KEYS[overall])}
-            </span>
-          </div>
-        </li>
-        {STAGE_LABEL_KEYS.map((labelKey, index) => {
+      <ol className="mt-4 space-y-1.5" aria-label={t("verification.job.stagesTitle")}>
+        {ANALYSIS_STAGES.map((stage, index) => {
           const state = stages[index] ?? "pending";
+          const active = state === "active" || state === "cancelling";
 
           return (
-            <li key={labelKey} className="flex items-start gap-3 px-3 py-1.5">
+            <li
+              key={stage}
+              aria-current={active ? "step" : undefined}
+              className={cn(
+                "flex items-start gap-3 rounded-[6px] px-3 py-2",
+                active && "border border-petrol-500/30 bg-petrol-500/5",
+              )}
+            >
               <StageIcon state={state} />
-              <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                <span className="text-sm text-muted-foreground">{t(labelKey)}</span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                <div className="min-w-0">
+                  <span
+                    className={cn(
+                      "text-sm",
+                      state === "pending" ? "text-muted-foreground" : "text-foreground",
+                      active && "font-medium",
+                    )}
+                  >
+                    {t(STAGE_LABEL_KEYS[stage])}
+                  </span>
+                  {active && progress.stage === stage && progress.detail ? (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {progress.detail}
+                    </span>
+                  ) : null}
+                  {active && isLongStage(stage) ? <StageIndeterminateBar /> : null}
+                </div>
                 <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-muted-foreground">
-                  {t(STAGE_STATE_KEYS[state])}
+                  {t(stageStateLabelKey(state))}
                 </span>
               </div>
             </li>
@@ -162,23 +150,61 @@ export function AnalysisPipeline({ status }: AnalysisPipelineProps) {
   );
 }
 
+function ConnectionNotice({ state }: Readonly<{ state: AnalysisStreamState }>) {
+  const { t } = useI18n();
+
+  if (state === "reconnecting") {
+    return (
+      <p
+        role="status"
+        aria-live="polite"
+        className="mt-3 flex items-center gap-2 rounded-[6px] border border-border bg-surface-elevated px-3 py-2 text-xs text-muted-foreground"
+      >
+        <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+        {t("verification.job.connection.reconnecting")}
+      </p>
+    );
+  }
+
+  if (state === "polling") {
+    return (
+      <p
+        role="status"
+        aria-live="polite"
+        className="mt-3 rounded-[6px] border border-border bg-surface-elevated px-3 py-2 text-xs text-muted-foreground"
+      >
+        {t("verification.job.connection.polling")}
+      </p>
+    );
+  }
+
+  return null;
+}
+
 export type JobProgressPanelProps = {
   analysis: AnalysisDetail;
   showDossierLink?: boolean;
+  streamState?: AnalysisStreamState;
   onRetryPolling?: () => void;
   onResend?: () => void;
+  onCancelled?: () => void;
   resending?: boolean;
 };
 
 export function JobProgressPanel({
   analysis,
   showDossierLink = true,
+  streamState = "closed",
   onRetryPolling,
   onResend,
+  onCancelled,
   resending = false,
 }: JobProgressPanelProps) {
   const { t } = useI18n();
+  const reduceMotion = useReducedMotion() ?? false;
   const active = isActiveStatus(analysis.status);
+  const progress = progressOf(analysis.progress, analysis.status);
+  const percent = displayPercent(progress, analysis.status);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -194,6 +220,16 @@ export function JobProgressPanel({
   const longRunning = isLongRunning(analysis.status, elapsed);
   const result = analysis.result_available ? analysis.result : null;
   const errorKey = getAnalysisErrorKey(analysis.error_code);
+  const stageLabel =
+    progress.stage !== null
+      ? t(STAGE_LABEL_KEYS[progress.stage])
+      : analysis.status === "cancelling"
+        ? t("verification.job.stage.cancelling")
+        : analysis.status === "running" || analysis.status === "processing"
+          ? t("verification.job.stage.validation")
+          : t("verification.job.queued");
+  const detail = progress.detail ?? stageLabel;
+  const percentText = t("verification.job.progress.percent", { percent });
 
   return (
     <section
@@ -221,20 +257,70 @@ export function JobProgressPanel({
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">{t(STATUS_KEYS[analysis.status])}</Badge>
           {result ? <RiskStamp band={result.band} /> : null}
+          <CancelAnalysisButton
+            analysisId={analysis.id}
+            status={analysis.status}
+            onCancelled={onCancelled}
+            onRefresh={onRetryPolling}
+          />
         </div>
       </div>
 
-      <div className="mt-4" aria-live="polite">
+      <div className="mt-4" aria-live="polite" aria-atomic="false">
         {active ? (
           <>
-            <IndeterminateBar />
-            <p className="mt-2 text-sm text-muted-foreground">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex min-w-0 items-center gap-2">
+                <BrandLoader className="size-5 shrink-0" />
+                <span className="min-w-0">
+                  <span className="font-medium text-foreground">{stageLabel}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{detail}</span>
+                </span>
+              </span>
+              <span className="font-mono text-sm tabular-nums text-petrol-700">
+                {t("verification.job.progress.percentShort", { percent })}
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label={t("verification.job.progress.aria")}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={percent}
+              aria-valuetext={`${percentText}. ${detail}`}
+              className="relative mt-2 h-2 w-full overflow-hidden rounded-full border border-border bg-surface-elevated"
+            >
+              <div
+                className="h-full rounded-full bg-petrol-500 transition-[width] duration-500 ease-out motion-reduce:transition-none"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
               {analysis.status === "queued"
                 ? t("verification.job.queued")
-                : t("verification.job.processing")}{" "}
-              {t("verification.job.progress.indeterminate")}
+                : analysis.status === "cancelling"
+                  ? t("verification.job.cancelling")
+                  : isLongStage(progress.stage)
+                    ? t("verification.job.progress.longStage")
+                    : t("verification.job.progress.waiting")}
             </p>
           </>
+        ) : analysis.status === "cancelled" ? (
+          <div role="status" className="rounded-[6px] border border-border bg-surface p-4">
+            <h3 className="text-base font-medium">{t("verification.job.cancelled.title")}</h3>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              {t("verification.job.cancelled.body")}
+            </p>
+            {onCancelled ? (
+              <Button type="button" className="mt-3" size="sm" onClick={onCancelled}>
+                {t("verification.cancel.newAnalysis")}
+              </Button>
+            ) : (
+              <Button asChild className="mt-3" size="sm">
+                <Link href="/verificacao">{t("verification.cancel.newAnalysis")}</Link>
+              </Button>
+            )}
+          </div>
         ) : analysis.status === "failed" ? (
           <div role="alert" className="rounded-[6px] border border-risk-high/50 bg-risk-high/5 p-4">
             <h3 className="text-base font-medium">{t("verification.job.failed.title")}</h3>
@@ -259,29 +345,45 @@ export function JobProgressPanel({
               ) : null}
             </div>
           </div>
-        ) : result ? (
-          <div className="rounded-[6px] border border-border bg-surface p-4">
-            <p className="text-sm font-medium">
-              {analysis.status === "degraded"
-                ? t("verification.job.degraded.title")
-                : t("verification.job.completed.title")}
-            </p>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              {analysis.status === "degraded"
-                ? t("verification.job.degraded.body")
-                : t("verification.job.completed.body")}
-            </p>
-            <div className="mt-4">
-              <RiskRuler score={result.score} band={result.band} variant="medium" />
-            </div>
-            {showDossierLink ? (
-              <Button asChild className="mt-4" size="sm">
-                <Link href={`/verificacao/${analysis.id}`}>
-                  {t("verification.job.openDossier")}
-                </Link>
-              </Button>
-            ) : null}
+        ) : analysis.result_available && result === null ? (
+          <div
+            role="status"
+            className="flex items-center gap-3 rounded-[6px] border border-border bg-surface p-4"
+          >
+            <BrandLoader className="size-5 shrink-0" />
+            <p className="text-sm text-muted-foreground">{t("verification.job.loadingResult")}</p>
           </div>
+        ) : result ? (
+          <AnimatePresence initial={false}>
+            <motion.div
+              key="result"
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.35, ease: "easeOut" }}
+              className="rounded-[6px] border border-border bg-surface p-4"
+            >
+              <p className="text-sm font-medium">
+                {analysis.status === "degraded"
+                  ? t("verification.job.degraded.title")
+                  : t("verification.job.completed.title")}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                {analysis.status === "degraded"
+                  ? t("verification.job.degraded.body")
+                  : t("verification.job.completed.body")}
+              </p>
+              <div className="mt-4">
+                <RiskRuler score={result.score} band={result.band} variant="medium" />
+              </div>
+              {showDossierLink ? (
+                <Button asChild className="mt-4" size="sm">
+                  <Link href={`/verificacao/${analysis.id}`}>
+                    {t("verification.job.openDossier")}
+                  </Link>
+                </Button>
+              ) : null}
+            </motion.div>
+          </AnimatePresence>
         ) : (
           <div className="rounded-[6px] border border-border bg-surface p-4">
             <p className="text-sm leading-relaxed text-muted-foreground">
@@ -298,6 +400,8 @@ export function JobProgressPanel({
         )}
       </div>
 
+      <ConnectionNotice state={streamState} />
+
       {longRunning ? (
         <div className="mt-4 rounded-[6px] border border-border bg-surface-elevated p-3">
           <p className="text-sm font-medium">{t("verification.job.long.title")}</p>
@@ -310,10 +414,10 @@ export function JobProgressPanel({
       <div
         className={cn(
           "mt-5 border-t border-border pt-4",
-          analysis.status === "failed" ? "opacity-70" : "",
+          analysis.status === "failed" || analysis.status === "cancelled" ? "opacity-70" : "",
         )}
       >
-        <AnalysisPipeline status={analysis.status} />
+        <AnalysisPipeline analysis={analysis} />
       </div>
     </section>
   );

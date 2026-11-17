@@ -54,6 +54,15 @@ class CeleryTaskDispatcher:
             _logger.error("notification_dispatch_failed")
             raise TaskDispatchError() from exc
 
+    def revoke_analysis(self, task_id: str) -> None:
+        if not task_id.strip():
+            raise ValueError("task_id is required")
+        try:
+            self._app.control.revoke(task_id, terminate=False)
+        except Exception as exc:
+            _logger.warning("analysis_task_revoke_failed")
+            raise TaskDispatchError() from exc
+
     @staticmethod
     def _headers() -> dict[str, str]:
         return {"request_id": get_request_id() or str(uuid4())}

@@ -2,15 +2,17 @@
 
 ## Estado atual
 
-- Fase atual: F11 (revisão final) concluída.
+- Fase atual: F13 (identidade visual, logo e favicon) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
+- Marca: símbolo oficial aplicado no header, sidebar, login, landing, carregamento, progresso, erro, vazio, rodapé e README. Originais em `assets/brand/originals/` e derivados em `public/brand/`.
 - Acessibilidade: matriz axe em 16 rotas, 2 temas e 3 idiomas, com zero violações.
 - Responsivo: 16 rotas em 360, 768, 1280 e 1920 px, sem rolagem horizontal; régua de risco completa no painel e no dossiê.
-- i18n: 1.166 chaves completas em pt, es e en; texto fixo em JSX barrado no build.
+- i18n: dicionários completos em pt, es e en; texto fixo em JSX barrado no build.
 - Sem mocks: varredura de produção zerada para mock, fixture, faker, lorem e nomes do protótipo.
 - Sem travessão longo em `frontend/`; varredura incluída em `npm run check`.
+- Favicon e ícones gerados do símbolo transparente, com manifest, `icon.svg` próprio, `apple-icon` sólido, Open Graph 1200x630 e metadados de ícones. O arquivo `SentinelPay_Favicon__2_.png` recebido é RGB com xadrez gravado e não é usado.
 - Segurança: CSP e cabeçalhos, cookies HttpOnly e Secure, 401/403/429 tratados, `npm audit` sem crítica.
-- Desempenho: Lighthouse 99/100/96 na landing e 93/100/96 no painel; visualizador e gráficos sob demanda.
+- Desempenho: Lighthouse 97/100/96 na landing na F13; painel com 93/100/96 na F11 e medição da F13 bloqueada pelo seed da F12. Visualizador e gráficos sob demanda.
 - Entrega: Vercel documentada, README atualizado, relatório em `docs/QUALITY.md`.
 - `/account` reúne perfil, organização, preferências, atalho de notificações, segurança, privacidade e zona de perigo com navegação lateral no desktop e abas roláveis no mobile.
 - Idioma, tema e formato de data aplicam imediatamente e persistem em cookies. Perfil, organização, sessões e dados mostram somente o que a API expõe, com lacunas explícitas.
@@ -19,10 +21,12 @@
 - `/inteligencia` mostra um estado "Em desenvolvimento" honesto, sem métricas ou gráficos inventados, até existir endpoint de regras, casos e modelos.
 - `/boletos` e `/folha` listam as análises por classe, com contagens, filtros, ordenação, paginação e estado na URL.
 - As listas usam a amostra real de até 500 análises obtida por cursor, porque a API ainda não oferece filtros, totais nem os campos extraídos. A interface explica a limitação e mostra "+" quando a amostra é truncada.
-- `/verificacao` e `/verificacao/nova` enviam PDF ou imagem, criam o job e acompanham o pipeline por polling.
+- `/verificacao` e `/verificacao/nova` enviam PDF ou imagem, criam o job e acompanham o pipeline por SSE, com fallback automático para polling.
 - `/verificacao/[id]` mostra o dossiê com score, classe, justificativa, evidências, campos, metadados e avisos honestos.
+- A barra de progresso usa percentual, etapa e detalhe persistidos pelo backend, com subprogresso de OCR por página, estado indeterminado dentro de RAG e LLM e lista de sete etapas.
+- O botão "Cancelar análise" aparece durante todo o job, pede confirmação, mostra "Cancelando..." e retorna para o envio após o cancelamento.
 - Painel da F06, landing da F05, shell da F04, sessão da F03 e design system da F02 preservados.
-- Backend, migrations, Compose, banco, infraestrutura e knowledge base: intocados.
+- O backend foi alterado nesta fase por pedido explícito do usuário: progresso, SSE, cancelamento, migration e testes. Score, classes, prompts, RAG, thresholds e schema de resultado continuam intocados.
 
 ## Comandos de checagem
 
@@ -45,6 +49,55 @@ Resultados reais em 2026-11-16 (F11):
 - `npm run analyze`: maior rota em 258,3 kB de JS gzip, abaixo do orçamento de 280 kB.
 - `npm run lighthouse`: landing 99/100/96 e painel 93/100/96 (desempenho, acessibilidade, boas práticas).
 - `npm run audit`: 0 críticas e 0 altas; 7 moderadas transitivas de desenvolvimento.
+
+Resultados reais em 2026-11-17 (F12):
+
+- `npm run lint`, `npm run typecheck`, `npm run test` (244 testes), `npm run check:content` e `npm run build`: verdes.
+- Backend: `make check` com 906 testes sem Docker, 2 skips, cobertura 81,54%; `mypy` 405 arquivos; Ruff, format e import-linter verdes.
+- Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada após reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem violações.
+- Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
+- Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
+
+## Feito em F12
+
+- Spec em `docs/specs/F12.md` e ADR em `docs/adr/0013-progresso-sse-cancelamento.md`.
+- Schemas Zod aceitam `running`, `cancelling` e `cancelled`, além de `progress` com etapa, percentual, detalhe, início e estado indeterminado.
+- Cliente SSE em `lib/verification/events.ts`, com parser testado, reconexão própria e queda automática para polling após duas falhas.
+- O snapshot inicial do SSE é aplicado no cache do TanStack Query; abrir a tela no meio da análise mostra o estado persistido sem depender de estado local.
+- `useAnalysisJob` liga e desliga o SSE conforme o status terminal, e `useCancelAnalysis` chama `POST /analyses/{id}/cancel` com validação Zod.
+- Painel refeito com barra determinate, `role="progressbar"`, `aria-valuenow`, `aria-live` no texto da etapa, percentual e lista de sete etapas.
+- OCR mostra "Página N de M"; RAG e LLM mostram estado indeterminado dentro da etapa, sem barra parada sem texto.
+- Avisos de conexão perdida, reconexão e fallback de polling, além de estados de cancelado, erro, resultado indisponível e concluído com transição suave.
+- Botão "Cancelar análise" com diálogo de confirmação, estado "Cancelando...", retorno ao envio e tratamento de 409.
+- Fluxos de boleto, folha, Central de Verificação e recibo usam o mesmo painel; o dossiê de recibo também acompanha e cancela a análise.
+- Testes novos para progresso, parser SSE, fallback de polling e confirmação de cancelamento. 244 testes unitários verdes.
+
+## Resultados reais em 2026-11-17 (F13)
+
+- `npm run check`: verde. ESLint, `tsc --noEmit`, 244 testes unitários, portões de conteúdo e build de produção.
+- Lighthouse na landing: 97 de desempenho, 100 de acessibilidade e 96 de boas práticas, com LCP de 1,1 s, LCP observado de 177 ms e TBT de 180 ms. A primeira medição ficou baixa por concorrência com a suíte Vitest da F12; a medição final foi feita com a máquina ociosa.
+- O painel não pôde ser remedido com a mesma base da F11: o script de seed da F12 cria uma análise com status `processing` e falha na constraint `ck_analyses_status` do backend. Uma medição avulsa com sessão sem dados semeados deu 73/100/96 e não é comparável. A lacuna está registrada em `docs/BACKEND_GAPS.md`.
+- Verificação visual em 1440x900 e 390x844, nos temas claro e escuro: landing, login, painel, menu mobile, 404 e rodapé.
+- Favicons validados em 16, 32, 48, 180, 192 e 512 px sobre fundo claro e escuro. O `apple-icon` foi conferido com fundo sólido.
+- `npm run format:check`: pendente nos arquivos da F12 que não pertencem a esta fase; os arquivos da F13 foram formatados.
+
+## Feito em F13
+
+- Spec em `docs/specs/F13.md` e ADR em `docs/adr/0014-identidade-visual.md`.
+- Auditoria inicial: o app usava um SVG desenhado à mão que não era o símbolo oficial, favicons aproximados, nenhum manifest e nenhum `next/image` para a marca.
+- Originais copiados sem recompressão para `assets/brand/originals/`, com SHA-256 conferido. O favicon recebido foi descartado por ser RGB sem alfa e ter xadrez nos pixels.
+- Derivados recortados pelo bounding box de 745x748 px: símbolo em 512, 256, 128 e 64, fundo branco em 512 e 256 e variante clara em 512, 128 e 64.
+- Variante compacta com o mesmo desenho e traços mais grossos para 28 a 64 px, porque o traço original de 6 px no losango desaparece no header. A versão original segue disponível para formatos grandes.
+- Cores amostradas do original e registradas em `styles/tokens.css`: `--brand-frame: #2a716d`, `--brand-mark: #4d927f`, `--brand-frame-on-dark: #7bbcb0` e `--brand-mark-on-dark: #a7d2ca`. O original não foi recolorido.
+- SVG reconstruído com a geometria medida no raster e comparado ao PNG por IoU de alfa de 0,848, sem distorção.
+- Favicon próprio gerado do símbolo: `app/favicon.ico` com 16, 32 e 48, `app/icon.png` com 512, `app/apple-icon.png` com 180 e fundo petróleo, `public/icon-192.png`, `public/icon-512.png`, `public/icon.svg` e `public/favicon-alert.svg` redesenhado.
+- `app/icon.svg` antigo removido. O alternador de alerta continua usando `/icon.svg` e `/favicon-alert.svg`.
+- Metadata raiz com title, description, applicationName, manifest, icons, openGraph e twitter. Landing com imagem Open Graph declarada. `public/manifest.webmanifest` com name, short_name, theme_color, background_color e ícones 192 e 512.
+- Open Graph 1200x630 gerado no App Router com o símbolo real em base64, fundo petróleo, nome da marca, tagline e eyebrow.
+- Símbolo aplicado no header público, sidebar e header mobile do app, login, hero da landing, carregamento, barra de progresso, 404, 500, estados vazios, rodapés e README.
+- Sidebar e login usam a variante clara em fundo petróleo. O logo do sidebar aponta para `/painel`; o teste e2e foi atualizado.
+- `next/image` com largura, altura, `alt="SentinelPay"` e sem distorção. `priority` apenas no logo do header público e no logo da sidebar.
+- Relatórios PDF e e-mails transacionais não existem no front. O asset com fundo branco fica em `public/brand/logo-symbol-on-white-512.png` e a integração foi registrada em `docs/BACKEND_GAPS.md`.
 
 ## Feito em F11
 

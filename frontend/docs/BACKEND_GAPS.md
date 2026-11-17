@@ -80,9 +80,9 @@ Prioridades:
 | --- | --- | --- | --- | --- |
 | Filtrar an√°lises | Separar boletos, contracheques e recibos; filtrar por status, banda e per√≠odo. | `GET /api/v1/analyses` s√≥ aceita `limit` e `cursor`. | Estender `GET /api/v1/analyses` com `kind`, `status`, `band`, `created_from`, `created_to`, `q` e `limit`/`cursor`. | P0 |
 | Nome do documento na lista | Identificar a an√°lise sem abrir. | A lista n√£o traz nome do arquivo nem documento. | Incluir `document_name` e `document_id` nos itens da lista. | P0 |
-| Progresso por etapa | Mostrar "lendo documento", "aplicando regras", "gerando explica√ß√£o". | S√≥ `queued`, `processing`, `completed`, `degraded` e `failed`. | Incluir `stage` e `progress` no detalhe, ou `GET /api/v1/analyses/{id}/events` com a linha do tempo. | P1 |
-| Linha do tempo | Exibir eventos e retries. | Tabela `analysis_events` existe, mas n√£o h√° rota. | `GET /api/v1/analyses/{id}/events` com `event_type`, `rule_code`, `degradation_flags`, `payload` seguro e `created_at`. | P1 |
-| Cancelar | Interromper an√°lise enfileirada ou em processamento. | N√£o existe. | `POST /api/v1/analyses/{id}/cancel`; 202; novo status `cancelled` ou retorno 409 se terminal. | P2 |
+| Progresso por etapa | Mostrar "lendo documento", "aplicando regras", "gerando explica√ß√£o". | Resolvido na P18.1: `GET /api/v1/analyses/{id}` devolve `progress` com `percent`, `stage`, `detail`, `started_at` e `indeterminate`; `GET /api/v1/analyses/{id}/events` entrega SSE com snapshot e eventos `progress`. | Nenhuma mudan√ßa necess√°ria. Percentual e etapa v√™m do pipeline, com subprogresso de OCR por p√°gina. | n/a |
+| Linha do tempo | Exibir eventos e retries. | O SSE entrega progresso, status e cancelamento, mas n√£o a lista hist√≥rica de eventos e retries. | `GET /api/v1/analyses/{id}/history` com `event_type`, `rule_code`, `degradation_flags`, `payload` seguro e `created_at`. | P2 |
+| Cancelar | Interromper an√°lise enfileirada ou em processamento. | Resolvido na P18.1: `POST /api/v1/analyses/{id}/cancel`, restrito ao dono, idempotente, 202 com `cancelling` ou `cancelled`, 409 `analysis_not_cancellable` em estado terminal. | Nenhuma mudan√ßa necess√°ria. O worker aborta entre etapas, em p√°ginas do OCR e em chamadas longas de RAG/LLM. | n/a |
 | Reprocessar | Tentar de novo ap√≥s falha. | N√£o existe. | `POST /api/v1/analyses/{id}/retry`; 202; volta para `queued`. | P1 |
 | Excluir an√°lise | Remover job e documento (LGPD). | N√£o existe. | `DELETE /api/v1/analyses/{id}`; 204; apaga documento, relat√≥rio e eventos. | P1 |
 | Baixar relat√≥rio | Exportar o JSON da an√°lise. | Relat√≥rio existe no bucket, sem rota. | `GET /api/v1/analyses/{id}/report` com URL assinada ou JSON. | P2 |
@@ -373,3 +373,25 @@ Fallbacks da F11:
   n√£o uma rota de produto.
 - A observabilidade opcional n√£o depende de endpoint novo: o DSN do Sentry √© configurado
   por vari√°vel de ambiente e desligado por padr√£o.
+
+## 21. F12: progresso e cancelamento (2026-11-17)
+
+A P18.1 fechou as lacunas de progresso e cancelamento. Contratos agora disponÌveis:
+
+- `GET /api/v1/analyses/{id}` inclui `progress` com `percent` (0 a 100), `stage` (`validation`, `ocr`, `extraction`, `classification`, `rag`, `llm`, `persistence`), `detail`, `started_at` e `indeterminate`, alÈm de `cancelled_at`.
+- `GET /api/v1/analyses/{id}/events` entrega `text/event-stream` com snapshot inicial, eventos `progress` e `done`. O snapshot permite reconectar e abrir a tela no meio da an·lise.
+- `POST /api/v1/analyses/{id}/cancel` responde 202 com `{ analysis_id, status }`. Estados `completed`, `degraded` e `failed` retornam 409 `analysis_not_cancellable`.
+- Status novos: `running`, `cancelling` e `cancelled`. `processing` continua aceito como alias legado.
+
+O front usa SSE e cai para polling de `GET /analyses/{id}` apÛs duas falhas de conex„o. A linha do tempo histÛrica completa de eventos e retries continua fora do contrato e segue como lacuna P2.
+
+## 22. F13: identidade visual (2026-11-17)
+
+O front entrega o kit de marca em `frontend/public/brand/` e mantÈm os originais intactos em `frontend/assets/brand/originals/`. O favicon oficial recebido tem xadrez de transparÍncia gravado nos pixels e foi descartado. Os favicons em uso foram gerados do sÌmbolo transparente.
+
+RelatÛrios PDF e e-mails transacionais n„o s„o gerados pelo front. Para aplicar a marca nesses canais, o backend precisa de uma cÛpia prÛpria do asset, porque n„o deve ler `frontend/public` em runtime.
+
+| Canal | Necessidade | Hoje | Proposta | Prioridade |
+| --- | --- | --- | --- | --- |
+| RelatÛrio PDF, cabeÁalho | usar a vers„o com fundo branco, com proporÁ„o e respiro preservados | O relatÛrio JSON existe no bucket, sem template versionado no repositÛrio. | Copiar `logo-symbol-on-white-512.png` para os assets do gerador de PDF e inserir no cabeÁalho, com altura entre 24 e 40 px e ·rea de respiro de 25%. | P2 |
+| E-mails transacionais, cabeÁalho | usar a vers„o com fundo branco, com `alt` e proporÁ„o preservados | N„o h· templates de e-mail no backend. | Copiar o mesmo asset para o serviÁo de e-mail e inserir no cabeÁalho. Nunca usar a variante clara em fundo branco nem a vers„o colorida em fundo escuro. | P2 |

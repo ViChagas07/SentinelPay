@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from paysentineliq.application.ports.analysis_read_repository import AnalysisSummary
 from paysentineliq.domain.analysis import AnalysisDocumentType, AnalysisStatus
+from paysentineliq.domain.analysis_progress import stage_from_value
 from paysentineliq.domain.scoring import RiskBand
 from paysentineliq.infrastructure.db.models import AnalysisModel
 
@@ -57,16 +58,24 @@ class SqlAlchemyAnalysisReadRepository:
 
 
 def _to_summary(model: AnalysisModel) -> AnalysisSummary:
+    status = (
+        AnalysisStatus.RUNNING if model.status == "processing" else AnalysisStatus(model.status)
+    )
     return AnalysisSummary(
         id=model.id,
         owner_id=model.owner_id,
         document_id=model.document_id,
         document_type=AnalysisDocumentType(model.document_type),
-        status=AnalysisStatus(model.status),
+        status=status,
         score=model.score,
         band=RiskBand(model.band) if model.band is not None else None,
         error_code=model.error_code,
         report_s3_key=model.report_s3_key,
         created_at=model.created_at,
         updated_at=model.updated_at,
+        progress_percent=model.progress_percent,
+        current_stage=stage_from_value(model.current_stage),
+        stage_detail=model.stage_detail,
+        stage_started_at=model.stage_started_at,
+        cancelled_at=model.cancelled_at,
     )

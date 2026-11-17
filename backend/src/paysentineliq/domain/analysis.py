@@ -5,12 +5,16 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
+from paysentineliq.domain.analysis_progress import AnalysisStage
 from paysentineliq.domain.scoring import RiskBand
 
 
 class AnalysisStatus(StrEnum):
     QUEUED = "queued"
-    PROCESSING = "processing"
+    RUNNING = "running"
+    PROCESSING = "running"
+    CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
     COMPLETED = "completed"
     FAILED = "failed"
     DEGRADED = "degraded"
@@ -19,6 +23,9 @@ class AnalysisStatus(StrEnum):
 class AnalysisEventType(StrEnum):
     QUEUED = "queued"
     PROCESSING = "processing"
+    PROGRESS = "progress"
+    CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
     RULE_TRIGGERED = "rule_triggered"
     GUARDRAIL_TRIGGERED = "guardrail_triggered"
     RETRY_SCHEDULED = "retry_scheduled"
@@ -95,6 +102,12 @@ class AnalysisRecord:
     idempotency_request_hash: str | None = None
     task_id: str | None = None
     processing_started_at: datetime | None = None
+    progress_percent: int = 0
+    current_stage: AnalysisStage | None = None
+    stage_detail: str | None = None
+    stage_started_at: datetime | None = None
+    cancel_requested_at: datetime | None = None
+    cancelled_at: datetime | None = None
 
 
 def _jsonable(value: object) -> object:

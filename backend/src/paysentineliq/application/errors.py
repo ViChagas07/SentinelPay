@@ -342,6 +342,22 @@ class AnalysisNotFoundError(NotFoundError):
         )
 
 
+class AnalysisNotCancellableError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="analysis_not_cancellable",
+            message="Analysis has already finished and cannot be cancelled.",
+            status_code=409,
+            title="Conflict",
+        )
+
+
+class AnalysisCancelledError(RuntimeError):
+    def __init__(self, analysis_id: object | None = None) -> None:
+        super().__init__("analysis cancelled")
+        self.analysis_id = analysis_id
+
+
 class InvalidCursorError(ApplicationError):
     def __init__(self) -> None:
         super().__init__(

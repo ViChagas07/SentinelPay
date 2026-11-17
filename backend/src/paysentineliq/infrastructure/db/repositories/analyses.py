@@ -1,10 +1,15 @@
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from paysentineliq.application.ports.analysis_cancellation import (
+    CancelOutcome,
+    CancelTransition,
+)
 from paysentineliq.domain.analysis import (
     AnalysisDocumentType,
     AnalysisEvent,
@@ -13,6 +18,7 @@ from paysentineliq.domain.analysis import (
     AnalysisStatus,
     DegradationFlag,
 )
+from paysentineliq.domain.analysis_progress import AnalysisStage, stage_from_value
 from paysentineliq.domain.notification import (
     Notification,
     NotificationStatus,
@@ -31,11 +37,20 @@ _TERMINAL = (
     AnalysisStatus.COMPLETED.value,
     AnalysisStatus.DEGRADED.value,
     AnalysisStatus.FAILED.value,
+    AnalysisStatus.CANCELLED.value,
 )
 _ACTIVE = (
     AnalysisStatus.QUEUED.value,
-    AnalysisStatus.PROCESSING.value,
+    AnalysisStatus.RUNNING.value,
+    AnalysisStatus.CANCELLING.value,
 )
+_IN_PROGRESS = (
+    AnalysisStatus.QUEUED.value,
+    AnalysisStatus.RUNNING.value,
+)
+_CANCELLING = AnalysisStatus.CANCELLING.value
+_CANCELLED = AnalysisStatus.CANCELLED.value
+_RUNNING = AnalysisStatus.RUNNING.value
 
 
 def _event_model(event: AnalysisEvent) -> AnalysisEventModel:
@@ -98,6 +113,12 @@ def _analysis_model(record: AnalysisRecord) -> AnalysisModel:
         idempotency_request_hash=record.idempotency_request_hash,
         task_id=record.task_id,
         processing_started_at=record.processing_started_at,
+        progress_percent=record.progress_percent,
+        current_stage=record.current_stage.value if record.current_stage is not None else None,
+        stage_detail=record.stage_detail,
+        stage_started_at=record.stage_started_at,
+        cancel_requested_at=record.cancel_requested_at,
+        cancelled_at=record.cancelled_at,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -154,6 +175,39 @@ class SqlAlchemyAnalysisRepository:
                 session.add(_event_model(event))
             return True
 
+    async def report_progress(
+        self,
+        analysis_id: UUID,
+        *,
+        stage: AnalysisStage,
+        percent: int,
+        detail: str | None,
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        bounded = max(0, min(100, int(percent)))
+        now = self._clock()
+        async with self._session_factory() as session, session.begin():
+            model = await session.scalar(
+                select(AnalysisModel)
+                .where(
+                    AnalysisModel.id == analysis_id,
+                    AnalysisModel.status == _RUNNING,
+                )
+                .with_for_update(),
+            )
+            if model is None:
+                return False
+            previous = stage_from_value(model.current_stage)
+            model.progress_percent = max(model.progress_percent, bounded)
+            model.current_stage = stage.value
+            model.stage_detail = detail[:160] if detail else None
+            if previous is not stage or model.stage_started_at is None:
+                model.stage_started_at = now
+            model.state = {"stage": stage.value, "detail": detail or ""}
+            if event is not None:
+                session.add(_event_model(event))
+            return True
+
     async def complete(
         self,
         analysis_id: UUID,
@@ -177,7 +231,7 @@ class SqlAlchemyAnalysisRepository:
                 update(AnalysisModel)
                 .where(
                     AnalysisModel.id == analysis_id,
-                    AnalysisModel.status.notin_(_TERMINAL),
+                    AnalysisModel.status.in_(_IN_PROGRESS),
                 )
                 .values(
                     status=target,
@@ -189,6 +243,9 @@ class SqlAlchemyAnalysisRepository:
                     state=dict(state),
                     report_s3_key=report_s3_key,
                     error_code=None,
+                    progress_percent=100,
+                    current_stage=AnalysisStage.PERSISTENCE.value,
+                    stage_detail="Resultado salvo",
                     updated_at=func.now(),
                 )
                 .returning(AnalysisModel.id),
@@ -217,7 +274,7 @@ class SqlAlchemyAnalysisRepository:
                 update(AnalysisModel)
                 .where(
                     AnalysisModel.id == analysis_id,
-                    AnalysisModel.status.notin_(_TERMINAL),
+                    AnalysisModel.status.in_(_IN_PROGRESS),
                 )
                 .values(
                     status=AnalysisStatus.FAILED.value,
@@ -248,7 +305,7 @@ class SqlAlchemyAnalysisRepository:
                 update(AnalysisModel)
                 .where(
                     AnalysisModel.id == analysis_id,
-                    AnalysisModel.status == AnalysisStatus.PROCESSING.value,
+                    AnalysisModel.status == _RUNNING,
                 )
                 .values(
                     status=AnalysisStatus.QUEUED.value,
@@ -284,7 +341,7 @@ class SqlAlchemyAnalysisRepository:
                     or_(
                         AnalysisModel.status == AnalysisStatus.QUEUED.value,
                         and_(
-                            AnalysisModel.status == AnalysisStatus.PROCESSING.value,
+                            AnalysisModel.status == _RUNNING,
                             or_(
                                 AnalysisModel.processing_started_at.is_(None),
                                 AnalysisModel.processing_started_at < cutoff,
@@ -293,7 +350,7 @@ class SqlAlchemyAnalysisRepository:
                     ),
                 )
                 .values(
-                    status=AnalysisStatus.PROCESSING.value,
+                    status=_RUNNING,
                     task_id=task_id,
                     processing_started_at=now,
                     updated_at=func.now(),
@@ -341,10 +398,116 @@ class SqlAlchemyAnalysisRepository:
             models = (
                 await session.scalars(
                     select(AnalysisModel).where(
-                        AnalysisModel.status == AnalysisStatus.PROCESSING.value,
+                        AnalysisModel.status == _RUNNING,
                         or_(
                             AnalysisModel.processing_started_at.is_(None),
                             AnalysisModel.processing_started_at < before,
+                        ),
+                    ),
+                )
+            ).all()
+        return tuple(_to_record(model) for model in models)
+
+    async def request_cancel(
+        self,
+        analysis_id: UUID,
+        owner_id: UUID,
+        *,
+        now: datetime,
+        event: AnalysisEvent | None = None,
+    ) -> CancelTransition:
+        async with self._session_factory() as session, session.begin():
+            model = await session.scalar(
+                select(AnalysisModel)
+                .where(
+                    AnalysisModel.id == analysis_id,
+                    AnalysisModel.owner_id == owner_id,
+                )
+                .with_for_update(),
+            )
+            if model is None:
+                return CancelTransition(outcome=CancelOutcome.NOT_FOUND)
+            status = _status_from_value(model.status)
+            if status in (
+                AnalysisStatus.COMPLETED,
+                AnalysisStatus.DEGRADED,
+                AnalysisStatus.FAILED,
+            ):
+                return CancelTransition(
+                    outcome=CancelOutcome.NOT_CANCELLABLE,
+                    record=_to_record(model),
+                )
+            if status in (AnalysisStatus.CANCELLED, AnalysisStatus.CANCELLING):
+                return CancelTransition(
+                    outcome=CancelOutcome.ALREADY_CANCELLED,
+                    record=_to_record(model),
+                )
+            if status is AnalysisStatus.QUEUED:
+                _clear_partial_result(model)
+                model.status = _CANCELLED
+                model.cancelled_at = now
+                if event is not None:
+                    session.add(
+                        _event_model(
+                            replace(event, event_type=AnalysisEventType.CANCELLED),
+                        ),
+                    )
+                return CancelTransition(
+                    outcome=CancelOutcome.CANCELLED,
+                    record=_to_record(model),
+                )
+            if status is AnalysisStatus.RUNNING:
+                model.status = _CANCELLING
+                model.cancel_requested_at = now
+                model.state = {"stage": "cancelling"}
+                if event is not None:
+                    session.add(_event_model(event))
+                return CancelTransition(
+                    outcome=CancelOutcome.REQUESTED,
+                    record=_to_record(model),
+                )
+            return CancelTransition(
+                outcome=CancelOutcome.NOT_CANCELLABLE,
+                record=_to_record(model),
+            )
+
+    async def finalize_cancelled(
+        self,
+        analysis_id: UUID,
+        *,
+        event: AnalysisEvent | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        resolved_now = now or self._clock()
+        async with self._session_factory() as session, session.begin():
+            model = await session.scalar(
+                select(AnalysisModel)
+                .where(
+                    AnalysisModel.id == analysis_id,
+                    AnalysisModel.status.in_((_RUNNING, _CANCELLING)),
+                )
+                .with_for_update(),
+            )
+            if model is None:
+                return False
+            _clear_partial_result(model)
+            model.status = _CANCELLED
+            model.cancelled_at = resolved_now
+            model.cancel_requested_at = model.cancel_requested_at or resolved_now
+            model.state = {"stage": "cancelled"}
+            if event is not None:
+                session.add(_event_model(event))
+            return True
+
+    async def list_stale_cancelling(self, before: datetime) -> tuple[AnalysisRecord, ...]:
+        async with self._session_factory() as session:
+            models = (
+                await session.scalars(
+                    select(AnalysisModel).where(
+                        AnalysisModel.status == _CANCELLING,
+                        or_(
+                            AnalysisModel.cancel_requested_at.is_(None),
+                            AnalysisModel.cancel_requested_at < before,
                         ),
                     ),
                 )
@@ -431,13 +594,30 @@ class SqlAlchemyNotificationRepository:
             )
 
 
+def _status_from_value(value: str) -> AnalysisStatus:
+    if value == "processing":
+        return AnalysisStatus.RUNNING
+    return AnalysisStatus(value)
+
+
+def _clear_partial_result(model: AnalysisModel) -> None:
+    model.score = None
+    model.band = None
+    model.rule_set_version = None
+    model.model_versions = {}
+    model.degradation_flags = []
+    model.state = {}
+    model.report_s3_key = None
+    model.error_code = None
+
+
 def _to_record(model: AnalysisModel) -> AnalysisRecord:
     return AnalysisRecord(
         id=model.id,
         owner_id=model.owner_id,
         document_id=model.document_id,
         document_type=AnalysisDocumentType(model.document_type),
-        status=AnalysisStatus(model.status),
+        status=_status_from_value(model.status),
         score=model.score,
         band=RiskBand(model.band) if model.band is not None else None,
         rule_set_version=model.rule_set_version,
@@ -452,6 +632,12 @@ def _to_record(model: AnalysisModel) -> AnalysisRecord:
         idempotency_request_hash=model.idempotency_request_hash,
         task_id=model.task_id,
         processing_started_at=model.processing_started_at,
+        progress_percent=model.progress_percent,
+        current_stage=stage_from_value(model.current_stage),
+        stage_detail=model.stage_detail,
+        stage_started_at=model.stage_started_at,
+        cancel_requested_at=model.cancel_requested_at,
+        cancelled_at=model.cancelled_at,
     )
 
 

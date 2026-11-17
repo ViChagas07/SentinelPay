@@ -20,8 +20,25 @@ function requireBaseUrl(): string {
   return baseURL;
 }
 
+async function uploadBoleto(page: import("@playwright/test").Page): Promise<void> {
+  await page.getByRole("combobox", { name: "Tipo do documento" }).click();
+  await page.getByRole("option", { name: "Boleto" }).click();
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "boleto-sintetico.pdf",
+    mimeType: "application/pdf",
+    buffer: buildSyntheticBoletoPdf(
+      "Boleto sintetico para teste de fluxo com texto nativo suficiente para leitura.",
+    ),
+  });
+
+  await expect(page.getByText("boleto-sintetico.pdf")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enviar para análise" })).toBeEnabled();
+  await page.getByRole("button", { name: "Enviar para análise" }).click();
+}
+
 test.describe("verification flow with the real backend", () => {
-  test("uploads a synthetic PDF, polls the job and resumes it after reload", async ({
+  test("uploads a synthetic PDF, tracks real progress and resumes after reload", async ({
     page,
     context,
   }) => {
@@ -45,30 +62,25 @@ test.describe("verification flow with the real backend", () => {
     ).toBeVisible();
     await expect(page.getByText(/Limite de 25 MB/)).toBeVisible();
 
-    await page.getByRole("combobox", { name: "Tipo do documento" }).click();
-    await page.getByRole("option", { name: "Boleto" }).click();
-
-    await page.locator('input[type="file"]').setInputFiles({
-      name: "boleto-sintetico.pdf",
-      mimeType: "application/pdf",
-      buffer: buildSyntheticBoletoPdf(
-        "Boleto sintetico para teste de fluxo com texto nativo suficiente para leitura.",
-      ),
-    });
-
-    await expect(page.getByText("boleto-sintetico.pdf")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Enviar para análise" })).toBeEnabled();
-    await page.getByRole("button", { name: "Enviar para análise" }).click();
+    await uploadBoleto(page);
 
     await expect(page.getByRole("heading", { name: "Andamento da análise" })).toBeVisible({
       timeout: 40_000,
     });
     await expect(page.getByText(/Análise #[0-9a-f]{8}/).first()).toBeVisible();
-    await expect(page.getByText("Etapas do backend")).toBeVisible();
-    await expect(page.getByText("Leitura do documento")).toBeVisible();
-    await expect(page.getByText("Extração de campos")).toBeVisible();
-    await expect(page.getByText("Regras FEBRABAN, INSS e CLT")).toBeVisible();
+    await expect(page.getByText("Etapas da análise")).toBeVisible();
+    await expect(page.getByText("Leitura do documento (OCR)")).toBeVisible();
+    await expect(page.getByText("Extração e regras")).toBeVisible();
+    await expect(page.getByText("Classificação de risco")).toBeVisible();
     await expect(page.getByText(/Tempo decorrido/)).toBeVisible();
+
+    const progressbar = page.getByRole("progressbar", { name: "Progresso da análise" });
+    await expect(progressbar).toBeVisible();
+    await expect(progressbar).toHaveAttribute("aria-valuemin", "0");
+    await expect(progressbar).toHaveAttribute("aria-valuemax", "100");
+    const percent = Number(await progressbar.getAttribute("aria-valuenow"));
+    expect(percent).toBeGreaterThanOrEqual(0);
+    expect(percent).toBeLessThanOrEqual(100);
 
     const recent = page.getByRole("region", { name: "Verificações recentes" });
     await expect(recent).toBeVisible();
@@ -108,5 +120,50 @@ test.describe("verification flow with the real backend", () => {
         "O índice organiza sinais para revisão e não substitui a conferência dos dados nem decide sozinho.",
       ),
     ).toBeVisible();
+  });
+
+  test("cancels the analysis and returns to the upload screen", async ({ page, context }) => {
+    test.skip(!available, skipReason);
+    test.setTimeout(120_000);
+
+    const session = createBackendSession({
+      email: `cancelamento.${Date.now()}@paysentineliq.test`,
+    });
+
+    await applySessionCookies(context, session, requireBaseUrl());
+    await page.goto("/verificacao");
+
+    await expect(
+      page.getByRole("heading", { name: "Envie o documento e acompanhe cada sinal." }),
+    ).toBeVisible({ timeout: 20_000 });
+
+    await uploadBoleto(page);
+    await expect(page.getByRole("heading", { name: "Andamento da análise" })).toBeVisible({
+      timeout: 40_000,
+    });
+
+    const cancel = page.getByRole("button", { name: "Cancelar análise" });
+    await expect(cancel).toBeVisible();
+    await cancel.click();
+
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByText("Cancelar esta análise?")).toBeVisible();
+    await expect(
+      page.getByText("Tem certeza? O progresso será perdido e o resultado parcial será removido."),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Sim, cancelar" }).click();
+
+    const cancelled = page.getByText("Análise cancelada.");
+    const uploadHeading = page.getByRole("heading", {
+      name: "Envie o documento e acompanhe cada sinal.",
+    });
+    await expect(cancelled.or(uploadHeading)).toBeVisible({ timeout: 40_000 });
+
+    const newAnalysis = page.getByRole("button", { name: "Nova análise" });
+    if (await newAnalysis.isVisible().catch(() => false)) {
+      await newAnalysis.click();
+    }
+
+    await expect(uploadHeading).toBeVisible();
   });
 });

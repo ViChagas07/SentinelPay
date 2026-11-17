@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from paysentineliq.application.commands.auth import AuthService
+from paysentineliq.application.commands.cancel_analysis import CancelAnalysisHandler
 from paysentineliq.application.commands.create_analysis import CreateAnalysisHandler
 from paysentineliq.application.commands.documents import (
     DocumentPreparer,
@@ -30,11 +31,15 @@ from paysentineliq.application.errors import (
 )
 from paysentineliq.application.locale import resolve_locale
 from paysentineliq.application.ports.analysis import AnalysisLookupPort
+from paysentineliq.application.ports.analysis_cancellation import (
+    AnalysisCancellationRepositoryPort,
+)
 from paysentineliq.application.ports.analysis_read_repository import (
     AnalysisReadRepositoryPort,
 )
 from paysentineliq.application.ports.analysis_unit_of_work import AnalysisUnitOfWork
 from paysentineliq.application.ports.auth_unit_of_work import AuthUnitOfWork
+from paysentineliq.application.ports.cancellation import CancellationPort
 from paysentineliq.application.ports.document_inspector import DocumentInspector
 from paysentineliq.application.ports.document_read_repository import DocumentReadRepository
 from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
@@ -68,6 +73,9 @@ from paysentineliq.application.queries.example import GetExampleHandler
 from paysentineliq.application.queries.notifications import ListNotificationsHandler
 from paysentineliq.application.queries.payables import ListPayablesHandler
 from paysentineliq.domain.user import Role, User
+from paysentineliq.infrastructure.cache.analysis_cancellation import (
+    RedisAnalysisCancellation,
+)
 from paysentineliq.infrastructure.config import Settings
 from paysentineliq.infrastructure.db.repositories.analyses import (
     SqlAlchemyAnalysisRepository,
@@ -139,6 +147,39 @@ def get_task_dispatcher(request: Request) -> TaskDispatcherPort:
 def get_analysis_lookup(request: Request) -> AnalysisLookupPort:
     session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
     return SqlAlchemyAnalysisRepository(session_factory)
+
+
+def get_analysis_cancellation(request: Request) -> CancellationPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return RedisAnalysisCancellation(
+        request.app.state.redis,
+        fallback=SqlAlchemyAnalysisRepository(session_factory),
+    )
+
+
+def get_analysis_cancellation_repository(
+    request: Request,
+) -> AnalysisCancellationRepositoryPort:
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return SqlAlchemyAnalysisRepository(session_factory)
+
+
+def get_cancel_analysis_handler(
+    repository: Annotated[
+        AnalysisCancellationRepositoryPort,
+        Depends(get_analysis_cancellation_repository),
+    ],
+    cancellation: Annotated[CancellationPort, Depends(get_analysis_cancellation)],
+    dispatcher: Annotated[TaskDispatcherPort, Depends(get_task_dispatcher)],
+    request: Request,
+) -> CancelAnalysisHandler:
+    storage: StoragePort | None = getattr(request.app.state, "storage", None)
+    return CancelAnalysisHandler(
+        repository,
+        cancellation,
+        dispatcher,
+        storage,
+    )
 
 
 def get_example_read_repository(

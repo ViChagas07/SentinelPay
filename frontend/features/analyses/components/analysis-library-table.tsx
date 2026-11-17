@@ -19,11 +19,15 @@ import type { AnalysisListItem, AnalysisStatus } from "@/lib/api/schemas";
 import type { LibraryKind, LibraryView } from "@/lib/analyses/library";
 import type { TranslationKey } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/provider";
+import { isActiveStatus } from "@/lib/verification/polling";
 import { cn } from "@/lib/utils";
 
 export const LIBRARY_STATUS_KEYS: Record<AnalysisStatus, TranslationKey> = {
   queued: "dashboard.status.queued",
+  running: "dashboard.status.running",
   processing: "dashboard.status.processing",
+  cancelling: "dashboard.status.cancelling",
+  cancelled: "dashboard.status.cancelled",
   completed: "dashboard.status.completed",
   degraded: "dashboard.status.degraded",
   failed: "dashboard.status.failed",
@@ -31,20 +35,24 @@ export const LIBRARY_STATUS_KEYS: Record<AnalysisStatus, TranslationKey> = {
 
 function StatusBadge({ status }: Readonly<{ status: AnalysisStatus }>) {
   const { t } = useI18n();
-  const active = status === "queued" || status === "processing";
+  const active = isActiveStatus(status);
   const failed = status === "failed";
+  const cancelled = status === "cancelled";
 
   return (
     <Badge
       variant="outline"
-      className={cn("max-w-full gap-1.5 whitespace-normal", failed && "border-risk-high/40")}
+      className={cn(
+        "max-w-full gap-1.5 whitespace-normal",
+        (failed || cancelled) && "border-risk-high/40",
+      )}
     >
       {active ? (
         <Loader2
           className="size-3 shrink-0 animate-spin motion-reduce:animate-none"
           aria-hidden="true"
         />
-      ) : failed ? (
+      ) : failed || cancelled ? (
         <AlertCircle className="size-3 shrink-0 text-risk-high" aria-hidden="true" />
       ) : null}
       {t(LIBRARY_STATUS_KEYS[status])}
@@ -146,7 +154,7 @@ function MobileAnalysisList({
         const score = row.score;
         const band = row.band;
         const hasResult = score !== null && band !== null;
-        const awaiting = row.status === "queued" || row.status === "processing";
+        const awaiting = isActiveStatus(row.status);
 
         return (
           <li key={row.id} className="space-y-3 p-4">
@@ -325,7 +333,7 @@ export function AnalysisLibraryTable({
           );
         }
 
-        const awaiting = row.status === "queued" || row.status === "processing";
+        const awaiting = isActiveStatus(row.status);
 
         return (
           <span className="text-xs text-muted-foreground">

@@ -6,16 +6,31 @@ const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
 
 export function isTerminalStatus(status: AnalysisStatus): boolean {
-  return status === "completed" || status === "degraded" || status === "failed";
+  return (
+    status === "completed" || status === "degraded" || status === "failed" || status === "cancelled"
+  );
 }
 
 export function isActiveStatus(status: AnalysisStatus): boolean {
-  return status === "queued" || status === "processing";
+  return (
+    status === "queued" ||
+    status === "running" ||
+    status === "processing" ||
+    status === "cancelling"
+  );
+}
+
+export function isCancellableStatus(status: AnalysisStatus): boolean {
+  return status === "queued" || status === "running" || status === "processing";
 }
 
 export function pollIntervalFor(status: AnalysisStatus, elapsedMs: number): number | false {
   if (isTerminalStatus(status)) {
     return false;
+  }
+
+  if (status === "cancelling") {
+    return 1000;
   }
 
   const elapsed = Math.max(0, Number.isFinite(elapsedMs) ? elapsedMs : 0);

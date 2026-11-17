@@ -3,6 +3,18 @@
     "schemas": {
       "AnalysisDetailResponse": {
         "properties": {
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -27,6 +39,9 @@
           "kind": {
             "title": "Kind",
             "type": "string"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/AnalysisProgressResponse"
           },
           "result": {
             "anyOf": [
@@ -60,7 +75,9 @@
           "updated_at",
           "error_code",
           "result_available",
-          "result"
+          "result",
+          "progress",
+          "cancelled_at"
         ],
         "title": "AnalysisDetailResponse",
         "type": "object"
@@ -174,6 +191,61 @@
         "title": "AnalysisListResponse",
         "type": "object"
       },
+      "AnalysisProgressResponse": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "indeterminate": {
+            "title": "Indeterminate",
+            "type": "boolean"
+          },
+          "percent": {
+            "title": "Percent",
+            "type": "integer"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          }
+        },
+        "required": [
+          "percent",
+          "stage",
+          "detail",
+          "started_at",
+          "indeterminate"
+        ],
+        "title": "AnalysisProgressResponse",
+        "type": "object"
+      },
       "AnalysisResultResponse": {
         "properties": {
           "band": {
@@ -265,6 +337,25 @@
           "file"
         ],
         "title": "Body_upload_document_api_v1_documents_upload_post",
+        "type": "object"
+      },
+      "CancelAnalysisResponse": {
+        "properties": {
+          "analysis_id": {
+            "format": "uuid",
+            "title": "Analysis Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "analysis_id",
+          "status"
+        ],
+        "title": "CancelAnalysisResponse",
         "type": "object"
       },
       "ChannelPreferenceRequest": {
@@ -1307,6 +1398,122 @@
           }
         },
         "summary": "Get Analysis",
+        "tags": [
+          "analyses"
+        ]
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/cancel": {
+      "post": {
+        "operationId": "cancel_analysis_api_v1_analyses__analysis_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAnalysisResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Analysis",
+        "tags": [
+          "analyses"
+        ]
+      }
+    },
+    "/api/v1/analyses/{analysis_id}/events": {
+      "get": {
+        "operationId": "analysis_events_api_v1_analyses__analysis_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analysis Events",
         "tags": [
           "analyses"
         ]

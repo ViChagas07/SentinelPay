@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from paysentineliq.application.errors import (
+    AnalysisCancelledError,
     AnalysisTimeoutError,
     DocumentNotFoundError,
     EmbeddingUnavailableError,
@@ -21,12 +22,16 @@ from paysentineliq.application.ports.analysis import (
     AnalysisOrchestratorPort,
     AnalysisRepositoryPort,
 )
+from paysentineliq.application.ports.cancellation import CancellationPort, NullCancellation
 from paysentineliq.application.ports.notification_repository import (
     NotificationRepositoryPort,
 )
-from paysentineliq.domain.analysis import AnalysisEvent, AnalysisEventType
+from paysentineliq.application.ports.storage import StoragePort
+from paysentineliq.application.security.storage_keys import build_analysis_report_key
+from paysentineliq.domain.analysis import AnalysisEvent, AnalysisEventType, AnalysisRecord
 
 _NON_RETRYABLE = (
+    AnalysisCancelledError,
     UnsupportedDocumentError,
     DocumentNotFoundError,
     InvalidDocumentError,
@@ -49,6 +54,8 @@ class ProcessAnalysisHandler:
         notifications: NotificationRepositoryPort,
         *,
         lease_seconds: int,
+        cancellation: CancellationPort | None = None,
+        storage: StoragePort | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         if lease_seconds <= 0:
@@ -58,6 +65,8 @@ class ProcessAnalysisHandler:
         self._analyses = analyses
         self._notifications = notifications
         self._lease_seconds = lease_seconds
+        self._cancellation = cancellation or NullCancellation()
+        self._storage = storage
         self._clock = clock or (lambda: datetime.now(UTC))
 
     async def execute(
@@ -83,6 +92,8 @@ class ProcessAnalysisHandler:
         )
         if claimed is None:
             return ProcessedAnalysis(analysis_id=analysis_id, status="skipped")
+        if await self._cancellation.is_cancelled(analysis_id):
+            return await self._finalize_cancel(claimed)
         try:
             document = await self._source.get(claimed.document_id)
             if document is None:
@@ -94,7 +105,11 @@ class ProcessAnalysisHandler:
                 data=data,
                 locale=locale,
             )
+        except AnalysisCancelledError:
+            return await self._finalize_cancel(claimed)
         except Exception as error:
+            if await self._cancellation.is_cancelled(analysis_id):
+                return await self._finalize_cancel(claimed)
             error_code = analysis_error_code(error)
             if is_retryable_analysis_error(error) and not final_attempt:
                 with contextlib.suppress(Exception):
@@ -120,13 +135,38 @@ class ProcessAnalysisHandler:
                             payload={"error_code": error_code},
                         ),
                     )
+            await self._cancellation.clear(analysis_id)
             raise
+        await self._cancellation.clear(analysis_id)
         notifications = await self._notifications.list_pending_for_analysis(analysis_id)
         return ProcessedAnalysis(
             analysis_id=analysis_id,
             status="degraded" if report.degradation_flags else "completed",
             notification_ids=tuple(item.id for item in notifications),
         )
+
+    async def _finalize_cancel(self, claimed: AnalysisRecord) -> ProcessedAnalysis:
+        analysis_id = claimed.id
+        await self._delete_partial_report(claimed.owner_id, analysis_id)
+        await self._analyses.finalize_cancelled(
+            analysis_id,
+            event=AnalysisEvent(
+                analysis_id=analysis_id,
+                event_type=AnalysisEventType.CANCELLED,
+                payload={"reason": "user_cancelled"},
+            ),
+        )
+        await self._cancellation.clear(analysis_id)
+        return ProcessedAnalysis(analysis_id=analysis_id, status="cancelled")
+
+    async def _delete_partial_report(self, owner_id: UUID, analysis_id: UUID) -> None:
+        if self._storage is None:
+            return
+        key = build_analysis_report_key(owner_id=owner_id, analysis_id=analysis_id)
+        try:
+            await self._storage.delete(key)
+        except Exception:
+            return
 
 
 def is_retryable_analysis_error(error: BaseException) -> bool:

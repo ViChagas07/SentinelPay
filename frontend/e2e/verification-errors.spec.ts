@@ -179,12 +179,19 @@ test.describe("verification dossier states", () => {
           status: 200,
           body: analysisDetail({
             id,
-            status: "processing",
+            status: "running",
             created_at: createdAt,
             updated_at: createdAt,
             error_code: null,
             result_available: false,
             result: null,
+            progress: {
+              percent: 55,
+              stage: "rag",
+              detail: "Reranqueando",
+              started_at: createdAt,
+              indeterminate: true,
+            },
           }),
         }),
       },
@@ -196,17 +203,20 @@ test.describe("verification dossier states", () => {
     await expect(page.getByText("Em análise").first()).toBeVisible();
     await expect(page.getByText("Tempo decorrido")).toBeVisible();
     const progress = page.getByRole("progressbar", { name: "Progresso da análise" });
-    await expect(progress).toHaveAttribute(
-      "aria-valuetext",
-      "O backend não informa percentual. A análise continua no servidor.",
-    );
-    await expect(page.getByText("Etapas do backend")).toBeVisible();
-    await expect(page.getByText("Execução da análise")).toBeVisible();
-    await expect(page.getByText("Leitura do documento")).toBeVisible();
-    await expect(page.getByText("Extração de campos")).toBeVisible();
-    await expect(page.getByText("Regras FEBRABAN, INSS e CLT")).toBeVisible();
-    await expect(page.getByText("Classificação de risco")).toBeVisible();
-    await expect(page.getByText("Justificativa")).toBeVisible();
+    await expect(progress).toHaveAttribute("aria-valuenow", "55");
+    await expect(progress).toHaveAttribute("aria-valuetext", "55% concluído. Reranqueando");
+    await expect(page.getByText("Etapas da análise")).toBeVisible();
+    const stageList = page.getByRole("list", { name: "Etapas da análise" });
+    await expect(stageList.getByText("Leitura do documento (OCR)")).toBeVisible();
+    await expect(stageList.getByText("Extração e regras")).toBeVisible();
+    await expect(stageList.getByText("Classificação de risco")).toBeVisible();
+    await expect(stageList.getByText("Base de conhecimento")).toBeVisible();
+    await expect(stageList.getByText("Análise do LLM")).toBeVisible();
+    await expect(stageList.getByText("Finalização")).toBeVisible();
+    await expect(stageList.getByText("Reranqueando")).toBeVisible();
+
+    const accessibility = await new AxeBuilder({ page }).analyze();
+    expect(accessibility.violations).toEqual([]);
   });
 
   test("shows the failed job with the translated error code", async ({ page, context }) => {

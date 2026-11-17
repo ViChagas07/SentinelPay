@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -21,6 +22,7 @@ import { queryKeys } from "@/lib/query/keys";
 import { formatDate, INTL_LOCALE } from "@/lib/i18n/format";
 import { useI18n } from "@/lib/i18n/provider";
 import { getAnalysisErrorKey } from "@/lib/verification/errors";
+import { isActiveStatus } from "@/lib/verification/polling";
 import { createIdempotencyKey, formatFileSize } from "@/lib/verification/upload";
 import { uploadAnalysis, type UploadProgress } from "@/lib/verification/upload-analysis";
 
@@ -191,6 +193,7 @@ function ResultView({
 
 export function VerificationDossier({ analysisId }: Readonly<{ analysisId: string }>) {
   const { t, locale } = useI18n();
+  const reduceMotion = useReducedMotion() ?? false;
   const router = useRouter();
   const queryClient = useQueryClient();
   const validId = uuidSchema.safeParse(analysisId).success;
@@ -335,13 +338,18 @@ export function VerificationDossier({ analysisId }: Readonly<{ analysisId: strin
           ) : null}
 
           <div className="mt-6">
-            {analysis.status === "queued" || analysis.status === "processing" ? (
+            {isActiveStatus(analysis.status) ? (
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                 <LazyDocumentViewer file={file} scanning />
                 <JobProgressPanel
                   analysis={analysis}
                   showDossierLink={false}
+                  streamState={query.streamState}
                   onRetryPolling={() => void query.refetch()}
+                  onCancelled={() => {
+                    forgetDocument(analysis.id);
+                    router.push("/verificacao");
+                  }}
                 />
               </div>
             ) : analysis.status === "failed" ? (
@@ -350,13 +358,38 @@ export function VerificationDossier({ analysisId }: Readonly<{ analysisId: strin
                 <JobProgressPanel
                   analysis={analysis}
                   showDossierLink={false}
+                  streamState={query.streamState}
                   onRetryPolling={() => void query.refetch()}
                   onResend={file ? () => void handleResend() : undefined}
                   resending={resending}
                 />
               </div>
+            ) : analysis.status === "cancelled" ? (
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+                <LazyDocumentViewer file={file} />
+                <JobProgressPanel
+                  analysis={analysis}
+                  showDossierLink={false}
+                  streamState={query.streamState}
+                  onRetryPolling={() => void query.refetch()}
+                  onCancelled={() => {
+                    forgetDocument(analysis.id);
+                    router.push("/verificacao");
+                  }}
+                />
+              </div>
             ) : (
-              <ResultView analysis={analysis} file={file} onRefresh={() => void query.refetch()} />
+              <motion.div
+                initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.35, ease: "easeOut" }}
+              >
+                <ResultView
+                  analysis={analysis}
+                  file={file}
+                  onRefresh={() => void query.refetch()}
+                />
+              </motion.div>
             )}
           </div>
 

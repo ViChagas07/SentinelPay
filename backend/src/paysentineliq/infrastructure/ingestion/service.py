@@ -8,12 +8,14 @@ import pymupdf
 from PIL import Image, UnidentifiedImageError
 
 from paysentineliq.application.errors import (
+    AnalysisCancelledError,
     InvalidDocumentError,
     OcrImageTooLargeError,
     OcrPageLimitError,
     OcrTimeoutError,
     UnsupportedDocumentError,
 )
+from paysentineliq.application.ports.ingestion import CancelCheck, PageProgressCallback
 from paysentineliq.application.ports.ocr import OcrPort, OcrResult
 from paysentineliq.domain.ingestion import (
     BBox,
@@ -65,19 +67,42 @@ class DocumentIngestionService:
         self._max_image_pixels = max_image_pixels
         self._native_min_chars = native_min_chars
 
-    async def ingest(self, data: bytes) -> IngestionResult:
+    async def ingest(
+        self,
+        data: bytes,
+        *,
+        on_page: PageProgressCallback | None = None,
+        check_cancelled: CancelCheck | None = None,
+    ) -> IngestionResult:
         if not data:
             raise InvalidDocumentError()
         if data.startswith(_PDF_SIGNATURE):
-            return await self._ingest_pdf(data)
+            return await self._ingest_pdf(
+                data,
+                on_page=on_page,
+                check_cancelled=check_cancelled,
+            )
         if data.startswith(_PNG_SIGNATURE) or data.startswith(_JPEG_SIGNATURE):
-            return await self._ingest_image(data)
+            return await self._ingest_image(
+                data,
+                on_page=on_page,
+                check_cancelled=check_cancelled,
+            )
         raise UnsupportedDocumentError()
 
-    async def _ingest_image(self, data: bytes) -> IngestionResult:
+    async def _ingest_image(
+        self,
+        data: bytes,
+        *,
+        on_page: PageProgressCallback | None,
+        check_cancelled: CancelCheck | None,
+    ) -> IngestionResult:
+        await self._ensure_not_cancelled(check_cancelled)
         self._ensure_image_size(data)
 
         ocr_result = await self._run_ocr(data)
+        await self._ensure_not_cancelled(check_cancelled)
+        await self._report_page(on_page, 1, 1)
         image_signals = self._visuals.analyze_image(data, page=1)
         blocks = tuple(
             TextBlock(
@@ -97,7 +122,13 @@ class DocumentIngestionService:
             language=ocr_result.language,
         )
 
-    async def _ingest_pdf(self, data: bytes) -> IngestionResult:
+    async def _ingest_pdf(
+        self,
+        data: bytes,
+        *,
+        on_page: PageProgressCallback | None,
+        check_cancelled: CancelCheck | None,
+    ) -> IngestionResult:
         try:
             document = await asyncio.to_thread(
                 pymupdf.open,
@@ -124,6 +155,7 @@ class DocumentIngestionService:
             language: str | None = None
 
             for index in range(page_count):
+                await self._ensure_not_cancelled(check_cancelled)
                 page = await asyncio.to_thread(document.load_page, index)
                 page_number = index + 1
                 native_blocks = await asyncio.to_thread(
@@ -151,6 +183,8 @@ class DocumentIngestionService:
 
                 if native_chars >= self._native_min_chars:
                     blocks.extend(native_blocks)
+                    await self._report_page(on_page, page_number, page_count)
+                    await self._ensure_not_cancelled(check_cancelled)
                     continue
 
                 ocr_result = await self._run_ocr(png)
@@ -165,6 +199,8 @@ class DocumentIngestionService:
                     )
                     for block in ocr_result.blocks
                 )
+                await self._report_page(on_page, page_number, page_count)
+                await self._ensure_not_cancelled(check_cancelled)
 
             return IngestionResult(
                 blocks=tuple(blocks),
@@ -176,6 +212,20 @@ class DocumentIngestionService:
             )
         finally:
             document.close()
+
+    @staticmethod
+    async def _ensure_not_cancelled(check: CancelCheck | None) -> None:
+        if check is not None and await check():
+            raise AnalysisCancelledError()
+
+    @staticmethod
+    async def _report_page(
+        on_page: PageProgressCallback | None,
+        page: int,
+        total: int,
+    ) -> None:
+        if on_page is not None:
+            await on_page(page, total)
 
     async def _run_ocr(self, image: bytes) -> OcrResult:
         try:

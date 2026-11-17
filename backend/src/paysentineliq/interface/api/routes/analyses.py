@@ -1,26 +1,42 @@
+import asyncio
+from collections.abc import AsyncIterator
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from paysentineliq.application.commands.cancel_analysis import (
+    AnalysisCancellationDTO,
+    CancelAnalysisHandler,
+)
 from paysentineliq.application.commands.create_analysis import (
     CreateAnalysisCommand,
     CreateAnalysisHandler,
 )
+from paysentineliq.application.errors import AnalysisNotFoundError
+from paysentineliq.application.ports.analysis_read_repository import (
+    AnalysisReadRepositoryPort,
+    AnalysisSummary,
+)
 from paysentineliq.application.queries.analyses import (
     AnalysisDetailDTO,
+    AnalysisProgressDTO,
     AnalysisResultDTO,
     GetAnalysisHandler,
     ListAnalysesHandler,
 )
+from paysentineliq.domain.analysis import AnalysisStatus
 from paysentineliq.domain.document import DocumentKind
 from paysentineliq.domain.user import User
 from paysentineliq.interface.api.dependencies import (
     get_analysis_detail_query,
     get_analysis_list_query,
+    get_analysis_read_repository,
+    get_cancel_analysis_handler,
     get_create_analysis_handler,
     get_current_user,
     get_locale,
@@ -66,6 +82,14 @@ class AnalysisResultResponse(BaseModel):
     degradation_flags: list[str]
 
 
+class AnalysisProgressResponse(BaseModel):
+    percent: int
+    stage: str | None
+    detail: str | None
+    started_at: datetime | None
+    indeterminate: bool
+
+
 class AnalysisDetailResponse(BaseModel):
     id: UUID
     status: str
@@ -75,6 +99,25 @@ class AnalysisDetailResponse(BaseModel):
     error_code: str | None
     result_available: bool
     result: AnalysisResultResponse | None
+    progress: AnalysisProgressResponse
+    cancelled_at: datetime | None
+
+
+class AnalysisProgressEventResponse(BaseModel):
+    id: UUID
+    status: str
+    kind: str
+    created_at: datetime
+    updated_at: datetime
+    error_code: str | None
+    result_available: bool
+    progress: AnalysisProgressResponse
+    cancelled_at: datetime | None
+
+
+class CancelAnalysisResponse(BaseModel):
+    analysis_id: UUID
+    status: str
 
 
 class AnalysisListItemResponse(BaseModel):
@@ -167,6 +210,122 @@ def _detail_response(detail: AnalysisDetailDTO) -> AnalysisDetailResponse:
         error_code=detail.error_code,
         result_available=detail.result_available,
         result=_result_response(detail.result),
+        progress=_progress_response(detail.progress),
+        cancelled_at=detail.cancelled_at,
+    )
+
+
+def _progress_response(progress: AnalysisProgressDTO) -> AnalysisProgressResponse:
+    return AnalysisProgressResponse(
+        percent=progress.percent,
+        stage=progress.stage.value if progress.stage is not None else None,
+        detail=progress.detail,
+        started_at=progress.started_at,
+        indeterminate=progress.indeterminate,
+    )
+
+
+def _progress_event(summary: AnalysisSummary) -> AnalysisProgressEventResponse:
+    return AnalysisProgressEventResponse(
+        id=summary.id,
+        status=summary.status.value,
+        kind=summary.document_type.value,
+        created_at=summary.created_at,
+        updated_at=summary.updated_at,
+        error_code=summary.error_code,
+        result_available=summary.report_s3_key is not None
+        and summary.status in (AnalysisStatus.COMPLETED, AnalysisStatus.DEGRADED),
+        progress=AnalysisProgressResponse(
+            percent=summary.progress_percent,
+            stage=summary.current_stage.value if summary.current_stage is not None else None,
+            detail=summary.stage_detail,
+            started_at=summary.stage_started_at,
+            indeterminate=summary.status in (AnalysisStatus.RUNNING, AnalysisStatus.CANCELLING),
+        ),
+        cancelled_at=summary.cancelled_at,
+    )
+
+
+def _is_terminal(status: AnalysisStatus) -> bool:
+    return status in (
+        AnalysisStatus.COMPLETED,
+        AnalysisStatus.DEGRADED,
+        AnalysisStatus.FAILED,
+        AnalysisStatus.CANCELLED,
+    )
+
+
+@router.post(
+    "/{analysis_id}/cancel",
+    response_model=CancelAnalysisResponse,
+    status_code=202,
+)
+async def cancel_analysis(
+    analysis_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    handler: Annotated[CancelAnalysisHandler, Depends(get_cancel_analysis_handler)],
+) -> CancelAnalysisResponse:
+    result: AnalysisCancellationDTO = await handler.handle(analysis_id, user.id)
+    return CancelAnalysisResponse(
+        analysis_id=result.analysis_id,
+        status=result.status.value,
+    )
+
+
+@router.get("/{analysis_id}/events")
+async def analysis_events(
+    analysis_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    repository: Annotated[
+        AnalysisReadRepositoryPort,
+        Depends(get_analysis_read_repository),
+    ],
+    request: Request,
+) -> StreamingResponse:
+    summary = await repository.get_for_owner(analysis_id, user.id)
+    if summary is None:
+        raise AnalysisNotFoundError()
+
+    async def stream() -> "AsyncIterator[str]":
+        last_signature: tuple[object, ...] | None = None
+        heartbeat = 0
+        while True:
+            if await request.is_disconnected():
+                break
+            current = await repository.get_for_owner(analysis_id, user.id)
+            if current is None:
+                break
+            signature = (
+                current.status.value,
+                current.progress_percent,
+                current.current_stage,
+                current.stage_detail,
+                current.updated_at,
+                current.error_code,
+                current.cancelled_at,
+            )
+            payload = _progress_event(current)
+            data = payload.model_dump_json()
+            if signature != last_signature:
+                last_signature = signature
+                yield f"event: progress\ndata: {data}\n\n"
+            if _is_terminal(current.status):
+                yield f"event: done\ndata: {data}\n\n"
+                break
+            heartbeat += 1
+            if heartbeat >= 20:
+                heartbeat = 0
+                yield ": ping\n\n"
+            await asyncio.sleep(0.75)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

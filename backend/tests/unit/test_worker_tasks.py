@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+import paysentineliq.infrastructure.messaging.tasks as tasks
 from paysentineliq.application.commands.process_analysis import ProcessedAnalysis
 from paysentineliq.application.errors import StorageNotConfiguredError
 from paysentineliq.application.notifications.delivery import DeliveryOutcome
@@ -12,7 +13,6 @@ from paysentineliq.infrastructure.composition.notification_worker import (
     build_notification_runtime,
 )
 from paysentineliq.infrastructure.config import Settings, get_settings
-from paysentineliq.infrastructure.messaging import tasks
 from paysentineliq.infrastructure.messaging.celery_app import celery_app
 
 pytestmark = pytest.mark.unit

@@ -1,12 +1,13 @@
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from datetime import UTC, datetime
 from functools import wraps
 from io import BytesIO
 from pathlib import Path
 from time import perf_counter
-from typing import Any, TypedDict
+from typing import Any, TypedDict, TypeVar
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, StateGraph
@@ -14,6 +15,7 @@ from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
 from paysentineliq.application.errors import (
+    AnalysisCancelledError,
     AnalysisTimeoutError,
     UnsupportedDocumentError,
 )
@@ -23,6 +25,7 @@ from paysentineliq.application.ports.analysis import (
     AnalysisRepositoryPort,
     document_type_for,
 )
+from paysentineliq.application.ports.cancellation import CancellationPort, NullCancellation
 from paysentineliq.application.ports.guardrails import (
     GuardrailMetricsPort,
     InjectionClassifierPort,
@@ -80,6 +83,12 @@ from paysentineliq.domain.analysis import (
     AnalysisStatus,
     DegradationFlag,
 )
+from paysentineliq.domain.analysis_progress import (
+    AnalysisStage,
+    progress_within_stage,
+    stage_end_percent,
+    stage_start_percent,
+)
 from paysentineliq.domain.boleto.analysis import BoletoAnalysis, analyze_boleto
 from paysentineliq.domain.boleto.bank_directory import (
     BankDirectory,
@@ -122,6 +131,31 @@ from paysentineliq.infrastructure.observability.metrics import (
     PlatformMetrics,
     get_platform_metrics,
 )
+
+_T = TypeVar("_T")
+_CANCELLATION_POLL_SECONDS = 0.5
+
+
+async def _await_with_cancellation(
+    awaitable: Awaitable[_T],
+    check: Callable[[], Awaitable[bool]],
+) -> _T:
+    task = asyncio.ensure_future(awaitable)
+    try:
+        while True:
+            done, _ = await asyncio.wait({task}, timeout=_CANCELLATION_POLL_SECONDS)
+            if task in done:
+                return await task
+            if await check():
+                task.cancel()
+                with suppress(asyncio.CancelledError, TimeoutError):
+                    await asyncio.wait_for(task, timeout=5)
+                raise AnalysisCancelledError()
+    except asyncio.CancelledError:
+        task.cancel()
+        with suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, timeout=5)
+        raise
 
 
 class AnalysisGraphState(TypedDict, total=False):
@@ -174,6 +208,7 @@ class LangGraphAnalysisOrchestrator:
         classifier: InjectionClassifierPort | None = None,
         metrics: GuardrailMetricsPort | None = None,
         platform_metrics: PlatformMetrics | None = None,
+        cancellation: CancellationPort | None = None,
     ) -> None:
         self._ingestion = ingestion
         self._fraud_service = fraud_service
@@ -195,6 +230,7 @@ class LangGraphAnalysisOrchestrator:
         self._platform_metrics = (
             platform_metrics if platform_metrics is not None else get_platform_metrics()
         )
+        self._cancellation = cancellation or NullCancellation()
         self._tracer = trace.get_tracer("paysentineliq")
         self._input_guard = InputGuardrailService(
             max_chars=settings.guardrail_max_text_chars,
@@ -258,7 +294,14 @@ class LangGraphAnalysisOrchestrator:
                 span.set_attribute("pipeline.stage", stage)
                 span.set_attribute("document.type", document_type)
                 try:
-                    result = await node(state)
+                    if stage == "persist":
+                        await self._ensure_not_cancelled(state["analysis_id"])
+                        result = await node(state)
+                    else:
+                        result = await _await_with_cancellation(
+                            node(state),
+                            lambda: self._is_cancelled(state["analysis_id"]),
+                        )
                 except Exception:
                     span.set_status(Status(StatusCode.ERROR))
                     raise
@@ -297,6 +340,8 @@ class LangGraphAnalysisOrchestrator:
             "guardrail_evidence": (),
             "input_guard_triggered": False,
         }
+        await self._ensure_not_cancelled(analysis_id)
+        await self._begin_stage(analysis_id, AnalysisStage.VALIDATION, "Validando o arquivo")
         with self._tracer.start_as_current_span("pipeline.run") as span:
             span.set_attribute("document.type", self._metric_document_type(initial))
             result: Any = await self._graph.ainvoke(initial)
@@ -307,38 +352,41 @@ class LangGraphAnalysisOrchestrator:
 
     async def _load_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
         document = state["document"]
-        flags = self._flags(state)
-        await self._processing(
+        await self._complete_stage(
             state["analysis_id"],
-            "load",
-            {
-                "node": "load",
-                "document_id": str(document.id),
-                "kind": document.kind.value,
-            },
-            flags,
+            AnalysisStage.VALIDATION,
+            f"Arquivo recebido ({document.kind.value})",
         )
         return {}
 
     async def _ingest_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
-        flags = self._flags(state)
+        analysis_id = state["analysis_id"]
+        await self._begin_stage(analysis_id, AnalysisStage.OCR, "Lendo o documento")
+
+        async def _on_page(page: int, total: int) -> None:
+            await self._report_progress(
+                analysis_id,
+                AnalysisStage.OCR,
+                progress_within_stage(AnalysisStage.OCR, page / max(1, total)),
+                f"Página {page} de {total}",
+            )
+
         try:
             result = await asyncio.wait_for(
-                self._ingestion.ingest(state["data"]),
+                self._ingestion.ingest(
+                    state["data"],
+                    on_page=_on_page,
+                    check_cancelled=lambda: self._is_cancelled(analysis_id),
+                ),
                 timeout=self._node_timeout,
             )
         except TimeoutError as exc:
             raise AnalysisTimeoutError("ingest") from exc
         text = "\n".join(block.text for block in result.blocks)
-        await self._processing(
-            state["analysis_id"],
-            "ingest",
-            {
-                "node": "ingest",
-                "pages": str(result.page_count),
-                "signals": str(len(result.signals)),
-            },
-            flags,
+        await self._complete_stage(
+            analysis_id,
+            AnalysisStage.OCR,
+            f"{result.page_count} página(s) lida(s)",
         )
         return {
             "ocr_text": text,
@@ -368,16 +416,11 @@ class LangGraphAnalysisOrchestrator:
             state["analysis_id"],
             result.findings,
         )
-        await self._processing(
+        await self._report_progress(
             state["analysis_id"],
-            "guard",
-            {
-                "node": "guard",
-                "findings": str(len(result.findings)),
-                "triggered": "1" if result.triggered else "0",
-                "sanitized": "1",
-            },
-            flags,
+            AnalysisStage.OCR,
+            stage_end_percent(AnalysisStage.OCR),
+            "Verificando segurança do texto",
         )
         return {
             "sanitized_text": result.sanitized.text,
@@ -393,12 +436,10 @@ class LangGraphAnalysisOrchestrator:
         document_type = document_type_for(document.kind)
         if document_type is None:
             raise UnsupportedDocumentError()
-        flags = self._flags(state)
-        await self._processing(
+        await self._begin_stage(
             state["analysis_id"],
-            "classify",
-            {"node": "classify", "document_type": document_type.value},
-            flags,
+            AnalysisStage.EXTRACTION,
+            "Identificando o tipo de documento",
         )
         return {"document_type": document_type}
 
@@ -409,7 +450,6 @@ class LangGraphAnalysisOrchestrator:
         return document_type.value
 
     async def _boleto_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
-        flags = self._flags(state)
         try:
             analysis, summary = await asyncio.wait_for(
                 asyncio.to_thread(self._run_boleto, state["ocr_text"]),
@@ -422,15 +462,10 @@ class LangGraphAnalysisOrchestrator:
             analysis.evidence,
             analysis.rule_set_version,
         )
-        await self._processing(
+        await self._complete_stage(
             state["analysis_id"],
-            "boleto",
-            {
-                "node": "boleto",
-                "subscore": str(analysis.subscore),
-                "evidence": str(len(analysis.evidence)),
-            },
-            flags,
+            AnalysisStage.EXTRACTION,
+            f"Regras aplicadas ({len(analysis.evidence)} evidências)",
         )
         return {
             "boleto_analysis": analysis,
@@ -438,7 +473,6 @@ class LangGraphAnalysisOrchestrator:
         }
 
     async def _payslip_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
-        flags = self._flags(state)
         try:
             analysis, summary = await asyncio.wait_for(
                 asyncio.to_thread(self._run_payslip, state["ocr_text"]),
@@ -452,15 +486,10 @@ class LangGraphAnalysisOrchestrator:
             analysis.rule_set_version,
             only_triggered=True,
         )
-        await self._processing(
+        await self._complete_stage(
             state["analysis_id"],
-            "payslip",
-            {
-                "node": "payslip",
-                "subscore": str(analysis.subscore),
-                "evidence": str(len(analysis.evidence)),
-            },
-            flags,
+            AnalysisStage.EXTRACTION,
+            f"Regras aplicadas ({len(analysis.evidence)} evidências)",
         )
         return {
             "payslip_analysis": analysis,
@@ -468,7 +497,6 @@ class LangGraphAnalysisOrchestrator:
         }
 
     async def _receipt_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
-        flags = self._flags(state)
         try:
             analysis, summary = await asyncio.wait_for(
                 asyncio.to_thread(self._run_receipt, state["ocr_text"]),
@@ -481,15 +509,10 @@ class LangGraphAnalysisOrchestrator:
             analysis.evidence,
             analysis.rule_set_version,
         )
-        await self._processing(
+        await self._complete_stage(
             state["analysis_id"],
-            "receipt",
-            {
-                "node": "receipt",
-                "subscore": str(analysis.subscore),
-                "evidence": str(len(analysis.evidence)),
-            },
-            flags,
+            AnalysisStage.EXTRACTION,
+            f"Regras aplicadas ({len(analysis.evidence)} evidências)",
         )
         return {
             "receipt_analysis": analysis,
@@ -501,6 +524,11 @@ class LangGraphAnalysisOrchestrator:
         if summary is None:
             raise RuntimeError("deterministic summary is missing")
         flags = self._flags(state)
+        await self._begin_stage(
+            state["analysis_id"],
+            AnalysisStage.CLASSIFICATION,
+            "Calculando o score de risco",
+        )
         try:
             score = await asyncio.wait_for(
                 asyncio.to_thread(
@@ -521,20 +549,20 @@ class LangGraphAnalysisOrchestrator:
                 DegradationFlag.ML_UNAVAILABLE,
                 "fraud",
             )
-        await self._processing(
+        await self._complete_stage(
             state["analysis_id"],
-            "fraud",
-            {
-                "node": "fraud",
-                "base_score": str(score.score),
-                "ml_available": "0" if score.ml_unavailable else "1",
-            },
-            flags,
+            AnalysisStage.CLASSIFICATION,
+            f"Score calculado ({score.score})",
         )
         return {"fraud_score": score, "degradation_flags": flags}
 
     async def _rag_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
         flags = self._flags(state)
+        await self._begin_stage(
+            state["analysis_id"],
+            AnalysisStage.RAG,
+            "Consultando a base de conhecimento e reranqueando",
+        )
         try:
             result = await asyncio.wait_for(
                 self._retriever.retrieve(
@@ -557,11 +585,10 @@ class LangGraphAnalysisOrchestrator:
                 DegradationFlag.RAG_UNAVAILABLE,
                 "rag",
             )
-            await self._processing(
+            await self._complete_stage(
                 state["analysis_id"],
-                "rag",
-                {"node": "rag", "passages": "0"},
-                flags,
+                AnalysisStage.RAG,
+                "Base de conhecimento indisponível",
             )
             return {"rag_passages": (), "degradation_flags": flags}
         if result.rag_unavailable:
@@ -571,11 +598,10 @@ class LangGraphAnalysisOrchestrator:
                 DegradationFlag.RAG_UNAVAILABLE,
                 "rag",
             )
-        await self._processing(
+        await self._complete_stage(
             state["analysis_id"],
-            "rag",
-            {"node": "rag", "passages": str(len(result.passages))},
-            flags,
+            AnalysisStage.RAG,
+            f"{len(result.passages)} trecho(s) recuperado(s)",
         )
         return {"rag_passages": result.passages, "degradation_flags": flags}
 
@@ -589,6 +615,11 @@ class LangGraphAnalysisOrchestrator:
         interpretation: InterpretationResult | None = None
         rejection: str | None = None
         judge_verdict: JudgeVerdict | None = None
+        await self._begin_stage(
+            state["analysis_id"],
+            AnalysisStage.LLM,
+            "Gerando a justificativa",
+        )
 
         if state.get("input_guard_triggered", False):
             rejection = "input"
@@ -641,6 +672,12 @@ class LangGraphAnalysisOrchestrator:
             adjustment,
         )
         if interpretation is not None and self._judge_enabled:
+            await self._report_progress(
+                state["analysis_id"],
+                AnalysisStage.LLM,
+                stage_start_percent(AnalysisStage.LLM),
+                "Revisando a resposta do modelo",
+            )
             judge_verdict, flags, guardrail_evidence, accepted = await self._judge_report(
                 state,
                 candidate_score,
@@ -676,18 +713,10 @@ class LangGraphAnalysisOrchestrator:
                 evidence_count,
             )
             inconsistencies = ()
-        await self._processing(
+        await self._complete_stage(
             state["analysis_id"],
-            "interpret",
-            {
-                "node": "interpret",
-                "llm_available": "0" if interpretation is None else "1",
-                "adjustment": str(adjustment),
-                "final_score": str(final_score),
-                "guardrail_evidence": str(len(guardrail_evidence)),
-                "guardrail_rejection": rejection or "",
-            },
-            flags,
+            AnalysisStage.LLM,
+            "Justificativa pronta",
         )
         return {
             "interpretation": interpretation,
@@ -925,6 +954,11 @@ class LangGraphAnalysisOrchestrator:
         document = state["document"]
         flags = self._flags(state)
         interpretation = state.get("interpretation")
+        await self._begin_stage(
+            analysis_id,
+            AnalysisStage.PERSISTENCE,
+            "Salvando o resultado",
+        )
         if boleto is not None:
             fields = boleto_fields(boleto)
             evidence = boleto_evidence(boleto)
@@ -1017,7 +1051,13 @@ class LangGraphAnalysisOrchestrator:
             },
             created_at=self._clock(),
         )
-        await self._analyses.complete(
+        await self._report_progress(
+            analysis_id,
+            AnalysisStage.PERSISTENCE,
+            stage_end_percent(AnalysisStage.PERSISTENCE),
+            "Resultado pronto para finalizar",
+        )
+        completed = await self._analyses.complete(
             analysis_id,
             score=report.score,
             band=report.band,
@@ -1046,30 +1086,69 @@ class LangGraphAnalysisOrchestrator:
             notifications=(notification,),
             payables=payables,
         )
+        if not completed:
+            with suppress(Exception):
+                await self._storage.delete(report_key)
+            raise AnalysisCancelledError(analysis_id)
         self._platform_metrics.record_analysis(document_type.value, report.band.value)
         self._platform_metrics.record_notification("in_app", "created")
         return {"report": report}
 
-    async def _processing(
+    async def _is_cancelled(self, analysis_id: UUID) -> bool:
+        return await self._cancellation.is_cancelled(analysis_id)
+
+    async def _ensure_not_cancelled(self, analysis_id: UUID) -> None:
+        if await self._is_cancelled(analysis_id):
+            raise AnalysisCancelledError(analysis_id)
+
+    async def _report_progress(
         self,
         analysis_id: UUID,
-        node: str,
-        state: dict[str, str],
-        flags: tuple[DegradationFlag, ...],
+        stage: AnalysisStage,
+        percent: int,
+        detail: str | None,
     ) -> None:
-        await self._events.append(
-            AnalysisEvent(
-                analysis_id=analysis_id,
-                event_type=AnalysisEventType.PROCESSING,
-                degradation_flags=flags,
-                payload={"node": node},
-            ),
-        )
-        await self._analyses.update_state(
+        with suppress(Exception):
+            await self._analyses.report_progress(
+                analysis_id,
+                stage=stage,
+                percent=percent,
+                detail=detail,
+                event=AnalysisEvent(
+                    analysis_id=analysis_id,
+                    event_type=AnalysisEventType.PROGRESS,
+                    payload={
+                        "stage": stage.value,
+                        "percent": str(percent),
+                        "detail": (detail or "")[:120],
+                    },
+                ),
+            )
+
+    async def _begin_stage(
+        self,
+        analysis_id: UUID,
+        stage: AnalysisStage,
+        detail: str | None,
+    ) -> None:
+        await self._report_progress(
             analysis_id,
-            status=AnalysisStatus.PROCESSING,
-            state=state,
-            degradation_flags=flags,
+            stage,
+            stage_start_percent(stage),
+            detail,
+        )
+
+    async def _complete_stage(
+        self,
+        analysis_id: UUID,
+        stage: AnalysisStage,
+        detail: str | None,
+    ) -> None:
+        await self._report_progress(
+            analysis_id,
+            stage,
+            stage_end_percent(stage),
+            detail,
         )
 
     async def _append_rule_events(

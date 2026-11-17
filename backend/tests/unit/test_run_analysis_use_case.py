@@ -20,6 +20,7 @@ from paysentineliq.domain.analysis import (
     AnalysisStatus,
     DegradationFlag,
 )
+from paysentineliq.domain.analysis_progress import AnalysisStage
 from paysentineliq.domain.document import DocumentKind
 from paysentineliq.domain.notification import Notification
 from paysentineliq.domain.scoring import RiskBand
@@ -201,6 +202,25 @@ class FakeAnalysisRepository:
 
     async def list_stale_processing(self, before: datetime) -> tuple[AnalysisRecord, ...]:
         return ()
+
+    async def report_progress(
+        self,
+        analysis_id: UUID,
+        *,
+        stage: AnalysisStage,
+        percent: int,
+        detail: str | None,
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        return True
+
+    async def finalize_cancelled(
+        self,
+        analysis_id: UUID,
+        *,
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        return True
 
 
 def _document(kind: DocumentKind = DocumentKind.BANK_SLIP) -> AnalysisDocument:

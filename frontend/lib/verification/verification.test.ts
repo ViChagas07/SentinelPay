@@ -5,6 +5,7 @@ import {
   elapsedBetween,
   formatElapsed,
   isActiveStatus,
+  isCancellableStatus,
   isLongRunning,
   isTerminalStatus,
   pollIntervalFor,
@@ -90,21 +91,34 @@ describe("job polling", () => {
     expect(isTerminalStatus("completed")).toBe(true);
     expect(isTerminalStatus("degraded")).toBe(true);
     expect(isTerminalStatus("failed")).toBe(true);
+    expect(isTerminalStatus("cancelled")).toBe(true);
     expect(isTerminalStatus("queued")).toBe(false);
+    expect(isTerminalStatus("running")).toBe(false);
     expect(isTerminalStatus("processing")).toBe(false);
+    expect(isTerminalStatus("cancelling")).toBe(false);
     expect(isActiveStatus("queued")).toBe(true);
+    expect(isActiveStatus("running")).toBe(true);
     expect(isActiveStatus("processing")).toBe(true);
+    expect(isActiveStatus("cancelling")).toBe(true);
+    expect(isActiveStatus("cancelled")).toBe(false);
+    expect(isCancellableStatus("queued")).toBe(true);
+    expect(isCancellableStatus("running")).toBe(true);
+    expect(isCancellableStatus("cancelling")).toBe(false);
+    expect(isCancellableStatus("completed")).toBe(false);
   });
 
   it("grows the polling interval with the job age and stops at the end", () => {
     expect(pollIntervalFor("queued", 0)).toBe(2500);
     expect(pollIntervalFor("processing", 30_000)).toBe(2500);
+    expect(pollIntervalFor("running", 30_000)).toBe(2500);
+    expect(pollIntervalFor("cancelling", 30_000)).toBe(1000);
     expect(pollIntervalFor("processing", 2 * 60_000)).toBe(5000);
     expect(pollIntervalFor("processing", 5 * 60_000)).toBe(10_000);
     expect(pollIntervalFor("processing", 9 * 60_000)).toBe(20_000);
     expect(pollIntervalFor("completed", 0)).toBe(false);
     expect(pollIntervalFor("degraded", 0)).toBe(false);
     expect(pollIntervalFor("failed", 0)).toBe(false);
+    expect(pollIntervalFor("cancelled", 0)).toBe(false);
   });
 
   it("calculates elapsed time and flags long jobs", () => {
@@ -113,6 +127,7 @@ describe("job polling", () => {
     expect(elapsedBetween("2026-11-16T12:00:00Z", now)).toBe(600_000);
     expect(elapsedBetween("not-a-date", now)).toBe(0);
     expect(isLongRunning("processing", LONG_JOB_MS)).toBe(true);
+    expect(isLongRunning("running", LONG_JOB_MS)).toBe(true);
     expect(isLongRunning("completed", LONG_JOB_MS)).toBe(false);
   });
 

@@ -1,13 +1,17 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from typing import Any, BinaryIO
 from uuid import UUID, uuid4
 
 import pytest
 
-from paysentineliq.application.errors import AnalysisTimeoutError, LlmUnavailableError
+from paysentineliq.application.errors import (
+    AnalysisCancelledError,
+    AnalysisTimeoutError,
+    LlmUnavailableError,
+)
 from paysentineliq.application.ports.analysis import AnalysisDocument
 from paysentineliq.application.ports.fraud_model import ModelPrediction
 from paysentineliq.application.queries.fraud_scoring import FraudScoringService
@@ -24,6 +28,7 @@ from paysentineliq.domain.analysis import (
     AnalysisStatus,
     DegradationFlag,
 )
+from paysentineliq.domain.analysis_progress import AnalysisStage
 from paysentineliq.domain.document import DocumentKind
 from paysentineliq.domain.ingestion import IngestionResult, TextBlock, VisualSignal
 from paysentineliq.domain.knowledge import (
@@ -49,10 +54,20 @@ class FakeIngestion:
         self._delay = delay
         self.calls = 0
 
-    async def ingest(self, data: bytes) -> IngestionResult:
+    async def ingest(
+        self,
+        data: bytes,
+        *,
+        on_page: Callable[[int, int], Awaitable[None]] | None = None,
+        check_cancelled: Callable[[], Awaitable[bool]] | None = None,
+    ) -> IngestionResult:
         self.calls += 1
+        if check_cancelled is not None and await check_cancelled():
+            raise RuntimeError("cancelled")
         if self._delay:
             await asyncio.sleep(self._delay)
+        if on_page is not None:
+            await on_page(1, 1)
         return IngestionResult(
             blocks=(TextBlock(text=self._text, page=1, bbox=None, confidence=1.0),),
             signals=(VisualSignal(name="image_blur", value=0.0, explanation="none"),),
@@ -71,6 +86,22 @@ class FakeRag:
     async def retrieve(self, query: KnowledgeQuery) -> KnowledgeRetrievalResult:
         self.query = query
         return self._result
+
+
+class FakeCancellation:
+    def __init__(self, *, cancelled: bool = False) -> None:
+        self.cancelled = cancelled
+        self.requests: list[UUID] = []
+        self.cleared: list[UUID] = []
+
+    async def request(self, analysis_id: UUID) -> None:
+        self.requests.append(analysis_id)
+
+    async def clear(self, analysis_id: UUID) -> None:
+        self.cleared.append(analysis_id)
+
+    async def is_cancelled(self, analysis_id: UUID) -> bool:
+        return self.cancelled
 
 
 class FakeInterpreter:
@@ -130,8 +161,10 @@ class FakeModel:
 class FakeAnalysisRepository:
     def __init__(self) -> None:
         self.states: list[dict[str, Any]] = []
+        self.progress: list[dict[str, Any]] = []
         self.completed: dict[str, Any] | None = None
         self.failed: dict[str, Any] | None = None
+        self.cancelled = False
 
     async def create(
         self,
@@ -235,6 +268,35 @@ class FakeAnalysisRepository:
     async def list_stale_processing(self, before: datetime) -> tuple[Any, ...]:
         return ()
 
+    async def report_progress(
+        self,
+        analysis_id: UUID,
+        *,
+        stage: AnalysisStage,
+        percent: int,
+        detail: str | None,
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        self.progress.append(
+            {
+                "analysis_id": analysis_id,
+                "stage": stage,
+                "percent": percent,
+                "detail": detail,
+                "event": event,
+            },
+        )
+        return True
+
+    async def finalize_cancelled(
+        self,
+        analysis_id: UUID,
+        *,
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        self.cancelled = True
+        return True
+
 
 class FakeEventRepository:
     def __init__(self) -> None:
@@ -334,6 +396,7 @@ def _orchestrator(
     settings: Settings | None = None,
     regulatory: RegulatoryTables | None = None,
     ingestion_delay: float = 0.0,
+    cancellation: FakeCancellation | None = None,
 ) -> tuple[
     LangGraphAnalysisOrchestrator,
     FakeAnalysisRepository,
@@ -360,6 +423,7 @@ def _orchestrator(
         settings=settings or _settings(),
         regulatory=regulatory,
         clock=lambda: _NOW,
+        cancellation=cancellation,
     )
     return (
         orchestrator,
@@ -419,6 +483,48 @@ async def test_boleto_runs_end_to_end_with_fake_llm() -> None:
     assert len(notifications) == 1
     assert notifications[0].payload["status"] == "completed"
     assert notifications[0].type is NotificationType.ANALYSIS_COMPLETED
+
+
+async def test_progress_is_monotonic_and_reaches_one_hundred() -> None:
+    boleto = build_boleto()
+    orchestrator, analyses, _events, _storage, _ingestion, _rag, _interpreter = _orchestrator(
+        boleto.ocr_text(),
+        model=FakeModel(),
+    )
+
+    await _run(orchestrator)
+
+    percents = [item["percent"] for item in analyses.progress]
+    stages = [item["stage"] for item in analyses.progress]
+    assert percents == sorted(percents)
+    assert percents[-1] == 100
+    assert set(stages) == set(AnalysisStage)
+    assert any(
+        item["stage"] is AnalysisStage.OCR and item["detail"] == "Página 1 de 1"
+        for item in analyses.progress
+    )
+    assert all(
+        isinstance(item["event"], AnalysisEvent)
+        and item["event"].event_type is AnalysisEventType.PROGRESS
+        for item in analyses.progress
+    )
+
+
+async def test_cancelled_before_first_stage_aborts_without_completing() -> None:
+    boleto = build_boleto()
+    cancellation = FakeCancellation(cancelled=True)
+    orchestrator, analyses, _events, _storage, _ingestion, _rag, _interpreter = _orchestrator(
+        boleto.ocr_text(),
+        model=FakeModel(),
+        cancellation=cancellation,
+    )
+
+    with pytest.raises(AnalysisCancelledError):
+        await _run(orchestrator)
+
+    assert analyses.completed is None
+    assert analyses.failed is None
+    assert analyses.progress == []
 
 
 async def test_payslip_runs_with_synthetic_regulatory_tables() -> None:

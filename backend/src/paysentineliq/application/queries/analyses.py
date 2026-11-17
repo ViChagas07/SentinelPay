@@ -1,6 +1,6 @@
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from paysentineliq.application.ports.analysis_read_repository import (
 from paysentineliq.application.ports.storage import StoragePort
 from paysentineliq.application.queries.analysis_cursor import decode_cursor, encode_cursor
 from paysentineliq.domain.analysis import AnalysisStatus
+from paysentineliq.domain.analysis_progress import AnalysisStage
 from paysentineliq.domain.scoring import RiskBand
 
 _logger = logging.getLogger("paysentineliq")
@@ -40,6 +41,15 @@ class AnalysisResultDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class AnalysisProgressDTO:
+    percent: int
+    stage: AnalysisStage | None
+    detail: str | None
+    started_at: datetime | None
+    indeterminate: bool
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisDetailDTO:
     id: UUID
     status: AnalysisStatus
@@ -49,6 +59,16 @@ class AnalysisDetailDTO:
     error_code: str | None
     result_available: bool
     result: AnalysisResultDTO | None
+    progress: AnalysisProgressDTO = field(
+        default_factory=lambda: AnalysisProgressDTO(
+            percent=0,
+            stage=None,
+            detail=None,
+            started_at=None,
+            indeterminate=False,
+        ),
+    )
+    cancelled_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +119,14 @@ class GetAnalysisHandler:
             error_code=summary.error_code,
             result_available=available,
             result=result,
+            progress=AnalysisProgressDTO(
+                percent=summary.progress_percent,
+                stage=summary.current_stage,
+                detail=summary.stage_detail,
+                started_at=summary.stage_started_at,
+                indeterminate=summary.status in (AnalysisStatus.RUNNING, AnalysisStatus.CANCELLING),
+            ),
+            cancelled_at=summary.cancelled_at,
         )
 
     async def _load_report(self, summary: AnalysisSummary) -> AnalysisResultDTO | None:

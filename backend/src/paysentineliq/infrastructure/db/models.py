@@ -98,8 +98,13 @@ class AnalysisModel(Base):
         ),
         Index("ix_analyses_owner_created_at", "owner_id", "created_at"),
         CheckConstraint(
-            "status IN ('queued', 'processing', 'completed', 'failed', 'degraded')",
+            "status IN ('queued', 'running', 'cancelling', 'cancelled', "
+            "'completed', 'failed', 'degraded')",
             name="ck_analyses_status",
+        ),
+        CheckConstraint(
+            "progress_percent >= 0 AND progress_percent <= 100",
+            name="ck_analyses_progress_percent",
         ),
     )
 
@@ -139,6 +144,26 @@ class AnalysisModel(Base):
     idempotency_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     task_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    progress_percent: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
+    current_stage: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    stage_detail: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    stage_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

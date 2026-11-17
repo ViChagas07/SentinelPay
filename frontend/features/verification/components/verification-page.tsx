@@ -11,6 +11,7 @@ import { queryKeys } from "@/lib/query/keys";
 import { useI18n } from "@/lib/i18n/provider";
 import { INTL_LOCALE } from "@/lib/i18n/format";
 import { getAnalysisErrorKey } from "@/lib/verification/errors";
+import { isActiveStatus } from "@/lib/verification/polling";
 import { createIdempotencyKey, formatFileSize } from "@/lib/verification/upload";
 import { uploadAnalysis, type UploadProgress } from "@/lib/verification/upload-analysis";
 
@@ -80,7 +81,7 @@ function ActiveVerification({
   }
 
   const status = query.data?.status;
-  const scanning = status === "queued" || status === "processing";
+  const scanning = status !== undefined && isActiveStatus(status);
 
   return (
     <div className="space-y-4">
@@ -165,7 +166,12 @@ function ActiveVerification({
           <JobProgressPanel
             analysis={query.data}
             showDossierLink
+            streamState={query.streamState}
             onRetryPolling={() => void query.refetch()}
+            onCancelled={() => {
+              forgetDocument(analysis.id);
+              onReset();
+            }}
             onResend={
               query.data.status === "failed"
                 ? () => {

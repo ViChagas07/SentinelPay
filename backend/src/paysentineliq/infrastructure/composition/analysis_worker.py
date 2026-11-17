@@ -9,6 +9,7 @@ from sqlalchemy.pool import NullPool
 
 from paysentineliq.application.commands.process_analysis import ProcessAnalysisHandler
 from paysentineliq.application.errors import StorageNotConfiguredError
+from paysentineliq.application.ports.cancellation import CancellationPort
 from paysentineliq.application.ports.embedding import EmbeddingPort
 from paysentineliq.application.ports.hybrid_vector_store import HybridVectorStorePort
 from paysentineliq.application.ports.interpretation import EvidenceInterpreterPort
@@ -27,6 +28,9 @@ from paysentineliq.infrastructure.ai.structured import StructuredInterpreter
 from paysentineliq.infrastructure.ai.unavailable import (
     UnavailableInterpreter,
     UnavailableRetriever,
+)
+from paysentineliq.infrastructure.cache.analysis_cancellation import (
+    RedisAnalysisCancellation,
 )
 from paysentineliq.infrastructure.cache.embedding_cache import CachedEmbedder
 from paysentineliq.infrastructure.config import Settings
@@ -67,6 +71,7 @@ def build_analysis_orchestrator(
     *,
     retrieval_runtime: RetrievalRuntime | None = None,
     redis: Redis | None = None,
+    cancellation: CancellationPort | None = None,
 ) -> LangGraphAnalysisOrchestrator:
     prompts = PromptRepository()
     guard = SSRFGuard(
@@ -104,6 +109,7 @@ def build_analysis_orchestrator(
         settings=settings,
         judge=judge,
         metrics=InMemoryGuardrailMetrics(),
+        cancellation=cancellation,
     )
 
 
@@ -121,11 +127,16 @@ async def build_worker_runtime(
     instrument_sqlalchemy_engine(engine.sync_engine)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     retrieval_runtime: RetrievalRuntime | None = None
-    cache_redis: Redis | None = None
+    redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    cancellation_redis = Redis.from_url(settings.redis_url, decode_responses=True)
     if settings.hybrid_retrieval_enabled:
         retrieval_runtime = RetrievalRuntime(settings)
         await retrieval_runtime.load()
-        cache_redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    analyses_repository = SqlAlchemyAnalysisRepository(session_factory)
+    cancellation = RedisAnalysisCancellation(
+        cancellation_redis,
+        fallback=analyses_repository,
+    )
     try:
         storage = S3StorageAdapter(settings)
         orchestrator = build_analysis_orchestrator(
@@ -133,20 +144,23 @@ async def build_worker_runtime(
             session_factory,
             storage,
             retrieval_runtime=retrieval_runtime,
-            redis=cache_redis,
+            redis=redis if settings.hybrid_retrieval_enabled else None,
+            cancellation=cancellation,
         )
         yield ProcessAnalysisHandler(
             SqlAlchemyAnalysisDocumentAdapter(session_factory, storage),
             orchestrator,
-            SqlAlchemyAnalysisRepository(session_factory),
+            analyses_repository,
             SqlAlchemyNotificationRepository(session_factory),
             lease_seconds=settings.analysis_lease_seconds,
+            cancellation=cancellation,
+            storage=storage,
         )
     finally:
         if retrieval_runtime is not None:
             await retrieval_runtime.aclose()
-        if cache_redis is not None:
-            await cache_redis.aclose()
+        await redis.aclose()
+        await cancellation_redis.aclose()
         await engine.dispose()
 
 

@@ -152,3 +152,12 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17.1: o reranker real fp32 para o benchmark esta em `models/retrieval/bge-reranker-v2-m3-fp32` (ONNX e external data, fora do git); o int8 fica em `bge-reranker-v2-m3`.
 - P17.1: benchmark ETAPA E com 3 consultas: K=25 preserva recall 1,0 (10/15 perdem 3,3 pontos); max_length 512 cobre 100% dos pares, 384 cobre 97,6% e 256 cobre 30,9%; int8 K25 p50 12,57 s em 512 contra 21,07 s em fp32. Default mantido em int8, K=25, max_length=512.
 - P17.1: o benchmark mede so o rerank e usa 3 consultas; nao use os p50/p95 dele como benchmark estatistico. Para reproduzir, rode `make eval-retrieval` e depois `make benchmark-rerank`; o benchmark atualiza a secao de `eval/RESULTS.md`.
+
+- P18.1: o progresso e persistido em `analyses` e tambem vira evento `progress`; o SSE le a linha e envia snapshot na conexao. Nao adicione percentual por timer no front.
+- P18.1: o `TimeoutMiddleware` ignora `/api/v1/analyses/{id}/events`; sem isso o stream pode ser cortado pelo timeout global.
+- P18.1: o cancelamento nao depende so do `revoke`: `request_cancel` grava `cancelling` no banco, o Redis guarda a flag para os loops e o worker verifica entre etapas, paginas de OCR e chamadas longas de RAG/LLM.
+- P18.1: `complete` so aceita `queued`/`running`; `cancelling` nunca conclui. Se o cancelamento vence, o worker apaga o relatorio S3 recem-escrito antes de finalizar `cancelled`.
+- P18.1: o SSE atravessa o proxy BFF same-origin e usa o cookie de sessao; o `EventSource` nao manda Bearer customizado, entao nao troque a URL para o backend direto sem tratar auth.
+- P18.1: o cliente aplica o snapshot SSE no cache do TanStack Query. O fallback de polling so liga depois de duas falhas; nao faca polling concorrente com SSE saudavel.
+- P18.1: `processing` continua como alias de leitura de `running` no enum e no front; a migration converte as linhas antigas. Novos codigos devem usar `running`.
+- P18.1: `RedisAnalysisCancellation.is_cancelled` usa a flag Redis como caminho rapido e consulta o status no PostgreSQL no maximo a cada 2 s quando a flag nao existe. Assim `CANCELLING` no banco ainda aborta o worker se o Redis perder a escrita, sem transformar cada checagem em query.

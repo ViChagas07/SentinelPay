@@ -1,4 +1,5 @@
 import logging
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -11,6 +12,7 @@ from paysentineliq.application.commands.process_analysis import (
     is_retryable_analysis_error,
 )
 from paysentineliq.application.notifications.delivery import DeliveryOutcome
+from paysentineliq.application.security.storage_keys import build_analysis_report_key
 from paysentineliq.domain.analysis import AnalysisEvent, AnalysisEventType
 from paysentineliq.infrastructure.config import get_settings
 from paysentineliq.infrastructure.db.repositories.analyses import (
@@ -30,8 +32,10 @@ from paysentineliq.infrastructure.messaging.celery_app import (
 )
 from paysentineliq.infrastructure.messaging.dispatcher import CeleryTaskDispatcher
 from paysentineliq.infrastructure.observability.metrics import get_platform_metrics
+from paysentineliq.infrastructure.storage.s3 import S3StorageAdapter
 
 _logger = logging.getLogger("paysentineliq")
+_CANCEL_FINALIZE_SECONDS = 120
 
 _DEFAULT_MAX_RETRIES = 3
 
@@ -175,6 +179,27 @@ async def _sweep_stale_analyses() -> int:
                     dispatcher.dispatch_analysis(record.id)
                 except Exception:
                     _logger.error("stale_analysis_dispatch_failed")
+        storage = S3StorageAdapter(settings) if settings.s3_configured else None
+        cancel_cutoff = datetime.now(UTC) - timedelta(
+            seconds=min(settings.analysis_lease_seconds, _CANCEL_FINALIZE_SECONDS),
+        )
+        for record in await repository.list_stale_cancelling(cancel_cutoff):
+            if storage is not None:
+                with suppress(Exception):
+                    await storage.delete(
+                        build_analysis_report_key(
+                            owner_id=record.owner_id,
+                            analysis_id=record.id,
+                        ),
+                    )
+            await repository.finalize_cancelled(
+                record.id,
+                event=AnalysisEvent(
+                    analysis_id=record.id,
+                    event_type=AnalysisEventType.CANCELLED,
+                    payload={"reason": "cancel_timeout"},
+                ),
+            )
         return requeued
     finally:
         await engine.dispose()

@@ -11,7 +11,11 @@ from paysentineliq.application.commands.process_analysis import (
     analysis_error_code,
     is_retryable_analysis_error,
 )
-from paysentineliq.application.errors import DocumentNotFoundError, UnsupportedDocumentError
+from paysentineliq.application.errors import (
+    AnalysisCancelledError,
+    DocumentNotFoundError,
+    UnsupportedDocumentError,
+)
 from paysentineliq.application.ports.analysis import AnalysisDocument
 from paysentineliq.domain.analysis import (
     AnalysisDocumentType,
@@ -21,6 +25,7 @@ from paysentineliq.domain.analysis import (
     AnalysisStatus,
     DegradationFlag,
 )
+from paysentineliq.domain.analysis_progress import AnalysisStage
 from paysentineliq.domain.document import DocumentKind
 from paysentineliq.domain.notification import Notification, NotificationType
 from paysentineliq.domain.scoring import RiskBand
@@ -94,6 +99,7 @@ class FakeAnalyses:
         self.claims: list[dict[str, object]] = []
         self.requeued: list[dict[str, object]] = []
         self.failed: list[dict[str, object]] = []
+        self.cancelled = False
 
     async def claim_for_processing(
         self,
@@ -196,6 +202,26 @@ class FakeAnalyses:
     async def list_stale_processing(self, before: datetime) -> tuple[AnalysisRecord, ...]:
         return ()
 
+    async def report_progress(
+        self,
+        analysis_id: UUID,
+        *,
+        stage: AnalysisStage,
+        percent: int,
+        detail: str | None,
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        return True
+
+    async def finalize_cancelled(
+        self,
+        analysis_id: UUID,
+        *,
+        event: AnalysisEvent | None = None,
+    ) -> bool:
+        self.cancelled = True
+        return True
+
 
 class FakeNotifications:
     def __init__(self, notification_id: UUID | None = None) -> None:
@@ -221,12 +247,31 @@ class FakeNotifications:
         return None
 
 
+class FakeCancellation:
+    def __init__(self, values: tuple[bool, ...] = ()) -> None:
+        self._values = list(values)
+        self.requests: list[UUID] = []
+        self.cleared: list[UUID] = []
+
+    async def request(self, analysis_id: UUID) -> None:
+        self.requests.append(analysis_id)
+
+    async def clear(self, analysis_id: UUID) -> None:
+        self.cleared.append(analysis_id)
+
+    async def is_cancelled(self, analysis_id: UUID) -> bool:
+        if not self._values:
+            return False
+        return self._values.pop(0)
+
+
 def _handler(
     *,
     analyses: FakeAnalyses | None = None,
     source: FakeSource | None = None,
     orchestrator: FakeOrchestrator | None = None,
     notification_id: UUID | None = None,
+    cancellation: FakeCancellation | None = None,
 ) -> tuple[ProcessAnalysisHandler, FakeAnalyses, FakeOrchestrator]:
     fake_analyses = analyses or FakeAnalyses()
     fake_orchestrator = orchestrator or FakeOrchestrator()
@@ -237,6 +282,7 @@ def _handler(
             fake_analyses,
             FakeNotifications(notification_id),
             lease_seconds=300,
+            cancellation=cancellation or FakeCancellation(),
         ),
         fake_analyses,
         fake_orchestrator,
@@ -341,6 +387,66 @@ async def test_missing_document_fails_safe() -> None:
         )
 
     assert analyses.failed[0]["error_code"] == "document_not_found"
+
+
+async def test_cancel_flag_before_run_finalizes_without_running() -> None:
+    cancellation = FakeCancellation((True,))
+    handler, analyses, orchestrator = _handler(cancellation=cancellation)
+    analysis_id = uuid4()
+
+    result = await handler.execute(
+        analysis_id,
+        task_id="task-cancel",
+        attempt=1,
+        final_attempt=False,
+    )
+
+    assert result.status == "cancelled"
+    assert orchestrator.calls == 0
+    assert analyses.cancelled is True
+    assert analyses.failed == []
+    assert analyses.requeued == []
+    assert cancellation.cleared == [analysis_id]
+
+
+async def test_cancelled_error_finalizes_cleanly() -> None:
+    handler, analyses, _ = _handler(
+        orchestrator=FakeOrchestrator(error=AnalysisCancelledError()),
+    )
+    analysis_id = uuid4()
+
+    result = await handler.execute(
+        analysis_id,
+        task_id="task-cancel-2",
+        attempt=1,
+        final_attempt=False,
+    )
+
+    assert result.status == "cancelled"
+    assert analyses.cancelled is True
+    assert analyses.failed == []
+    assert analyses.requeued == []
+    assert is_retryable_analysis_error(AnalysisCancelledError()) is False
+
+
+async def test_cancellation_during_failure_wins_over_retry() -> None:
+    cancellation = FakeCancellation((False, True))
+    handler, analyses, _ = _handler(
+        orchestrator=FakeOrchestrator(error=RuntimeError("db blip")),
+        cancellation=cancellation,
+    )
+
+    result = await handler.execute(
+        uuid4(),
+        task_id="task-cancel-3",
+        attempt=1,
+        final_attempt=False,
+    )
+
+    assert result.status == "cancelled"
+    assert analyses.cancelled is True
+    assert analyses.failed == []
+    assert analyses.requeued == []
 
 
 def test_error_codes_are_safe_and_bounded() -> None:

@@ -9,6 +9,7 @@ import pymupdf
 import pytest
 
 from paysentineliq.application.errors import (
+    AnalysisCancelledError,
     InvalidDocumentError,
     OcrImageTooLargeError,
     OcrPageLimitError,
@@ -97,6 +98,42 @@ async def test_native_pdf_uses_text_layer_without_ocr() -> None:
     assert ocr.calls == 0
     assert "pdf_producer" in {signal.name for signal in result.signals}
     assert "image_blur" in {signal.name for signal in result.signals}
+
+
+async def test_pdf_reports_page_progress_after_each_page() -> None:
+    ocr = FakeOcr()
+    pages: list[tuple[int, int]] = []
+
+    async def on_page(page: int, total: int) -> None:
+        pages.append((page, total))
+
+    result = await _service(ocr).ingest(native_pdf_bytes(pages=2), on_page=on_page)
+
+    assert result.page_count == 2
+    assert pages == [(1, 2), (2, 2)]
+
+
+async def test_pdf_stops_between_pages_when_cancelled() -> None:
+    ocr = FakeOcr()
+    pages: list[tuple[int, int]] = []
+    checks = 0
+
+    async def on_page(page: int, total: int) -> None:
+        pages.append((page, total))
+
+    async def check_cancelled() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks >= 2
+
+    with pytest.raises(AnalysisCancelledError):
+        await _service(ocr).ingest(
+            native_pdf_bytes(pages=3),
+            on_page=on_page,
+            check_cancelled=check_cancelled,
+        )
+
+    assert pages == [(1, 3)]
 
 
 async def test_scanned_pdf_uses_ocr() -> None:
