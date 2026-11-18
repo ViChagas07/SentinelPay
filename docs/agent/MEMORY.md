@@ -6,7 +6,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - Stack e fronteiras em ADR-0001; score deterministico em ADR-0002; `graphify-out/` fora do git em ADR-0003; MinIO local em ADR-0004.
 - `.env` local guarda as credenciais e nunca e versionado; somente `.env.example` (placeholders) entra no git.
 - A raiz do projeto e `SentinelPay/`. A antiga pasta `repo/` era uma duplicata dos arquivos de raiz e nao deve ser recriada.
-- Codigo e identificadores em ingles; documentacao em pt-BR (RULES).
+- Codigo e identificadores em ingles; documentacao interna em pt-BR (RULES). Excecao P19: README, indice de ADRs e roteiro de demo em ingles para recrutadores.
 - O Compose local usa `--env-file .env.example` (nunca o `.env` de producao); o Makefile e o unico ponto de entrada dos comandos.
 - O Makefile usa `poetry -C backend`; rode os alvos a partir da raiz.
 - `make migrate` sempre executa `make backup` antes de `alembic upgrade head`; nao rode migration direto no ambiente de desenvolvimento.
@@ -172,3 +172,9 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - F2: `.env` local usa `LANGFUSE_BASE_URL`; `Settings` aceita `LANGFUSE_HOST` e `LANGFUSE_BASE_URL`. O script de experimento le apenas `LANGFUSE_*` do `.env`, nunca o banco de producao.
 - F2: experimentos v3 `sentinelpay-retrieval-v3-*` no projeto Langfuse com 30 itens e 0 falhas; MRR denso 0.8917, denso+rerank 0.9611, RRF 0.8011 e RRF+rerank 0.9417. URLs em `eval/langfuse_experiment.json`.
 - F2: `dataset.run_experiment` retorna `experiment_url` com baseline; o id real do experimento aparece em `experiments.list`. Para agregados, consulte `experiments.list_items` com `fields=["io","scores"]` e `score_limit<=50`.
+
+- P19: README, indice de ADRs e roteiro de demo ficam em ingles para recrutadores; o restante da documentacao interna segue em pt-BR.
+- P19: `make seed-demo` usa `.env.example` e o banco local em 55432, cria o usuario `demo@sentinelpay.local` e grava um JWT local em `demo/.demo_token`. A pasta `demo/` e ignorada. Nunca use esse token fora do ambiente local.
+- P19: os PDFs de demo tem camada de texto nativa; o caminho de OCR de imagem nao foi exercitado. A conta de consumo com valor e vencimento ausentes produz Attention (65 na referencia), enquanto o subscores deterministicos sao 0/80/0/80/50.
+- P19: `docs/api/openapi.json` (75.936 bytes) ficou identico em SHA-256 a `backend/tests/contracts/openapi.json`; `test_openapi_contract.py` agora tambem compara a copia de docs.
+- P19: `make up`, `make migrate` e cinco analises reais na API local foram validados; `make test-docker` nao foi reexecutado. O worker concluiu `degraded` com `llm_unavailable` por ausencia de LM Studio.
