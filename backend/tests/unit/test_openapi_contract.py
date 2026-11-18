@@ -41,3 +41,10 @@ def test_openapi_matches_snapshot() -> None:
             "Contrato OpenAPI mudou. Revise a mudanca e rode `make openapi` no mesmo commit.\n"
             + "\n".join(diff[:80]),
         )
+
+
+def test_docs_openapi_matches_contract_snapshot() -> None:
+    docs_path = Path(__file__).resolve().parents[3] / "docs" / "api" / "openapi.json"
+    assert docs_path.exists(), "docs/api/openapi.json ausente; rode `make openapi`"
+    docs_schema = json.loads(docs_path.read_text(encoding="utf-8"))
+    assert docs_schema == _load_snapshot()
