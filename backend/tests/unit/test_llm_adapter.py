@@ -190,3 +190,28 @@ async def test_llm_span_never_contains_prompt_text(
     assert "user@example.com" not in dumped
     assert "CPF" not in dumped
     assert spans[0].name == "llm.complete"
+
+
+async def test_complete_parses_token_usage() -> None:
+    client = FakeHttpClient(
+        [
+            httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "ok"}}],
+                    "usage": {
+                        "prompt_tokens": 12,
+                        "completion_tokens": 7,
+                        "total_tokens": 19,
+                    },
+                },
+            ),
+        ],
+    )
+    llm = _llm(client)
+
+    result = await llm.complete((LlmMessage(role="user", content="hi"),))
+
+    assert result.prompt_tokens == 12
+    assert result.completion_tokens == 7
+    assert result.total_tokens == 19

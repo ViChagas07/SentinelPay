@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     otel_service_version: str = "0.1.0"
     otel_traces_sampler_ratio: float = 1.0
     otel_exporter_timeout_seconds: float = 5.0
+    langfuse_enabled: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = ""
+    langfuse_base_url: str = ""
+    langfuse_sample_rate: float = 1.0
     queue_depth_refresh_seconds: float = 15.0
     rabbitmq_management_url: str = ""
     fraud_model_dir: str = "models/artifacts"
@@ -495,6 +501,16 @@ class Settings(BaseSettings):
                 )
             if not endpoint.startswith(("http://", "https://")):
                 raise ValueError("OTEL_EXPORTER_OTLP_ENDPOINT must use http or https")
+        if not 0.0 <= self.langfuse_sample_rate <= 1.0:
+            raise ValueError("LANGFUSE_SAMPLE_RATE must be between 0 and 1")
+        if self.langfuse_host.strip() and not self.langfuse_host.strip().startswith(
+            ("http://", "https://"),
+        ):
+            raise ValueError("LANGFUSE_HOST must use http or https")
+        if self.langfuse_base_url.strip() and not self.langfuse_base_url.strip().startswith(
+            ("http://", "https://"),
+        ):
+            raise ValueError("LANGFUSE_BASE_URL must use http or https")
         if self.queue_depth_refresh_seconds <= 0:
             raise ValueError("QUEUE_DEPTH_REFRESH_SECONDS must be positive")
 

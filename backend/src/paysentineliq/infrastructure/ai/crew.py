@@ -1,5 +1,6 @@
 import asyncio
 import json
+from time import perf_counter
 from typing import Protocol, cast
 
 from langchain_core.output_parsers import PydanticOutputParser
@@ -15,9 +16,11 @@ from paysentineliq.application.ports.interpretation import (
 )
 from paysentineliq.application.security.guardrails import ToolAllowlist
 from paysentineliq.application.security.redaction import escape_delimiters, mask_pii
+from paysentineliq.domain.ports.observability import ObservabilityTracer
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.schemas import InterpretationOutput
 from paysentineliq.infrastructure.config import Settings
+from paysentineliq.infrastructure.observability.noop_tracer import NoopTracer
 from paysentineliq.infrastructure.security.ssrf import SSRFGuard
 
 
@@ -41,6 +44,7 @@ class CrewAIInterpreter:
         guard: SSRFGuard | None = None,
         timeout_seconds: float = 60.0,
         max_document_chars: int = 20_000,
+        tracer: ObservabilityTracer | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
@@ -52,6 +56,7 @@ class CrewAIInterpreter:
         self._guard = guard
         self._timeout = timeout_seconds
         self._max_document_chars = max_document_chars
+        self._tracer = tracer or NoopTracer()
         self._parser = PydanticOutputParser(pydantic_object=InterpretationOutput)
 
     async def interpret(
@@ -89,20 +94,53 @@ class CrewAIInterpreter:
         )
         system = messages[0].content
         user = messages[1].content
-        if self._crew_runner is not None:
-            output = await self._crew_runner.run(
-                system=system,
-                user=user,
+        started = perf_counter()
+        with self._tracer.observation(
+            "llm.crew_interpret",
+            as_type="generation",
+            input={
+                "document_type": request.document_type,
+                "score": request.score,
+                "band": request.band,
+                "language": request.language,
+                "degradation_flags": list(request.degradation_flags),
+                "evidence": evidence,
+                "document_excerpt": request.document_excerpt,
+            },
+            metadata={
+                "model": self._settings.llm_model,
+                "prompt_version": prompt.version,
+                "temperature": self._settings.llm_temperature,
+                "max_tokens": self._settings.llm_max_output_tokens,
+            },
+            model=self._settings.llm_model,
+        ) as observation:
+            if self._crew_runner is not None:
+                output = await self._crew_runner.run(
+                    system=system,
+                    user=user,
+                    prompt_version=prompt.version,
+                )
+            else:
+                output = await self._run_crew(system, user)
+            result = InterpretationResult(
+                justification=output.justification,
+                inconsistencies=tuple(output.inconsistencies),
+                model_version=self._settings.llm_model,
                 prompt_version=prompt.version,
             )
-        else:
-            output = await self._run_crew(system, user)
-        return InterpretationResult(
-            justification=output.justification,
-            inconsistencies=tuple(output.inconsistencies),
-            model_version=self._settings.llm_model,
-            prompt_version=prompt.version,
-        )
+            observation.update(
+                output={
+                    "justification": result.justification,
+                    "inconsistencies": list(result.inconsistencies),
+                },
+                metadata={
+                    "outcome": "success",
+                    "latency_ms": (perf_counter() - started) * 1000.0,
+                    "tokens_available": False,
+                },
+            )
+            return result
 
     async def _run_crew(self, system: str, user: str) -> InterpretationOutput:
         if (

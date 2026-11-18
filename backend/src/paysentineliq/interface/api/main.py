@@ -11,6 +11,9 @@ from paysentineliq.infrastructure.cache.swr import SWRCache
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.db.engine import build_engine, build_session_factory
 from paysentineliq.infrastructure.logging import configure_logging
+from paysentineliq.infrastructure.observability.langfuse_tracer import (
+    build_observability_tracer,
+)
 from paysentineliq.infrastructure.observability.metrics import (
     PlatformMetrics,
     set_platform_metrics,
@@ -76,6 +79,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         application.state.engine = engine
         application.state.session_factory = build_session_factory(engine)
         application.state.redis = redis
+        application.state.observability_tracer = build_observability_tracer(
+            resolved_settings,
+        )
         application.state.rate_limiter = TokenBucketRateLimiter(
             redis,
             capacity=resolved_settings.rate_limit_capacity,
@@ -150,6 +156,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             with suppress(asyncio.CancelledError):
                 await queue_monitor_task
             await retrieval_runtime.aclose()
+            await application.state.observability_tracer.aclose()
             await redis.aclose()
             await engine.dispose()
 

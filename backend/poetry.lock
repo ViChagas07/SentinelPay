@@ -573,6 +573,18 @@ cryptography = ">=45.0.1"
 joserfc = ">=1.6.8"
 
 [[package]]
+name = "backoff"
+version = "2.2.1"
+description = "Function decoration for backoff and retry"
+optional = false
+python-versions = ">=3.7,<4.0"
+groups = ["main"]
+files = [
+    {file = "backoff-2.2.1-py3-none-any.whl", hash = "sha256:63579f9a0628e06278f7e47b7d7d5b6ce20dc65c5e96a6f3ca99a6adca0396e8"},
+    {file = "backoff-2.2.1.tar.gz", hash = "sha256:03f829f5bb1923180821643f8753b0502c3b682293992485b0eef2807afa5cba"},
+]
+
+[[package]]
 name = "bandit"
 version = "1.9.4"
 description = "Security oriented static analyser for python code."
@@ -3523,6 +3535,29 @@ files = [
 
 [package.dependencies]
 typing-extensions = ">=4.13.0,<5.0.0"
+
+[[package]]
+name = "langfuse"
+version = "5.2.0"
+description = "Langfuse Python SDK - LLM observability/tracing, datasets, experiments, LLM-as-a-judge evaluation, and prompt management"
+optional = false
+python-versions = "<4.0,>=3.11"
+groups = ["main"]
+files = [
+    {file = "langfuse-5.2.0-py3-none-any.whl", hash = "sha256:4763cbad358960f1036078a4c6e9f86f04690ea566541709c2c40aa1998e2b0f"},
+    {file = "langfuse-5.2.0.tar.gz", hash = "sha256:8cde9e91b44b53444906af9b37efa9c29c647a9f45f9f8435a638026cb3d4693"},
+]
+
+[package.dependencies]
+backoff = ">=1.10.0"
+httpx = ">=0.15.4,<1.0"
+opentelemetry-api = ">=1.45.0,<2"
+opentelemetry-exporter-otlp-proto-http = ">=1.45.0,<2"
+opentelemetry-sdk = ">=1.45.0,<2"
+packaging = ">=23.2,<27.0"
+pydantic = ">=2,<3"
+typing-extensions = ">=4.12.2,<5"
+wrapt = ">=1.14,<3"
 
 [[package]]
 name = "langgraph"
@@ -10157,4 +10192,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.12"
-content-hash = "139ed244b5b503780be885149cee98928a43322ebf30128383861efd1f2a2f8b"
+content-hash = "085eb8852fbc7a51562f92b84890f3aa1cc4d5cd3f41fe686be7eda4238614c0"

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from time import perf_counter
 from typing import cast
 
 from langchain_core.output_parsers import PydanticOutputParser
@@ -11,8 +12,10 @@ from paysentineliq.application.ports.guardrails import (
 )
 from paysentineliq.application.ports.llm import LlmPort
 from paysentineliq.application.security.redaction import escape_delimiters
+from paysentineliq.domain.ports.observability import ObservabilityTracer
 from paysentineliq.infrastructure.ai.prompts import PromptRepository
 from paysentineliq.infrastructure.ai.schemas import JudgeOutput
+from paysentineliq.infrastructure.observability.noop_tracer import NoopTracer
 
 
 class LlmReportJudge:
@@ -24,6 +27,7 @@ class LlmReportJudge:
         timeout_seconds: float = 30.0,
         temperature: float = 0.0,
         max_tokens: int = 500,
+        tracer: ObservabilityTracer | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
@@ -36,6 +40,7 @@ class LlmReportJudge:
         self._timeout = timeout_seconds
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._tracer = tracer or NoopTracer()
         self._parser = PydanticOutputParser(pydantic_object=JudgeOutput)
 
     async def judge(self, request: JudgeRequest) -> JudgeVerdict:
@@ -65,25 +70,69 @@ class LlmReportJudge:
             ),
             format_instructions=self._parser.get_format_instructions(),
         )
-        try:
-            response = await asyncio.wait_for(
-                self._llm.complete(
-                    messages,
-                    temperature=self._temperature,
-                    max_tokens=self._max_tokens,
-                ),
-                timeout=self._timeout,
+        started = perf_counter()
+        with self._tracer.observation(
+            "llm.judge",
+            as_type="generation",
+            input={
+                "document_type": request.document_type,
+                "score": request.score,
+                "band": request.band,
+                "language": request.language,
+                "evidence": evidence,
+                "justification": request.justification,
+                "inconsistencies": list(request.inconsistencies),
+            },
+            metadata={
+                "model": self._llm.model,
+                "prompt_version": prompt.version,
+                "temperature": self._temperature,
+                "max_tokens": self._max_tokens,
+            },
+            model=self._llm.model,
+        ) as observation:
+            try:
+                response = await asyncio.wait_for(
+                    self._llm.complete(
+                        messages,
+                        temperature=self._temperature,
+                        max_tokens=self._max_tokens,
+                    ),
+                    timeout=self._timeout,
+                )
+            except (TimeoutError, LlmUnavailableError) as exc:
+                raise LlmUnavailableError("judge is unavailable") from exc
+            try:
+                output = cast(JudgeOutput, self._parser.parse(response.content))
+            except Exception as exc:
+                raise LlmUnavailableError("judge did not return valid JSON") from exc
+            verdict = JudgeVerdict(
+                approved=output.approved,
+                reason=output.reason,
+                findings=tuple(output.findings),
+                model_version=self._llm.model,
+                prompt_version=prompt.version,
             )
-        except (TimeoutError, LlmUnavailableError) as exc:
-            raise LlmUnavailableError("judge is unavailable") from exc
-        try:
-            output = cast(JudgeOutput, self._parser.parse(response.content))
-        except Exception as exc:
-            raise LlmUnavailableError("judge did not return valid JSON") from exc
-        return JudgeVerdict(
-            approved=output.approved,
-            reason=output.reason,
-            findings=tuple(output.findings),
-            model_version=self._llm.model,
-            prompt_version=prompt.version,
-        )
+            observation.update(
+                output={
+                    "approved": verdict.approved,
+                    "verdict_reason": verdict.reason,
+                    "findings": list(verdict.findings),
+                },
+                metadata={
+                    "outcome": "success",
+                    "latency_ms": (perf_counter() - started) * 1000.0,
+                    "prompt_tokens": response.prompt_tokens,
+                    "completion_tokens": response.completion_tokens,
+                    "total_tokens": response.total_tokens,
+                    "tokens_available": any(
+                        value is not None
+                        for value in (
+                            response.prompt_tokens,
+                            response.completion_tokens,
+                            response.total_tokens,
+                        )
+                    ),
+                },
+            )
+            return verdict

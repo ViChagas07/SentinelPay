@@ -14,12 +14,18 @@ class LlmMessage:
 class LlmResponse:
     content: str
     model: str
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
 
     def __post_init__(self) -> None:
         if not self.content.strip():
             raise ValueError("content is required")
         if not self.model.strip():
             raise ValueError("model is required")
+        for value in (self.prompt_tokens, self.completion_tokens, self.total_tokens):
+            if value is not None and value < 0:
+                raise ValueError("token counts must be non-negative")
 
 
 class LlmPort(Protocol):

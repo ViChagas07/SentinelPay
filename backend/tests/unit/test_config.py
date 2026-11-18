@@ -217,3 +217,25 @@ def test_hybrid_fusion_settings_are_validated() -> None:
         Settings(app_env="local", query_embedding_cache_ttl_seconds=0)
     with pytest.raises(ValidationError):
         Settings.model_validate({"app_env": "local", "hybrid_fusion": "magic"})
+
+
+def test_langfuse_defaults_are_disabled() -> None:
+    settings = Settings(app_env="local")
+
+    assert settings.langfuse_enabled is False
+    assert settings.langfuse_public_key == ""
+    assert settings.langfuse_secret_key == ""
+    assert settings.langfuse_host == ""
+    assert settings.langfuse_base_url == ""
+    assert settings.langfuse_sample_rate == 1.0
+
+
+def test_langfuse_settings_are_validated() -> None:
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", langfuse_sample_rate=1.5)
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", langfuse_sample_rate=-0.1)
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", langfuse_host="ftp://langfuse.example")
+    with pytest.raises(ValidationError):
+        Settings(app_env="local", langfuse_base_url="ftp://langfuse.example")

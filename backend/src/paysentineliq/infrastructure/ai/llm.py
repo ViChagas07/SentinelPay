@@ -18,6 +18,12 @@ from paysentineliq.infrastructure.observability.metrics import (
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
+def _token_count(value: object) -> int | None:
+    if isinstance(value, int) and value >= 0:
+        return value
+    return None
+
+
 class JsonHttpClientPort(Protocol):
     async def request(
         self,
@@ -134,8 +140,14 @@ class OpenAICompatibleLLM:
                     continue
                 if response.status_code >= 400:
                     raise LlmUnavailableError("LLM endpoint returned an error")
-                content = self._content(response)
-                return LlmResponse(content=content, model=self._model)
+                content, usage = self._content(response)
+                return LlmResponse(
+                    content=content,
+                    model=self._model,
+                    prompt_tokens=usage.get("prompt_tokens"),
+                    completion_tokens=usage.get("completion_tokens"),
+                    total_tokens=usage.get("total_tokens"),
+                )
             except (httpx.TransportError, SSRFBlockedError) as exc:
                 if attempt >= self._max_retries:
                     raise LlmUnavailableError("LLM endpoint is unavailable") from exc
@@ -148,7 +160,7 @@ class OpenAICompatibleLLM:
             await asyncio.sleep(self._backoff_seconds * (2**attempt))
 
     @staticmethod
-    def _content(response: httpx.Response) -> str:
+    def _content(response: httpx.Response) -> tuple[str, dict[str, int | None]]:
         try:
             payload = response.json()
         except ValueError as exc:
@@ -160,4 +172,13 @@ class OpenAICompatibleLLM:
             raise LlmUnavailableError("invalid LLM response") from exc
         if not isinstance(content, str) or not content.strip():
             raise LlmUnavailableError("empty LLM response")
-        return content
+        usage = payload.get("usage")
+        token_usage: dict[str, int | None] = {
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "total_tokens": None,
+        }
+        if isinstance(usage, Mapping):
+            for key in token_usage:
+                token_usage[key] = _token_count(usage.get(key))
+        return content, token_usage
