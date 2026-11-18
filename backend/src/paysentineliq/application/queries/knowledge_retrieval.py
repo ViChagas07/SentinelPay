@@ -59,6 +59,10 @@ class KnowledgeRetrievalResult:
     rerank_applied: bool = False
     rerank_fallback: str | None = None
     rerank_model: str | None = None
+    rerank_rank_before: tuple[str, ...] = ()
+    rerank_rank_after: tuple[str, ...] = ()
+    rerank_latency_ms: float | None = None
+    rerank_top1_changed: bool | None = None
 
 
 def citation_from_chunk(chunk: RetrievedChunk) -> KnowledgeCitation:

@@ -19,6 +19,7 @@ from paysentineliq.application.queries.fraud_scoring import FraudScoringService
 from paysentineliq.application.queries.hybrid_retrieval import HybridRetriever
 from paysentineliq.application.queries.knowledge_retrieval import KnowledgeRetriever
 from paysentineliq.application.queries.two_stage_retrieval import TwoStageRetriever
+from paysentineliq.domain.ports.observability import ObservabilityTracer
 from paysentineliq.infrastructure.ai.crew import CrewAIInterpreter
 from paysentineliq.infrastructure.ai.graph import LangGraphAnalysisOrchestrator
 from paysentineliq.infrastructure.ai.judge import LlmReportJudge
@@ -45,6 +46,9 @@ from paysentineliq.infrastructure.db.repositories.analysis_documents import (
 from paysentineliq.infrastructure.ingestion.service import DocumentIngestionService
 from paysentineliq.infrastructure.metrics.guardrails import InMemoryGuardrailMetrics
 from paysentineliq.infrastructure.ml.artifact import load_fraud_model_or_none
+from paysentineliq.infrastructure.observability.langfuse_tracer import (
+    build_observability_tracer,
+)
 from paysentineliq.infrastructure.observability.metrics import get_platform_metrics
 from paysentineliq.infrastructure.observability.tracing import (
     instrument_sqlalchemy_engine,
@@ -72,6 +76,7 @@ def build_analysis_orchestrator(
     retrieval_runtime: RetrievalRuntime | None = None,
     redis: Redis | None = None,
     cancellation: CancellationPort | None = None,
+    tracer: ObservabilityTracer | None = None,
 ) -> LangGraphAnalysisOrchestrator:
     prompts = PromptRepository()
     guard = SSRFGuard(
@@ -79,8 +84,8 @@ def build_analysis_orchestrator(
         allowed_hosts=set(settings.ssrf_allowed_hosts_list),
     )
     http_client = SafeHttpClient(guard)
-    interpreter = _build_interpreter(settings, prompts, guard)
-    judge = _build_judge(settings, prompts, http_client)
+    interpreter = _build_interpreter(settings, prompts, guard, tracer)
+    judge = _build_judge(settings, prompts, http_client, tracer)
     ingestion = DocumentIngestionService(
         PaddleOcrAdapter(languages=tuple(settings.ocr_languages_list)),
         VisualAnomalyService(),
@@ -101,6 +106,7 @@ def build_analysis_orchestrator(
             session_factory,
             retrieval_runtime=retrieval_runtime,
             redis=redis,
+            tracer=tracer,
         ),
         interpreter=interpreter,
         analyses=SqlAlchemyAnalysisRepository(session_factory),
@@ -110,6 +116,7 @@ def build_analysis_orchestrator(
         judge=judge,
         metrics=InMemoryGuardrailMetrics(),
         cancellation=cancellation,
+        tracer=tracer,
     )
 
 
@@ -137,6 +144,7 @@ async def build_worker_runtime(
         cancellation_redis,
         fallback=analyses_repository,
     )
+    tracer = build_observability_tracer(settings)
     try:
         storage = S3StorageAdapter(settings)
         orchestrator = build_analysis_orchestrator(
@@ -146,6 +154,7 @@ async def build_worker_runtime(
             retrieval_runtime=retrieval_runtime,
             redis=redis if settings.hybrid_retrieval_enabled else None,
             cancellation=cancellation,
+            tracer=tracer,
         )
         yield ProcessAnalysisHandler(
             SqlAlchemyAnalysisDocumentAdapter(session_factory, storage),
@@ -159,6 +168,7 @@ async def build_worker_runtime(
     finally:
         if retrieval_runtime is not None:
             await retrieval_runtime.aclose()
+        await tracer.aclose()
         await redis.aclose()
         await cancellation_redis.aclose()
         await engine.dispose()
@@ -168,6 +178,7 @@ def _build_interpreter(
     settings: Settings,
     prompts: PromptRepository,
     guard: SSRFGuard,
+    tracer: ObservabilityTracer | None,
 ) -> EvidenceInterpreterPort:
     if not settings.llm_base_url.strip() or not settings.llm_model.strip():
         return UnavailableInterpreter()
@@ -177,6 +188,7 @@ def _build_interpreter(
             prompts=prompts,
             guard=guard,
             timeout_seconds=settings.ai_node_timeout_seconds,
+            tracer=tracer,
         )
     llm = OpenAICompatibleLLM(
         base_url=settings.llm_base_url,
@@ -192,6 +204,7 @@ def _build_interpreter(
         prompts,
         timeout_seconds=settings.ai_node_timeout_seconds,
         max_document_chars=settings.guardrail_llm_excerpt_chars,
+        tracer=tracer,
     )
 
 
@@ -199,6 +212,7 @@ def _build_judge(
     settings: Settings,
     prompts: PromptRepository,
     client: SafeHttpClient,
+    tracer: ObservabilityTracer | None,
 ) -> LlmReportJudge | None:
     if not settings.guardrail_judge_enabled:
         return None
@@ -218,6 +232,7 @@ def _build_judge(
         llm,
         prompts,
         timeout_seconds=settings.ai_node_timeout_seconds,
+        tracer=tracer,
     )
 
 
@@ -227,6 +242,7 @@ def _build_retriever(
     *,
     retrieval_runtime: RetrievalRuntime | None = None,
     redis: Redis | None = None,
+    tracer: ObservabilityTracer | None = None,
 ) -> RagContextPort:
     if settings.hybrid_retrieval_enabled:
         return _build_hybrid_retriever(
@@ -234,6 +250,7 @@ def _build_retriever(
             session_factory,
             retrieval_runtime=retrieval_runtime,
             redis=redis,
+            tracer=tracer,
         )
     fake = settings.rag_fake_embedder or not (
         settings.embedding_base_url.strip() and settings.embedding_model.strip()
@@ -271,6 +288,7 @@ def _build_hybrid_retriever(
     *,
     retrieval_runtime: RetrievalRuntime | None,
     redis: Redis | None,
+    tracer: ObservabilityTracer | None = None,
 ) -> RagContextPort:
     if retrieval_runtime is None or redis is None:
         return UnavailableRetriever()
@@ -315,4 +333,5 @@ def _build_hybrid_retriever(
         top_n=settings.rerank_top_n,
         timeout_seconds=settings.rerank_timeout_seconds,
         metrics=platform_metrics,
+        observability=tracer,
     )

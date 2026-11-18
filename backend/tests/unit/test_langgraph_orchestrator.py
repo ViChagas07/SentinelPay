@@ -1,6 +1,7 @@
 import asyncio
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any, BinaryIO
 from uuid import UUID, uuid4
@@ -14,6 +15,7 @@ from paysentineliq.application.errors import (
 )
 from paysentineliq.application.ports.analysis import AnalysisDocument
 from paysentineliq.application.ports.fraud_model import ModelPrediction
+from paysentineliq.application.ports.guardrails import JudgeVerdict
 from paysentineliq.application.queries.fraud_scoring import FraudScoringService
 from paysentineliq.application.queries.knowledge_retrieval import (
     KnowledgeCitation,
@@ -126,6 +128,119 @@ class FakeInterpreter:
             inconsistencies=self._inconsistencies,
             model_version="fake-llm",
             prompt_version="p11-test",
+        )
+
+
+class FakeObservation:
+    def __init__(self, updates: list[dict[str, Any]], name: str) -> None:
+        self._updates = updates
+        self._name = name
+
+    def update(
+        self,
+        *,
+        output: Any = None,
+        metadata: Mapping[str, Any] | None = None,
+        level: str | None = None,
+        status_message: str | None = None,
+    ) -> None:
+        self._updates.append(
+            {
+                "name": self._name,
+                "output": output,
+                "metadata": metadata,
+                "level": level,
+                "status_message": status_message,
+            },
+        )
+
+
+class FakeObservability:
+    def __init__(self) -> None:
+        self.traces: list[dict[str, Any]] = []
+        self.spans: list[dict[str, Any]] = []
+        self.updates: list[dict[str, Any]] = []
+        self.scores: list[dict[str, Any]] = []
+
+    @contextmanager
+    def trace(
+        self,
+        name: str,
+        *,
+        session_id: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+        tags: tuple[str, ...] = (),
+        environment: str | None = None,
+        input: Any = None,
+    ) -> Iterator[FakeObservation]:
+        self.traces.append(
+            {
+                "name": name,
+                "session_id": session_id,
+                "metadata": metadata,
+                "tags": tags,
+                "environment": environment,
+                "input": input,
+            },
+        )
+        yield FakeObservation(self.updates, name)
+
+    @contextmanager
+    def observation(
+        self,
+        name: str,
+        *,
+        as_type: str = "generation",
+        input: Any = None,
+        metadata: Mapping[str, Any] | None = None,
+        model: str | None = None,
+    ) -> Iterator[FakeObservation]:
+        self.spans.append(
+            {
+                "name": name,
+                "as_type": as_type,
+                "input": input,
+                "metadata": metadata,
+                "model": model,
+            },
+        )
+        yield FakeObservation(self.updates, name)
+
+    def score(
+        self,
+        name: str,
+        value: float | str,
+        *,
+        data_type: str | None = None,
+        comment: str | None = None,
+    ) -> None:
+        self.scores.append(
+            {
+                "name": name,
+                "value": value,
+                "data_type": data_type,
+                "comment": comment,
+            },
+        )
+
+    def current_trace_id(self) -> str | None:
+        return "langfuse-trace-1"
+
+    async def flush(self) -> None:
+        return None
+
+    async def aclose(self) -> None:
+        return None
+
+
+class FakeJudge:
+    async def judge(self, request: Any) -> JudgeVerdict:
+        return JudgeVerdict(
+            approved=True,
+            reason="anchored",
+            findings=(),
+            model_version="fake-judge",
+            prompt_version="j1-test",
         )
 
 
@@ -397,6 +512,8 @@ def _orchestrator(
     regulatory: RegulatoryTables | None = None,
     ingestion_delay: float = 0.0,
     cancellation: FakeCancellation | None = None,
+    judge: Any = None,
+    observability: Any = None,
 ) -> tuple[
     LangGraphAnalysisOrchestrator,
     FakeAnalysisRepository,
@@ -424,6 +541,8 @@ def _orchestrator(
         regulatory=regulatory,
         clock=lambda: _NOW,
         cancellation=cancellation,
+        judge=judge,
+        tracer=observability,
     )
     return (
         orchestrator,
@@ -440,9 +559,10 @@ async def _run(
     orchestrator: LangGraphAnalysisOrchestrator,
     *,
     kind: DocumentKind = DocumentKind.BANK_SLIP,
+    analysis_id: UUID | None = None,
 ) -> Any:
     return await orchestrator.run(
-        analysis_id=uuid4(),
+        analysis_id=analysis_id or uuid4(),
         document=_document(kind),
         data=b"data",
         locale="pt",
@@ -670,3 +790,85 @@ async def test_ingest_timeout_fails_the_analysis() -> None:
 
     with pytest.raises(AnalysisTimeoutError):
         await _run(orchestrator)
+
+
+async def test_trace_contains_pipeline_spans_and_scores_without_pii() -> None:
+    boleto = build_boleto()
+    observability = FakeObservability()
+    settings = _settings().model_copy(update={"guardrail_judge_enabled": True})
+    orchestrator, *_ = _orchestrator(
+        boleto.ocr_text(),
+        model=FakeModel(),
+        settings=settings,
+        judge=FakeJudge(),
+        observability=observability,
+    )
+    analysis_id = uuid4()
+
+    report = await _run(orchestrator, analysis_id=analysis_id)
+
+    names = [span["name"] for span in observability.spans]
+    assert {
+        "ocr",
+        "classifier.document",
+        "guardrail.input",
+        "retrieval",
+        "classifier.risk",
+        "guardrail.output",
+        "guardrail.judge",
+    } <= set(names)
+    assert observability.traces[0]["name"] == "analysis"
+    assert observability.traces[0]["session_id"] == str(analysis_id)
+    assert observability.traces[0]["environment"] == "local"
+    assert "env:local" in observability.traces[0]["tags"]
+    score_names = {score["name"] for score in observability.scores}
+    assert {
+        "risk_score",
+        "risk_band",
+        "rerank_alterou_top1",
+        "guardrail_failed",
+        "judge_approved",
+        "judge_verdict",
+    } <= score_names
+    assert report.score >= 0
+    serialized = json.dumps(
+        {
+            "traces": observability.traces,
+            "spans": observability.spans,
+            "updates": observability.updates,
+            "scores": observability.scores,
+        },
+        default=str,
+    )
+    assert "123.456.789-09" not in serialized
+    assert "12345678909" not in serialized
+    assert "PAGAMENTOS SINTETICOS" not in serialized
+    assert "CONTEUDO" not in serialized
+
+
+async def test_langfuse_disabled_pipeline_matches_default_result() -> None:
+    from paysentineliq.infrastructure.observability.langfuse_tracer import (
+        build_observability_tracer,
+    )
+    from paysentineliq.infrastructure.observability.noop_tracer import NoopTracer
+
+    boleto = build_boleto()
+    default, *_ = _orchestrator(boleto.ocr_text(), model=FakeModel())
+    disabled_tracer = build_observability_tracer(_settings())
+    assert isinstance(disabled_tracer, NoopTracer)
+    with_noop, *_ = _orchestrator(
+        boleto.ocr_text(),
+        model=FakeModel(),
+        observability=disabled_tracer,
+    )
+
+    first = await _run(default)
+    second = await _run(with_noop)
+
+    assert first.score == second.score
+    assert first.band == second.band
+    assert first.fields == second.fields
+    assert first.evidence == second.evidence
+    assert first.justification == second.justification
+    assert first.inconsistencies == second.inconsistencies
+    assert first.degradation_flags == second.degradation_flags

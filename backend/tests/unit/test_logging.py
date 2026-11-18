@@ -101,3 +101,26 @@ def test_configure_logging_is_idempotent() -> None:
         if isinstance(handler.formatter, JsonFormatter)
     ]
     assert len(handlers) == 1
+
+
+def test_json_formatter_includes_trace_correlation_ids() -> None:
+    record = logging.LogRecord(
+        name="paysentineliq",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="analysis_trace",
+        args=(),
+        exc_info=None,
+    )
+    record.event = "analysis_trace"
+    record.analysis_id = "analysis-1"
+    record.otel_trace_id = "0" * 32
+    record.langfuse_trace_id = "langfuse-trace-1"
+
+    payload = json.loads(JsonFormatter().format(record))
+
+    assert payload["event"] == "analysis_trace"
+    assert payload["analysis_id"] == "analysis-1"
+    assert payload["otel_trace_id"] == "0" * 32
+    assert payload["langfuse_trace_id"] == "langfuse-trace-1"

@@ -1,0 +1,66 @@
+{
+  "generated_at": "2026-11-18T14:34:17.637478+00:00",
+  "dataset": "retrieval-eval-v1",
+  "experiment_prefix": "sentinelpay-retrieval-v3",
+  "eval_k": 5,
+  "top_k": 25,
+  "backend": "onnx",
+  "runs": [
+    {
+      "mode": "Denso (BGE-M3)",
+      "slug": "dense",
+      "experiment_url": "https://us.cloud.langfuse.com/project/cmwm4p0y80145ad0d02cx7xjk/experiments/results?baseline=90fea7f263d5f3fa",
+      "items": 30,
+      "failed_items": 0,
+      "summary": {
+        "recall_at_5": 0.9333333333333333,
+        "mrr": 0.8916666666666667,
+        "top1_match": 0.8333333333333334,
+        "p50_latency_ms": 134.64569999996456,
+        "scored_items": 30
+      }
+    },
+    {
+      "mode": "Denso + rerank",
+      "slug": "dense-rerank",
+      "experiment_url": "https://us.cloud.langfuse.com/project/cmwm4p0y80145ad0d02cx7xjk/experiments/results?baseline=12815ab6c8963ec3",
+      "items": 30,
+      "failed_items": 0,
+      "summary": {
+        "recall_at_5": 0.9666666666666667,
+        "mrr": 0.961111111111111,
+        "top1_match": 0.9333333333333333,
+        "p50_latency_ms": 14586.846399999558,
+        "scored_items": 30
+      }
+    },
+    {
+      "mode": "Hibrido RRF",
+      "slug": "hybrid-rrf",
+      "experiment_url": "https://us.cloud.langfuse.com/project/cmwm4p0y80145ad0d02cx7xjk/experiments/results?baseline=41cde83c4b156ed7",
+      "items": 30,
+      "failed_items": 0,
+      "summary": {
+        "recall_at_5": 0.8666666666666667,
+        "mrr": 0.8011111111111112,
+        "top1_match": 0.7333333333333333,
+        "p50_latency_ms": 135.95119999990857,
+        "scored_items": 30
+      }
+    },
+    {
+      "mode": "Hibrido RRF + rerank",
+      "slug": "hybrid-rerank",
+      "experiment_url": "https://us.cloud.langfuse.com/project/cmwm4p0y80145ad0d02cx7xjk/experiments/results?baseline=575234a66b899daf",
+      "items": 30,
+      "failed_items": 0,
+      "summary": {
+        "recall_at_5": 0.9666666666666667,
+        "mrr": 0.9416666666666667,
+        "top1_match": 0.9,
+        "p50_latency_ms": 14411.635799999203,
+        "scored_items": 30
+      }
+    }
+  ]
+}

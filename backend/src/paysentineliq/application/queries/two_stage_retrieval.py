@@ -15,10 +15,22 @@ from paysentineliq.application.ports.retrieval_metrics import (
 from paysentineliq.application.queries.knowledge_retrieval import (
     KnowledgeQuery,
     KnowledgeRetrievalResult,
+    RetrievedPassage,
 )
+from paysentineliq.domain.ports.observability import ObservabilityTracer
 from paysentineliq.domain.ports.retrieval import Reranker
 
 _logger = logging.getLogger("paysentineliq")
+
+
+def _rank_snapshot(passages: tuple[RetrievedPassage, ...]) -> tuple[str, ...]:
+    return tuple(f"{passage.citation.document_key}|{passage.score:.6f}" for passage in passages)
+
+
+def _top1_changed(before: tuple[str, ...], after: tuple[str, ...]) -> bool:
+    if not before or not after:
+        return False
+    return before[0].split("|", 1)[0] != after[0].split("|", 1)[0]
 
 
 class TwoStageRetriever:
@@ -32,6 +44,7 @@ class TwoStageRetriever:
         timeout_seconds: float,
         metrics: RetrievalMetricsPort | None = None,
         tracer: Tracer | None = None,
+        observability: ObservabilityTracer | None = None,
     ) -> None:
         if top_n <= 0:
             raise ValueError("top_n must be positive")
@@ -44,6 +57,7 @@ class TwoStageRetriever:
         self._timeout_seconds = timeout_seconds
         self._metrics = metrics or NullRetrievalMetrics()
         self._tracer = tracer or trace.get_tracer("paysentineliq.retrieval")
+        self._observability = observability
 
     async def retrieve(self, query: KnowledgeQuery) -> KnowledgeRetrievalResult:
         total_started = perf_counter()
@@ -69,6 +83,36 @@ class TwoStageRetriever:
                 span.set_attribute("retrieval.duration_seconds", duration)
 
     async def _run_stage1(self, query: KnowledgeQuery) -> KnowledgeRetrievalResult:
+        if self._observability is None:
+            return await self._run_stage1_inner(query)
+        with self._observability.observation(
+            "retrieval.stage1",
+            as_type="retriever",
+            input={"query_chars": len(query.text), "limit": query.limit},
+            metadata={"top_k": self._top_n},
+        ) as observation:
+            result = await self._run_stage1_inner(query)
+            observation.update(
+                output={
+                    "candidates": len(result.passages),
+                    "rag_unavailable": result.rag_unavailable,
+                    "scores": [
+                        {
+                            "document_key": passage.citation.document_key,
+                            "score": passage.score,
+                            "dense_score": passage.dense_score,
+                            "sparse_score": passage.sparse_score,
+                            "fused_score": passage.fused_score,
+                            "dense_rank": passage.dense_rank,
+                            "sparse_rank": passage.sparse_rank,
+                        }
+                        for passage in result.passages
+                    ],
+                },
+            )
+            return result
+
+    async def _run_stage1_inner(self, query: KnowledgeQuery) -> KnowledgeRetrievalResult:
         started = perf_counter()
         with self._tracer.start_as_current_span("retrieval.stage1"):
             try:
@@ -87,6 +131,37 @@ class TwoStageRetriever:
         return result
 
     async def _rerank(
+        self,
+        result: KnowledgeRetrievalResult,
+        query: KnowledgeQuery,
+        span: Span,
+    ) -> KnowledgeRetrievalResult:
+        if self._observability is None:
+            return await self._rerank_inner(result, query, span)
+        before = _rank_snapshot(result.passages)
+        with self._observability.observation(
+            "retrieval.rerank",
+            as_type="retriever",
+            input={"candidates": len(result.passages)},
+            metadata={
+                "top_n": self._top_n,
+                "model": self._reranker.model_id if self._reranker is not None else None,
+            },
+        ) as observation:
+            reranked = await self._rerank_inner(result, query, span)
+            observation.update(
+                output={
+                    "order_before": list(before),
+                    "order_after": list(reranked.rerank_rank_after),
+                    "latency_ms": reranked.rerank_latency_ms,
+                    "top1_changed": reranked.rerank_top1_changed,
+                    "outcome": ("success" if reranked.rerank_applied else reranked.rerank_fallback),
+                },
+                metadata={"model": reranked.rerank_model},
+            )
+            return reranked
+
+    async def _rerank_inner(
         self,
         result: KnowledgeRetrievalResult,
         query: KnowledgeQuery,
@@ -111,20 +186,40 @@ class TwoStageRetriever:
                     )
                 except (TimeoutError, RerankTimeoutError):
                     rerank_span.set_attribute("retrieval.rerank.outcome", "timeout")
-                    return self._fallback(result, "timeout", span)
+                    return self._fallback(
+                        result,
+                        "timeout",
+                        span,
+                        (perf_counter() - started) * 1000.0,
+                    )
                 except Exception:
                     _logger.warning("retrieval_rerank_failed")
                     rerank_span.set_attribute("retrieval.rerank.outcome", "error")
-                    return self._fallback(result, "error", span)
+                    return self._fallback(
+                        result,
+                        "error",
+                        span,
+                        (perf_counter() - started) * 1000.0,
+                    )
                 if not reranked:
                     rerank_span.set_attribute("retrieval.rerank.outcome", "empty")
-                    return self._fallback(result, "empty", span)
+                    return self._fallback(
+                        result,
+                        "empty",
+                        span,
+                        (perf_counter() - started) * 1000.0,
+                    )
                 indices = [item.index for item in reranked]
                 if len(set(indices)) != len(indices) or any(
                     index >= len(result.passages) for index in indices
                 ):
                     rerank_span.set_attribute("retrieval.rerank.outcome", "error")
-                    return self._fallback(result, "error", span)
+                    return self._fallback(
+                        result,
+                        "error",
+                        span,
+                        (perf_counter() - started) * 1000.0,
+                    )
                 selected = tuple(
                     replace(
                         result.passages[item.index],
@@ -133,6 +228,9 @@ class TwoStageRetriever:
                     )
                     for item in reranked[: self._top_n]
                 )
+                latency_ms = (perf_counter() - started) * 1000.0
+                before = _rank_snapshot(result.passages)
+                after = _rank_snapshot(selected)
                 rerank_span.set_attribute("retrieval.reranked", len(selected))
                 rerank_span.set_attribute("retrieval.rerank.outcome", "success")
                 rerank_span.set_attribute("retrieval.rerank.model", self._reranker.model_id)
@@ -151,6 +249,10 @@ class TwoStageRetriever:
             rerank_applied=True,
             rerank_fallback=None,
             rerank_model=self._reranker.model_id,
+            rerank_rank_before=before,
+            rerank_rank_after=after,
+            rerank_latency_ms=latency_ms,
+            rerank_top1_changed=_top1_changed(before, after),
             retrieval_mode=f"{result.retrieval_mode}_reranked",
         )
 
@@ -159,8 +261,11 @@ class TwoStageRetriever:
         result: KnowledgeRetrievalResult,
         reason: str,
         span: Span,
+        latency_ms: float | None = None,
     ) -> KnowledgeRetrievalResult:
         passages = result.passages[: self._top_n]
+        before = _rank_snapshot(result.passages)
+        after = _rank_snapshot(passages)
         self._metrics.record_retrieval_candidates("reranked", len(passages))
         for passage in passages:
             self._metrics.record_retrieval_score("reranked", passage.score)
@@ -176,5 +281,9 @@ class TwoStageRetriever:
             rerank_applied=False,
             rerank_fallback=reason,
             rerank_model=model_id,
+            rerank_rank_before=before,
+            rerank_rank_after=after,
+            rerank_latency_ms=latency_ms,
+            rerank_top1_changed=False,
             retrieval_mode=f"{result.retrieval_mode}_fallback",
         )

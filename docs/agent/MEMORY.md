@@ -107,10 +107,10 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17: para contar queries, escute `before_cursor_execute` no `engine.sync_engine` (o AsyncEngine nao recebe o evento direto) e remova o listener no `finally`. Nos endpoints de listagem, o custo esperado e 1 SELECT de auth + 1 da lista, independente do numero de linhas.
 - P17: o snapshot `backend/tests/contracts/openapi.json` e comparado campo a campo; ele so deve ser regenerado com `make openapi` no mesmo commit em que a mudanca de contrato for intencional.
 - P17.1: `RERANK_ENABLED` e `true` por padrao. Sem os binarios, o app sobe e o `/health` mostra `loaded=false` com `model_files_missing`; nao trate isso como falha de liveness.
-- P17.1: o servico `api` do Compose ainda nao monta `./models`; para carregar os modelos no container sera preciso adicionar o volume (pendencia de infra, fora desta etapa).
+- P17.1: o servico `api` do Compose passou a montar `./models` como somente leitura na ETAPA E; sem o diretorio no host, o `/health` mostra `loaded=false` com `model_files_missing`.
 - P17.1: `onnx`, `onnxruntime`, `tokenizers`, `numpy` e `huggingface-hub` sao dependencias declaradas; `onnx` adiciona `ml-dtypes` ao lock e aumenta a imagem. Nao remover sem revisar o warmup.
 - P17.1 ETAPA B: a migration `0010_hybrid_retrieval` ja foi aplicada no Postgres local e no container; backup imediatamente anterior em `backups/paysentineliq_20261117T004837Z.sql`. `alembic check` esta limpo; nao rode `downgrade base` sem backup e sem necessidade.
-- P17.1: a imagem `paysentineliq-api:local` foi reconstruida e api/worker/beat recriados. O servico `api` continua sem mount de `models/`, entao `/health` mostra `model_files_missing`; o volume segue pendencia de infra.
+- P17.1: a imagem `paysentineliq-api:local` foi reconstruida e api/worker/beat recriados; na ETAPA E o `api` recebeu o mount `./models:ro` e o `/health` confirmou `loaded=true` para embedder, sparse embedder e reranker.
 - P17.1: o Pinecone hibrido exige indice de dimensao 1024 e metrica `dotproduct`; `from_settings` valida a descricao e falha com `RagUnavailableError`. Criar/redimensionar indice real e operacao externa NAO VALIDADA.
 - P17.1: `scripts/reindex_kb.py` exige os modelos BGE em `models/retrieval`; sem eles o `--dry-run` retorna ausente e o modo real falha antes de tocar no banco. A idempotencia inclui `embedding_model`, entao trocar o modelo forca reescrita.
 - P17.1: `make test-docker` completo faz `downgrade base` no teste de migration; evite rodar sem backup. Nesta etapa foram executados apenas os testes Docker de PGVector antigo e hibrido.
@@ -119,7 +119,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17.1: `RetrievalModelHealth.backend` agora aceita `remote`; o snapshot OpenAPI foi regenerado. Atualize o snapshot no mesmo commit de qualquer mudanca de contrato.
 - P17.1: o `RERANKER_REMOTE_URL` em producao deve ser HTTPS e usar porta 443/80; `SafeHttpClient` bloqueia IPs privados e portas fora desse padrao, exceto `APP_ENV=local` com host na allowlist SSRF.
 - P17.1: o reranker remoto retorna probabilidade; se o provedor devolver logit fora de 0..1, o adaptador rejeita e o pipeline cai para o estagio 1. Ajuste o provedor, nao relaxe a validacao.
-- P17.1: `models/retrieval` fica fora do git e ja tem as conversoes int8 usadas no eval. O servico `api` ainda nao monta esse diretorio, entao `/health` no container mostra `model_files_missing`; o worker monta `./models`.
+- P17.1: `models/retrieval` fica fora do git e tem as conversoes int8 usadas no eval; o `api` monta `./models:ro` (corrigido na ETAPA E) e o worker ja montava o mesmo diretorio.
 - P17.1: os modelos int8 da comunidade sao derivados dos pesos BAAI, mas nao sao o caminho oficial de warmup/quantizacao. Nao os trate como substitutos validados do `warmup_models.py` em producao.
 - P17.1: o dataset usa perguntas sem acento para evitar problemas de encoding, mas as consultas reais podem ser acentuadas; o BGE-M3 e multilíngue e o eval deve ser repetido com consultas reais antes de conclusoes fortes.
 - P17: `cv2.imdecode` aloca a imagem inteira; para bomba de descompressao, leia as dimensoes pelo cabecalho (Pillow) antes de decodificar. Em PDF, cheque `page.rect` x DPI antes de `get_pixmap`.
@@ -146,7 +146,7 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P17.1: o timeout de 5 s fazia todo rerank cair no fallback; o padrao foi calibrado para 30 s. Se o p95 real subir, reavalie `RERANK_TIMEOUT_SECONDS`, top-K e lote antes de reduzir.
 - P17.1: o hibrido RRF ficou abaixo do denso neste corpus de 21 docs; nao presuma que hibrido sempre ganha. Use o eval para calibrar fusao e pesos em corpus maior.
 - P17.1 ETAPA E: o `api` monta `./models:/app/models:ro` e o `/health` do container mostra `loaded=true` para embedder, sparse embedder e reranker. O worker ja montava o mesmo diretorio.
-- P17.1: a auditoria por codepoints dos 21 PDFs mostrou 0 `U+FFFD`, 0 sequencias duplicadas e 0 NFC pendente; havia 78 travessoes longos e 10 medios. O mojibake visivel era encoding dos artefatos. `repair_text` usa `ftfy`, NFC e normalizacao de travessoes; a reindexacao ficou em 53 chunks e o segundo run pulou 21 documentos. Relatorio em `docs/qa/knowledge-text-repair.md`.
+- P17.1: a auditoria por codepoints dos 21 PDFs mostrou 0 `U+FFFD`, 0 sequencias duplicadas e 0 NFC pendente; havia 78 travessoes longos e 10 medios. O mojibake visivel era encoding dos artefatos. `repair_text` usa `ftfy`, NFC e normalizacao de travessoes; a reindexacao reescreveu 53 chunks (56 no total, pois 2 documentos com 3 chunks ficaram inalterados) e a segunda execucao pulou 21. Em 2026-11-18 a conferencia repetiu skipped=21 e 0 `U+2014`/`U+2013`/`U+FFFD` no banco. Relatorio em `docs/qa/knowledge-text-repair.md`.
 - P17.1: `ftfy` e dependencia declarada para a extracao; nao remova sem manter a normalizacao de texto de `knowledge/`.
 - P17.1: a segunda rodada do eval tem seis modos. O RRF ficou abaixo do denso (MRR 0,8011 vs 0,8917); ponderado 0,7/0,3 subiu o MRR do estagio 1 para 0,8344 e o rerank entregou 0,9583. Denso+rerank teve MRR 0,9611, com maior latencia.
 - P17.1: o reranker real fp32 para o benchmark esta em `models/retrieval/bge-reranker-v2-m3-fp32` (ONNX e external data, fora do git); o int8 fica em `bge-reranker-v2-m3`.
@@ -161,3 +161,14 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - P18.1: o cliente aplica o snapshot SSE no cache do TanStack Query. O fallback de polling so liga depois de duas falhas; nao faca polling concorrente com SSE saudavel.
 - P18.1: `processing` continua como alias de leitura de `running` no enum e no front; a migration converte as linhas antigas. Novos codigos devem usar `running`.
 - P18.1: `RedisAnalysisCancellation.is_cancelled` usa a flag Redis como caminho rapido e consulta o status no PostgreSQL no maximo a cada 2 s quando a flag nao existe. Assim `CANCELLING` no banco ainda aborta o worker se o Redis perder a escrita, sem transformar cada checagem em query.
+
+- F1: `langfuse 5.2.0` fica opcional; sem `LANGFUSE_ENABLED=true` e as duas chaves, `build_observability_tracer` retorna `NoopTracer`. Nunca logue as chaves.
+- F1: o mascaramento central (`application/security/observability_masking.py`) roda antes do SDK e o callback `mask` do Langfuse repete a barreira. Texto livre vira `sha256` + tamanho; `user_id` vira HMAC-SHA256; OCR bruto, imagens e bytes nunca sao enviados.
+- F1: o cliente Langfuse usa timeout de 2 s, `flush_at=10`, `flush_interval=2 s` e `flush`/`shutdown` com timeout de 2 s. Falha do SDK vira warning sem payload e nao altera a analise.
+- F1: o Compose usa `.env.example`; chaves no `.env` local nao chegam ao container sem passar o arquivo explicitamente. Nao coloque chaves reais no `.env.example`.
+
+- F2: o trace raiz `analysis` usa `session_id` = id da analise e `propagate_attributes`; os spans filhos sao criados pela porta em `LangGraphAnalysisOrchestrator`, `TwoStageRetriever`, interpretadores e judge.
+- F2: `dataset.run_experiment` executa a task dentro de um loop proprio. Nao reutilize engine/sessao asyncpg criados em outro loop: crie engine por item na task async e descarte no mesmo loop. O sintoma do erro e `another operation is in progress`.
+- F2: `.env` local usa `LANGFUSE_BASE_URL`; `Settings` aceita `LANGFUSE_HOST` e `LANGFUSE_BASE_URL`. O script de experimento le apenas `LANGFUSE_*` do `.env`, nunca o banco de producao.
+- F2: experimentos v3 `sentinelpay-retrieval-v3-*` no projeto Langfuse com 30 itens e 0 falhas; MRR denso 0.8917, denso+rerank 0.9611, RRF 0.8011 e RRF+rerank 0.9417. URLs em `eval/langfuse_experiment.json`.
+- F2: `dataset.run_experiment` retorna `experiment_url` com baseline; o id real do experimento aparece em `experiments.list`. Para agregados, consulte `experiments.list_items` com `fields=["io","scores"]` e `score_limit<=50`.

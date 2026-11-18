@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -7,7 +8,7 @@ from functools import wraps
 from io import BytesIO
 from pathlib import Path
 from time import perf_counter
-from typing import Any, TypedDict, TypeVar
+from typing import Any, TypedDict, TypeVar, cast
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, StateGraph
@@ -105,6 +106,7 @@ from paysentineliq.domain.payslip.regulatory import (
     load_regulatory_tables,
 )
 from paysentineliq.domain.payslip.rules import EvidenceStatus
+from paysentineliq.domain.ports.observability import ObservabilityTracer
 from paysentineliq.domain.receipt.analysis import ReceiptAnalysis, analyze_receipt
 from paysentineliq.domain.receipt.extraction import extract_receipt_fields
 from paysentineliq.domain.scoring import (
@@ -131,9 +133,11 @@ from paysentineliq.infrastructure.observability.metrics import (
     PlatformMetrics,
     get_platform_metrics,
 )
+from paysentineliq.infrastructure.observability.noop_tracer import NoopTracer
 
 _T = TypeVar("_T")
 _CANCELLATION_POLL_SECONDS = 0.5
+_logger = logging.getLogger("paysentineliq")
 
 
 async def _await_with_cancellation(
@@ -164,6 +168,9 @@ class AnalysisGraphState(TypedDict, total=False):
     data: bytes
     locale: str
     ocr_text: str
+    ocr_page_count: int
+    ocr_block_count: int
+    ocr_text_chars: int
     sanitized_text: str
     visual_signals: tuple[VisualSignal, ...]
     document_type: AnalysisDocumentType
@@ -173,6 +180,14 @@ class AnalysisGraphState(TypedDict, total=False):
     deterministic_summary: DeterministicSummary | None
     fraud_score: FraudScore | None
     rag_passages: tuple[RetrievedPassage, ...]
+    rag_retrieval_mode: str
+    rerank_applied: bool
+    rerank_fallback: str | None
+    rerank_model: str | None
+    rerank_top1_changed: bool | None
+    rerank_order_before: tuple[str, ...]
+    rerank_order_after: tuple[str, ...]
+    rerank_latency_ms: float | None
     interpretation: InterpretationResult | None
     guardrail_findings: tuple[GuardrailFinding, ...]
     guardrail_evidence: tuple[AnalysisEvidence, ...]
@@ -209,6 +224,7 @@ class LangGraphAnalysisOrchestrator:
         metrics: GuardrailMetricsPort | None = None,
         platform_metrics: PlatformMetrics | None = None,
         cancellation: CancellationPort | None = None,
+        tracer: ObservabilityTracer | None = None,
     ) -> None:
         self._ingestion = ingestion
         self._fraud_service = fraud_service
@@ -232,6 +248,7 @@ class LangGraphAnalysisOrchestrator:
         )
         self._cancellation = cancellation or NullCancellation()
         self._tracer = trace.get_tracer("paysentineliq")
+        self._observability = tracer or NoopTracer()
         self._input_guard = InputGuardrailService(
             max_chars=settings.guardrail_max_text_chars,
             classifier=classifier,
@@ -342,13 +359,126 @@ class LangGraphAnalysisOrchestrator:
         }
         await self._ensure_not_cancelled(analysis_id)
         await self._begin_stage(analysis_id, AnalysisStage.VALIDATION, "Validando o arquivo")
+        document_type = self._metric_document_type(initial)
         with self._tracer.start_as_current_span("pipeline.run") as span:
-            span.set_attribute("document.type", self._metric_document_type(initial))
-            result: Any = await self._graph.ainvoke(initial)
-        report = result.get("report") if isinstance(result, dict) else None
-        if not isinstance(report, AnalysisReport):
-            raise RuntimeError("analysis did not produce a report")
-        return report
+            span.set_attribute("document.type", document_type)
+            otel_trace_id = format(span.get_span_context().trace_id, "032x")
+            span.set_attribute("analysis.id", str(analysis_id))
+            with self._observability.trace(
+                "analysis",
+                session_id=str(analysis_id),
+                metadata={
+                    "analysis_id": str(analysis_id),
+                    "document_id": str(document.id),
+                    "document_type": document_type,
+                    "otel_trace_id": otel_trace_id,
+                    "environment": self._settings.app_env,
+                },
+                tags=("analysis", f"env:{self._settings.app_env}"),
+                environment=self._settings.app_env,
+                input={
+                    "document_type": document_type,
+                    "document_id": str(document.id),
+                    "locale": locale,
+                },
+            ) as trace_handle:
+                langfuse_trace_id = self._observability.current_trace_id()
+                span.set_attribute("langfuse.trace_id", langfuse_trace_id or "")
+                result: Any = await self._graph.ainvoke(initial)
+                final_state = cast(AnalysisGraphState, result if isinstance(result, dict) else {})
+                report = final_state.get("report")
+                if not isinstance(report, AnalysisReport):
+                    raise RuntimeError("analysis did not produce a report")
+                flags = final_state.get("degradation_flags", ())
+                guardrail_failed = self._guardrail_failed(final_state)
+                rerank_changed = final_state.get("rerank_top1_changed")
+                trace_handle.update(
+                    output={
+                        "score": report.score,
+                        "band": report.band.value,
+                        "evidence_count": len(report.evidence),
+                        "degradation_flags": [flag.value for flag in flags],
+                        "guardrail_failed": guardrail_failed,
+                        "rerank_alterou_top1": bool(rerank_changed),
+                        "rerank_applied": bool(final_state.get("rerank_applied", False)),
+                    },
+                    metadata={
+                        "otel_trace_id": otel_trace_id,
+                        "llm_adjustment": final_state.get("llm_adjustment"),
+                        "retrieval_mode": final_state.get("rag_retrieval_mode"),
+                        "rerank_fallback": final_state.get("rerank_fallback"),
+                    },
+                )
+                self._score_trace(report, final_state, guardrail_failed)
+                _logger.info(
+                    "analysis_trace",
+                    extra={
+                        "event": "analysis_trace",
+                        "analysis_id": str(analysis_id),
+                        "otel_trace_id": otel_trace_id,
+                        "langfuse_trace_id": langfuse_trace_id,
+                    },
+                )
+                return report
+
+    def _guardrail_failed(self, state: AnalysisGraphState) -> bool:
+        findings = state.get("guardrail_findings", ())
+        flags = set(state.get("degradation_flags", ()))
+        blocking_flags = {
+            DegradationFlag.PROMPT_INJECTION_DETECTED,
+            DegradationFlag.LLM_OUTPUT_REJECTED,
+            DegradationFlag.LLM_JUDGE_REJECTED,
+        }
+        return bool(findings) or bool(flags & blocking_flags)
+
+    def _score_trace(
+        self,
+        report: AnalysisReport,
+        state: AnalysisGraphState,
+        guardrail_failed: bool,
+    ) -> None:
+        self._observability.score(
+            "risk_score",
+            float(report.score),
+            data_type="NUMERIC",
+        )
+        self._observability.score(
+            "risk_band",
+            report.band.value,
+            data_type="CATEGORICAL",
+        )
+        self._observability.score(
+            "rerank_alterou_top1",
+            1.0 if state.get("rerank_top1_changed") else 0.0,
+            data_type="BOOLEAN",
+        )
+        self._observability.score(
+            "rerank_applied",
+            1.0 if state.get("rerank_applied") else 0.0,
+            data_type="BOOLEAN",
+        )
+        self._observability.score(
+            "guardrail_failed",
+            1.0 if guardrail_failed else 0.0,
+            data_type="BOOLEAN",
+        )
+        verdict = state.get("judge_verdict")
+        if isinstance(verdict, JudgeVerdict):
+            self._observability.score(
+                "judge_approved",
+                1.0 if verdict.approved else 0.0,
+                data_type="BOOLEAN",
+            )
+            self._observability.score(
+                "judge_verdict",
+                verdict.reason,
+                data_type="CATEGORICAL",
+            )
+            self._observability.score(
+                "judge_findings",
+                float(len(verdict.findings)),
+                data_type="NUMERIC",
+            )
 
     async def _load_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
         document = state["document"]
@@ -372,17 +502,37 @@ class LangGraphAnalysisOrchestrator:
             )
 
         try:
-            result = await asyncio.wait_for(
-                self._ingestion.ingest(
-                    state["data"],
-                    on_page=_on_page,
-                    check_cancelled=lambda: self._is_cancelled(analysis_id),
-                ),
-                timeout=self._node_timeout,
-            )
+            with self._observability.observation(
+                "ocr",
+                as_type="span",
+                input={
+                    "document_type": self._metric_document_type(state),
+                    "bytes": len(state["data"]),
+                },
+                metadata={
+                    "languages": list(self._settings.ocr_languages_list),
+                    "max_pages": self._settings.ocr_max_pages,
+                },
+            ) as observation:
+                result = await asyncio.wait_for(
+                    self._ingestion.ingest(
+                        state["data"],
+                        on_page=_on_page,
+                        check_cancelled=lambda: self._is_cancelled(analysis_id),
+                    ),
+                    timeout=self._node_timeout,
+                )
+                text = "\n".join(block.text for block in result.blocks)
+                observation.update(
+                    output={
+                        "page_count": result.page_count,
+                        "block_count": len(result.blocks),
+                        "text_chars": len(text),
+                        "visual_signal_count": len(result.signals),
+                    },
+                )
         except TimeoutError as exc:
             raise AnalysisTimeoutError("ingest") from exc
-        text = "\n".join(block.text for block in result.blocks)
         await self._complete_stage(
             analysis_id,
             AnalysisStage.OCR,
@@ -391,10 +541,27 @@ class LangGraphAnalysisOrchestrator:
         return {
             "ocr_text": text,
             "visual_signals": result.signals,
+            "ocr_page_count": result.page_count,
+            "ocr_block_count": len(result.blocks),
+            "ocr_text_chars": len(text),
         }
 
     async def _guard_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
-        result = self._input_guard.inspect(state["ocr_text"])
+        with self._observability.observation(
+            "guardrail.input",
+            as_type="guardrail",
+            input={"text_chars": len(state["ocr_text"])},
+            metadata={"classifier_enabled": self._classifier_enabled},
+        ) as observation:
+            result = self._input_guard.inspect(state["ocr_text"])
+            observation.update(
+                output={
+                    "triggered": result.triggered,
+                    "findings": [finding.code for finding in result.findings],
+                    "classifier_version": result.classifier_version,
+                    "classifier_unavailable": result.classifier_unavailable,
+                },
+            )
         flags = self._flags(state)
         classifier_unavailable = result.classifier_unavailable or (
             self._classifier_enabled and self._input_classifier is None
@@ -433,9 +600,15 @@ class LangGraphAnalysisOrchestrator:
 
     async def _classify_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
         document = state["document"]
-        document_type = document_type_for(document.kind)
-        if document_type is None:
-            raise UnsupportedDocumentError()
+        with self._observability.observation(
+            "classifier.document",
+            as_type="span",
+            input={"kind": document.kind.value},
+        ) as observation:
+            document_type = document_type_for(document.kind)
+            if document_type is None:
+                raise UnsupportedDocumentError()
+            observation.update(output={"document_type": document_type.value})
         await self._begin_stage(
             state["analysis_id"],
             AnalysisStage.EXTRACTION,
@@ -530,16 +703,33 @@ class LangGraphAnalysisOrchestrator:
             "Calculando o score de risco",
         )
         try:
-            score = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._fraud_service.score,
-                    FraudScoringRequest(
-                        deterministic=summary,
-                        visual_signals=state.get("visual_signals", ()),
+            with self._observability.observation(
+                "classifier.risk",
+                as_type="span",
+                input={
+                    "document_type": summary.document_type,
+                    "evidence_count": len(summary.evidence),
+                },
+            ) as observation:
+                score = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._fraud_service.score,
+                        FraudScoringRequest(
+                            deterministic=summary,
+                            visual_signals=state.get("visual_signals", ()),
+                        ),
                     ),
-                ),
-                timeout=self._node_timeout,
-            )
+                    timeout=self._node_timeout,
+                )
+                observation.update(
+                    output={
+                        "score": score.score,
+                        "band": score.band.value,
+                        "ml_unavailable": score.ml_unavailable,
+                        "critical_floor_applied": score.critical_floor_applied,
+                        "model_version": score.model_version,
+                    },
+                )
         except TimeoutError as exc:
             raise AnalysisTimeoutError("fraud") from exc
         if score.ml_unavailable and DegradationFlag.ML_UNAVAILABLE not in flags:
@@ -563,47 +753,114 @@ class LangGraphAnalysisOrchestrator:
             AnalysisStage.RAG,
             "Consultando a base de conhecimento e reranqueando",
         )
-        try:
-            result = await asyncio.wait_for(
-                self._retriever.retrieve(
-                    KnowledgeQuery(
-                        text=self._rag_query(state),
-                        as_of=self._clock().date(),
-                        limit=(
-                            self._settings.retrieval_top_k
-                            if self._settings.hybrid_retrieval_enabled
-                            else 5
+        query_text = self._rag_query(state)
+        limit = self._settings.retrieval_top_k if self._settings.hybrid_retrieval_enabled else 5
+        with self._observability.observation(
+            "retrieval",
+            as_type="retriever",
+            input={"query": query_text, "limit": limit},
+            metadata={
+                "hybrid_retrieval": self._settings.hybrid_retrieval_enabled,
+                "rerank_enabled": self._settings.rerank_enabled,
+            },
+        ) as observation:
+            try:
+                result = await asyncio.wait_for(
+                    self._retriever.retrieve(
+                        KnowledgeQuery(
+                            text=query_text,
+                            as_of=self._clock().date(),
+                            limit=limit,
                         ),
                     ),
-                ),
-                timeout=self._node_timeout,
+                    timeout=self._node_timeout,
+                )
+            except Exception:
+                observation.update(
+                    output={
+                        "rag_unavailable": True,
+                        "reason": "rag_unavailable",
+                    },
+                )
+                flags = self._add_flag(flags, DegradationFlag.RAG_UNAVAILABLE)
+                await self._append_degraded(
+                    state["analysis_id"],
+                    DegradationFlag.RAG_UNAVAILABLE,
+                    "rag",
+                )
+                await self._complete_stage(
+                    state["analysis_id"],
+                    AnalysisStage.RAG,
+                    "Base de conhecimento indisponível",
+                )
+                return {
+                    "rag_passages": (),
+                    "degradation_flags": flags,
+                    "rag_retrieval_mode": "unavailable",
+                    "rerank_applied": False,
+                    "rerank_fallback": "rag_unavailable",
+                    "rerank_model": None,
+                    "rerank_top1_changed": False,
+                    "rerank_order_before": (),
+                    "rerank_order_after": (),
+                    "rerank_latency_ms": None,
+                }
+            observation.update(
+                output={
+                    "rag_unavailable": result.rag_unavailable,
+                    "passages": self._passages_for_trace(result.passages),
+                    "retrieval_mode": result.retrieval_mode,
+                    "rerank_applied": result.rerank_applied,
+                    "rerank_fallback": result.rerank_fallback,
+                    "rerank_model": result.rerank_model,
+                    "rerank_top1_changed": result.rerank_top1_changed,
+                    "rerank_order_before": list(result.rerank_rank_before),
+                    "rerank_order_after": list(result.rerank_rank_after),
+                    "rerank_latency_ms": result.rerank_latency_ms,
+                },
             )
-        except Exception:
-            flags = self._add_flag(flags, DegradationFlag.RAG_UNAVAILABLE)
-            await self._append_degraded(
-                state["analysis_id"],
-                DegradationFlag.RAG_UNAVAILABLE,
-                "rag",
-            )
-            await self._complete_stage(
-                state["analysis_id"],
-                AnalysisStage.RAG,
-                "Base de conhecimento indisponível",
-            )
-            return {"rag_passages": (), "degradation_flags": flags}
-        if result.rag_unavailable:
-            flags = self._add_flag(flags, DegradationFlag.RAG_UNAVAILABLE)
-            await self._append_degraded(
-                state["analysis_id"],
-                DegradationFlag.RAG_UNAVAILABLE,
-                "rag",
-            )
+            if result.rag_unavailable:
+                flags = self._add_flag(flags, DegradationFlag.RAG_UNAVAILABLE)
+                await self._append_degraded(
+                    state["analysis_id"],
+                    DegradationFlag.RAG_UNAVAILABLE,
+                    "rag",
+                )
         await self._complete_stage(
             state["analysis_id"],
             AnalysisStage.RAG,
             f"{len(result.passages)} trecho(s) recuperado(s)",
         )
-        return {"rag_passages": result.passages, "degradation_flags": flags}
+        return {
+            "rag_passages": result.passages,
+            "degradation_flags": flags,
+            "rag_retrieval_mode": result.retrieval_mode,
+            "rerank_applied": result.rerank_applied,
+            "rerank_fallback": result.rerank_fallback,
+            "rerank_model": result.rerank_model,
+            "rerank_top1_changed": result.rerank_top1_changed,
+            "rerank_order_before": result.rerank_rank_before,
+            "rerank_order_after": result.rerank_rank_after,
+            "rerank_latency_ms": result.rerank_latency_ms,
+        }
+
+    @staticmethod
+    def _passages_for_trace(
+        passages: tuple[RetrievedPassage, ...],
+    ) -> list[dict[str, object]]:
+        return [
+            {
+                "document_key": passage.citation.document_key,
+                "score": passage.score,
+                "dense_score": passage.dense_score,
+                "sparse_score": passage.sparse_score,
+                "fused_score": passage.fused_score,
+                "dense_rank": passage.dense_rank,
+                "sparse_rank": passage.sparse_rank,
+                "rerank_score": passage.rerank_score,
+            }
+            for passage in passages
+        ]
 
     async def _interpret_node(self, state: AnalysisGraphState) -> AnalysisGraphState:
         score = state.get("fraud_score")
@@ -638,10 +895,24 @@ class LangGraphAnalysisOrchestrator:
                     "interpret",
                 )
             if interpretation is not None:
-                scanned, blocked, scan_findings = self._scan_interpretation(
-                    state,
-                    interpretation,
-                )
+                with self._observability.observation(
+                    "guardrail.output",
+                    as_type="guardrail",
+                    input={
+                        "justification_chars": len(interpretation.justification),
+                        "inconsistencies": len(interpretation.inconsistencies),
+                    },
+                ) as observation:
+                    scanned, blocked, scan_findings = self._scan_interpretation(
+                        state,
+                        interpretation,
+                    )
+                    observation.update(
+                        output={
+                            "blocked": blocked,
+                            "findings": [finding.code for finding in scan_findings],
+                        },
+                    )
                 if scan_findings:
                     guardrail_evidence = self._merge_guardrail_evidence(
                         guardrail_evidence,
@@ -771,6 +1042,12 @@ class LangGraphAnalysisOrchestrator:
         JudgeVerdict | None, tuple[DegradationFlag, ...], tuple[AnalysisEvidence, ...], bool
     ]:
         if self._judge is None:
+            with self._observability.observation(
+                "guardrail.judge",
+                as_type="evaluator",
+                input={"available": False},
+            ) as observation:
+                observation.update(output={"available": False, "reason": "disabled"})
             flags = self._add_flag(flags, DegradationFlag.LLM_JUDGE_UNAVAILABLE)
             await self._append_degraded(
                 state["analysis_id"],
@@ -788,20 +1065,41 @@ class LangGraphAnalysisOrchestrator:
             evidence=self._judge_evidence(state, evidence),
             language=state.get("locale", "pt"),
         )
-        try:
-            verdict = await asyncio.wait_for(
-                self._judge.judge(request),
-                timeout=self._node_timeout,
+        with self._observability.observation(
+            "guardrail.judge",
+            as_type="evaluator",
+            input={
+                "candidate_score": candidate_score,
+                "evidence_count": len(evidence),
+                "justification_chars": len(interpretation.justification),
+            },
+            metadata={"band": candidate_band.value},
+        ) as observation:
+            try:
+                verdict = await asyncio.wait_for(
+                    self._judge.judge(request),
+                    timeout=self._node_timeout,
+                )
+            except Exception:
+                observation.update(
+                    level="WARNING",
+                    status_message="judge_unavailable",
+                )
+                flags = self._add_flag(flags, DegradationFlag.LLM_JUDGE_UNAVAILABLE)
+                await self._append_degraded(
+                    state["analysis_id"],
+                    DegradationFlag.LLM_JUDGE_UNAVAILABLE,
+                    "interpret",
+                )
+                self._metrics.record(GUARDRAIL_LAYER_JUDGE, "unavailable")
+                return None, flags, evidence, True
+            observation.update(
+                output={
+                    "approved": verdict.approved,
+                    "verdict_reason": verdict.reason,
+                    "findings_count": len(verdict.findings),
+                },
             )
-        except Exception:
-            flags = self._add_flag(flags, DegradationFlag.LLM_JUDGE_UNAVAILABLE)
-            await self._append_degraded(
-                state["analysis_id"],
-                DegradationFlag.LLM_JUDGE_UNAVAILABLE,
-                "interpret",
-            )
-            self._metrics.record(GUARDRAIL_LAYER_JUDGE, "unavailable")
-            return None, flags, evidence, True
         self._metrics.record(
             GUARDRAIL_LAYER_JUDGE,
             "approved" if verdict.approved else "rejected",

@@ -51,6 +51,15 @@ class JsonFormatter(logging.Formatter):
         request_id = get_request_id()
         if request_id:
             payload["request_id"] = request_id
+        for key in (
+            "event",
+            "analysis_id",
+            "otel_trace_id",
+            "langfuse_trace_id",
+        ):
+            value = getattr(record, key, None)
+            if value:
+                payload[key] = value
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
