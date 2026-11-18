@@ -22,9 +22,10 @@ O aspecto de mojibake observado nos artefatos da ETAPA D vinha da gravacao/leitu
 | Travessao longo (`U+2014`) | 78 | 0 |
 | Travessao medio (`U+2013`) | 10 | 0 |
 | Documentos fora de NFC | 0 | 0 |
-| Chunks hibridos | 56 | 53 |
+| Chunks no banco | 56 | 56 |
+| Chunks reescritos na reindexacao | 56 | 53 |
 
-A mudanca de 56 para 53 chunks ocorre porque a substituicao de travessoes altera o conteudo e os limites do chunking, nao porque documentos foram removidos.
+Os 53 chunks reescritos na primeira execucao vieram de 19 documentos; 2 documentos com 3 chunks ficaram inalterados (`skipped=2`), por isso o total no banco permaneceu 56. A segunda execucao pulou 21 documentos, confirmando a idempotencia.
 
 ### Amostras
 
@@ -50,6 +51,7 @@ Resultados:
 
 - Primeira execucao: `documents=21`, `chunks=53`, `skipped=2`, `failures=0`, `22,20 s`.
 - Segunda execucao: `documents=21`, `chunks=0`, `skipped=21`, `failures=0`, `20,64 s`.
+- Conferencia em 2026-11-18: `documents=21`, `chunks=0`, `skipped=21`, `failures=0`, `22,12 s`; total de 56 chunks no banco e 0 ocorrencias de `U+2014`, `U+2013` e `U+FFFD`.
 
 Os 2 documentos pulados na primeira execucao nao tinham travessao nem outra mudanca de normalizacao. A segunda execucao confirma a idempotencia.
 

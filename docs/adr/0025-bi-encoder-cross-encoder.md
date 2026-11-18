@@ -48,7 +48,7 @@ Achados:
 - O hibrido RRF continuou abaixo do denso no top-5, confirmando o resultado da primeira rodada. A fusao ponderada 0,7/0,3 melhorou o MRR do estagio 1 de 0,8011 para 0,8344, sem mudar o Recall@5.
 - Rerankar o denso deu o melhor MRR (0,9611), mas com o maior p50 (14,2 s). O hibrido ponderado + rerank ficou proximo (0,9583) com p50 menor (13,0 s).
 - O ganho de MRR do rerank sobre o estagio 1 foi grande: +0,127 no ponderado e +0,141 no RRF. O rerank continua sendo o estagio que define a precisao do topo.
-- A extracao dos PDFs nao tinha mojibake real na camada de texto; o defeito visivel era encoding dos artefatos. A normalizeacao removeu 78 travessoes longos e 10 medios, e a reindexacao passou de 56 para 53 chunks por causa dos limites de chunk.
+- A extracao dos PDFs nao tinha mojibake real na camada de texto; o defeito visivel era encoding dos artefatos. A normalizeacao removeu 78 travessoes longos e 10 medios, e a reindexacao reescreveu 53 chunks (56 no total, pois 2 documentos com 3 chunks ficaram inalterados), sem remover documentos.
 
 ### Benchmark de K, max_length e precisao (ETAPA E)
 O benchmark usou 3 consultas, candidatos top-25 do RRF, e mediu apenas o rerank em CPU. A tabela completa, com 18 configuracoes, esta em `eval/RESULTS.md`.
@@ -72,6 +72,6 @@ O servico `api` passou a montar `./models` como somente leitura e o `/health` do
 ## Consequencias
 - O rerank melhora a precisao do topo, mas custa cerca de 12 s por consulta em CPU int8 neste ambiente. O uso em producao exige monitorar p95 e talvez reduzir top-K, aumentar batching ou usar o reranker remoto.
 - O hibrido RRF nao superou o denso neste corpus pequeno. A decisao mantem as duas rotas e a flag para permitir calibracao com uma base maior, pesos diferentes ou outro modo de fusao.
-- Os modelos ocupam espaco local e ficam fora do git. O `api` ainda nao monta `models/`, pendencia de infraestrutura.
+- Os modelos ocupam espaco local e ficam fora do git. O `api` monta `models/` como somente leitura; o diretorio precisa existir no host antes de subir o servico.
 - A avaliacao tem 30 perguntas e 21 documentos; os numeros sao indicativos e nao substituem uma avaliacao com analistas e consultas reais.
 - A conversao int8 oficial, o fallback PyTorch, o reranker remoto real e o Pinecone real continuam NAO VALIDADOS.
