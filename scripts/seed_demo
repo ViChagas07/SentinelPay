@@ -1,0 +1,4 @@
+#!/usr/bin/env python3
+from seed_demo import main
+
+raise SystemExit(main())

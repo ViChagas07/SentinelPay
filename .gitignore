@@ -30,6 +30,7 @@ models/retrieval/
 *.pkl
 backups/
 backend/tests/fixtures/generated/
+/demo/
 
 # Docker / infra local
 infra/**/data/
