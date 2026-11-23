@@ -22,6 +22,9 @@
   --color-input: var(--border);
   --color-ring: var(--ring);
   --color-landing: var(--landing);
+  --color-landing-accent: var(--landing-accent);
+  --color-landing-cta: var(--landing-cta);
+  --color-landing-cta-hover: var(--landing-cta-hover);
   --color-sidebar: var(--petrol-sidebar);
   --color-highlight: var(--petrol-highlight);
   --color-on-petrol: var(--on-petrol);

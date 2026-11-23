@@ -244,7 +244,7 @@ export function HowItWorks() {
           description={t("landing.how.description")}
         />
 
-        <div className="mt-14 grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start lg:gap-16">
+        <div className="mt-14 grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
           <div>
             {STEP_KEYS.map((step, index) => (
               <article
@@ -253,8 +253,10 @@ export function HowItWorks() {
                   stepRefs.current[index] = element;
                 }}
                 className={cn(
-                  "border-t border-border py-10 first:border-t-0 first:pt-0 lg:min-h-[58vh] lg:py-16",
-                  index === activeStep && "lg:border-petrol-500/40",
+                  "border-t border-border py-10 first:border-t-0 first:pt-0 lg:flex lg:min-h-[62vh] lg:flex-col lg:justify-center lg:border-t-0 lg:border-l-2 lg:py-0 lg:pl-8 lg:transition-colors",
+                  index === activeStep
+                    ? "lg:border-l-petrol-500"
+                    : "lg:border-l-border hover:lg:border-l-petrol-500/40",
                 )}
               >
                 <div className="flex items-baseline gap-3">

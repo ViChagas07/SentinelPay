@@ -273,9 +273,9 @@ export default async function LandingPage() {
                 {NORMS.map((norm, index) => (
                   <article
                     key={norm.titleKey}
-                    className="border-b border-border py-8 first:pt-0 lg:grid lg:grid-cols-[auto_1fr] lg:gap-6"
+                    className="border-b border-border py-9 lg:grid lg:grid-cols-[auto_1fr] lg:gap-6"
                   >
-                    <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                    <span className="font-mono text-xs leading-7 text-muted-foreground tabular-nums">
                       0{index + 1}
                     </span>
                     <div className="mt-2 lg:mt-0">
@@ -295,7 +295,7 @@ export default async function LandingPage() {
 
         <section aria-labelledby="final-title" className="bg-petrol-800 text-on-petrol">
           <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
-            <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+            <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
               <div>
                 <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-[0.65rem] uppercase tracking-[0.22em] text-on-petrol/80">
                   <span className="tabular-nums">06</span>
@@ -313,8 +313,12 @@ export default async function LandingPage() {
                   {t("landing.final.description")}
                 </p>
               </div>
-              <div className="lg:justify-self-end">
-                <Button asChild size="lg">
+              <div className="flex h-full items-center justify-center">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-16 min-w-[15rem] border border-petrol-300/45 bg-landing-cta px-10 text-lg font-semibold text-on-petrol shadow-none hover:border-petrol-200 hover:bg-landing-cta-hover"
+                >
                   <Link href="/painel">
                     {dashboardLabel}
                     <ArrowRight aria-hidden="true" />

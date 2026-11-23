@@ -118,6 +118,47 @@ test("risk index responds to the keyboard and keeps the caveat", async ({ page }
   await expect(riskSection.getByText(/O índice organiza sinais para revisão/)).toBeVisible();
 });
 
+test("risk index class badge follows the band and the ruler spans the card", async ({ page }) => {
+  await page.goto("/");
+
+  const riskSection = page.locator("#indice-risco");
+  const slider = page.getByRole("slider", { name: "Índice de risco de 0 a 100" });
+  const badge = riskSection.getByText("Baixo", { exact: true });
+
+  await slider.focus();
+  await page.keyboard.press("Home");
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveCSS("background-color", "rgb(37, 99, 235)");
+
+  await page.keyboard.press("End");
+  await expect(riskSection.getByText("Alto", { exact: true })).toHaveCSS(
+    "background-color",
+    "rgb(200, 64, 47)",
+  );
+
+  const geometry = await page.evaluate(() => {
+    const section = document.getElementById("indice-risco");
+    const input = section?.querySelector<HTMLInputElement>("input[type=range]");
+    const card = input?.closest(".rounded-\\[6px\\]");
+
+    if (!section || !input || !card) {
+      return null;
+    }
+
+    const inputRect = input.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const style = getComputedStyle(card);
+
+    return {
+      available: cardRect.width - Number.parseFloat(style.paddingLeft) * 2,
+      inputWidth: inputRect.width,
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry!.inputWidth).toBeGreaterThanOrEqual(geometry!.available - 2);
+});
+
 test("landing has no horizontal scroll on narrow screens", async ({ page, context }) => {
   const baseURL = test.info().project.use.baseURL;
 

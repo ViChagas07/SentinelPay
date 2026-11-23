@@ -2,8 +2,9 @@
 
 ## Estado atual
 
-- Fase atual: F13 (identidade visual, logo e favicon) concluída.
+- Fase atual: F14 (correções da landing pública) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
+- Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
 - Marca: símbolo oficial aplicado no header, sidebar, login, landing, carregamento, progresso, erro, vazio, rodapé e README. Originais em `assets/brand/originals/` e derivados em `public/brand/`.
 - Acessibilidade: matriz axe em 16 rotas, 2 temas e 3 idiomas, com zero violações.
 - Responsivo: 16 rotas em 360, 768, 1280 e 1920 px, sem rolagem horizontal; régua de risco completa no painel e no dossiê.
@@ -72,8 +73,29 @@ Resultados reais em 2026-11-17 (F12):
 - Fluxos de boleto, folha, Central de Verificação e recibo usam o mesmo painel; o dossiê de recibo também acompanha e cancela a análise.
 - Testes novos para progresso, parser SSE, fallback de polling e confirmação de cancelamento. 244 testes unitários verdes.
 
-## Resultados reais em 2026-11-17 (F13)
+## Feito em F14
 
+- Spec em `docs/specs/F14.md`.
+- Causa raiz dos defeitos visuais: a regra `turbopack.rules` do `next.config.ts` aplicava `@tailwindcss/turbopack` a todo `*.css`, então o `landing.module.css` perdia as classes de módulo e as mesmas chegavam como `undefined`. A regra foi reduzida a `styles/globals.css`, com verificação no DOM.
+- Header público em grid de três colunas iguais a partir de `lg`, com navegação centralizada e ações alinhadas à direita. Abaixo de `lg` o menu mobile continua igual.
+- Itens de tema e idioma no dropdown recebem `gap-3` e ícones de 16 px com `shrink-0`, separando ícone e rótulo.
+- "Como funciona" sem `items-start` no grid: a coluna do painel passa a acompanhar a altura dos três segmentos e o `sticky` funciona. Cada segmento tem borda esquerda petróleo quando ativo, com `min-h-[62vh]` para dar ritmo de rolagem, e o painel troca entre envio, análise e decisão.
+- Índice de risco: track nativo transparente, trilho próprio de ponta a ponta com preenchimento proporcional e marcadores de 40 e 70. A cor segue a faixa: azul de demonstração em baixo, amarelo em médio e vermelho em alto, aplicada ao preenchimento, ao polegar e ao selo de classe em destaque.
+- Paleta de demonstração em `getLandingRiskPalette` com teste próprio; o restante do app continua com `--risk-low`, `--risk-medium` e `--risk-high`.
+- Normas: o primeiro item deixa de usar `first:pt-0` e todos os itens seguem com `py-9` e número alinhado à primeira linha do título.
+- CTA final centralizado nas duas colunas, com 4 rem de altura, texto maior e fundo verde musgo próprio (`--landing-cta` em `#2e6b50`, hover `#377a5c`), com borda petróleo e texto `--on-petrol`.
+- Contraste do itálico da landing: novo token `--landing-accent` em `#3f8272`, que passa de 2,98:1 para acima de 3:1 sobre `--landing` e mantém `light-dark` para o tema escuro.
+- Dropdowns de tema e idioma com `sideOffset={10}`, separando o menu do botão que o abre.
+
+## Resultados reais em 2026-11-23 (F14)
+
+- `npm run lint`, `npm run typecheck`, `npm run test` (245 testes), `npm run check:content` e `npm run build`: verdes.
+- `e2e/landing-accessibility.spec.ts`: 6 testes verdes (2 temas e 3 idiomas), após ajustar o itálico e trocar o destaque de segmento por borda em vez de opacidade.
+- `e2e/landing.spec.ts`, `e2e/responsive.spec.ts`, `e2e/a11y-matrix.spec.ts` e `e2e/keyboard.spec.ts`: 59 testes verdes.
+- Baselines de `landing-light` e `landing-dark` regravados. As baselines do painel falham neste ambiente mesmo com o código de HEAD, por diferença de ambiente já registrada, e foram mantidas como estavam.
+- Verificação visual em 1440x900 e 390x844, nos temas claro e escuro, incluindo o dropdown de tema, a régua nas três faixas e o CTA final.
+
+## Resultados reais em 2026-11-17 (F13)
 - `npm run check`: verde. ESLint, `tsc --noEmit`, 244 testes unitários, portões de conteúdo e build de produção.
 - Lighthouse na landing: 97 de desempenho, 100 de acessibilidade e 96 de boas práticas, com LCP de 1,1 s, LCP observado de 177 ms e TBT de 180 ms. A primeira medição ficou baixa por concorrência com a suíte Vitest da F12; a medição final foi feita com a máquina ociosa.
 - O painel não pôde ser remedido com a mesma base da F11: o script de seed da F12 cria uma análise com status `processing` e falha na constraint `ck_analyses_status` do backend. Uma medição avulsa com sessão sem dados semeados deu 73/100/96 e não é comparável. A lacuna está registrada em `docs/BACKEND_GAPS.md`.

@@ -32,6 +32,16 @@ const presentations: Record<RiskBand, Omit<RiskPresentation, "band">> = {
   },
 };
 
+const landingPalettes: Record<RiskBand, { color: string; foreground: string }> = {
+  low: { color: "var(--risk-demo-low)", foreground: "var(--risk-demo-low-foreground)" },
+  attention: { color: "var(--risk-medium)", foreground: "var(--risk-medium-foreground)" },
+  high: { color: "var(--risk-high)", foreground: "var(--risk-high-foreground)" },
+};
+
 export function getRiskPresentation(band: RiskBand): RiskPresentation {
   return { band, ...presentations[band] };
+}
+
+export function getLandingRiskPalette(band: RiskBand): { color: string; foreground: string } {
+  return landingPalettes[band];
 }

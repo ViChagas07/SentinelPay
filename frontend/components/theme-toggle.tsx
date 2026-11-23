@@ -46,7 +46,7 @@ export function ThemeToggle() {
           <span className="hidden sm:inline">{t(THEME_LABEL_KEYS[mode])}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" sideOffset={10}>
         <DropdownMenuLabel>{t("theme.label")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup

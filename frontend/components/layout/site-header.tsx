@@ -33,12 +33,15 @@ export function SiteHeader({ sessionActive = false }: SiteHeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8 lg:grid lg:grid-cols-[1fr_auto_1fr]">
         <Link href="/" className="rounded-[6px]" aria-label={t("app.name")}>
           <Wordmark name={t("app.name")} priority />
         </Link>
 
-        <nav aria-label={t("landing.nav.primary")} className="hidden items-center gap-1 md:flex">
+        <nav
+          aria-label={t("landing.nav.primary")}
+          className="hidden items-center justify-center gap-1 lg:flex"
+        >
           {LANDING_NAV.map((item) => (
             <Link
               key={item.href}
@@ -50,10 +53,10 @@ export function SiteHeader({ sessionActive = false }: SiteHeaderProps) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <ThemeToggle />
           <LanguageSelector />
-          <Button asChild size="sm" className="hidden md:inline-flex">
+          <Button asChild size="sm" className="hidden lg:inline-flex">
             <Link href="/painel">{dashboardLabel}</Link>
           </Button>
 
@@ -62,13 +65,13 @@ export function SiteHeader({ sessionActive = false }: SiteHeaderProps) {
               <Button
                 variant="outline"
                 size="icon"
-                className="md:hidden"
+                className="lg:hidden"
                 aria-label={t("landing.nav.menu")}
               >
                 <Menu aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 md:hidden">
+            <DropdownMenuContent align="end" className="w-56 lg:hidden">
               {LANDING_NAV.map((item) => (
                 <DropdownMenuItem key={item.href} asChild>
                   <Link href={item.href}>{t(item.labelKey)}</Link>

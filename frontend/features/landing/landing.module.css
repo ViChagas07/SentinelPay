@@ -1,6 +1,6 @@
 .accent {
-  color: var(--petrol-500);
-  color: light-dark(var(--petrol-500), var(--petrol-300));
+  color: var(--landing-accent);
+  color: light-dark(var(--landing-accent), var(--petrol-300));
   font-style: italic;
 }
 
@@ -87,14 +87,7 @@
 
 .range::-webkit-slider-runnable-track {
   height: 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--risk-low) 60%, var(--surface)) 0 40%,
-    color-mix(in srgb, var(--risk-medium) 60%, var(--surface)) 40% 70%,
-    color-mix(in srgb, var(--risk-high) 60%, var(--surface)) 70% 100%
-  );
+  background: transparent;
 }
 
 .range::-webkit-slider-thumb {
@@ -107,18 +100,16 @@
   background: var(--risk-color);
   box-shadow: 0 0 0 1px var(--border);
   transform: rotate(45deg);
+  transition: background-color 150ms ease;
 }
 
 .range::-moz-range-track {
   height: 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--risk-low) 60%, var(--surface)) 0 40%,
-    color-mix(in srgb, var(--risk-medium) 60%, var(--surface)) 40% 70%,
-    color-mix(in srgb, var(--risk-high) 60%, var(--surface)) 70% 100%
-  );
+  background: transparent;
+}
+
+.range::-moz-range-progress {
+  background: transparent;
 }
 
 .range::-moz-range-thumb {
@@ -129,6 +120,7 @@
   background: var(--risk-color);
   box-shadow: 0 0 0 1px var(--border);
   transform: rotate(45deg);
+  transition: background-color 150ms ease;
 }
 
 .range:focus-visible {

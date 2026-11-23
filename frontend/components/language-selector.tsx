@@ -42,7 +42,7 @@ export function LanguageSelector() {
           <span className="font-mono text-xs tracking-widest">{LOCALE_SHORT_LABELS[locale]}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" sideOffset={10}>
         <DropdownMenuLabel>{t("language.label")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
