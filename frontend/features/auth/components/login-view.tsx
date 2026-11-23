@@ -12,12 +12,18 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { BackButton } from "@/features/auth/components/back-button";
+import { FormField, PasswordField, TextField } from "@/features/auth/components/form-fields";
+import { PasswordStrengthMeter } from "@/features/auth/components/password-strength-meter";
+import type { PasswordPolicy } from "@/lib/auth/capabilities";
+import { requestPasswordLogin, requestRegister } from "@/lib/auth/client";
 import {
   LOGIN_MODES,
   buildLoginModeUrl,
   parseLoginMode,
   type LoginMode,
 } from "@/lib/auth/login-mode";
+import { identifierFragments, passwordIssues } from "@/lib/auth/password";
+import { emailSchema } from "@/lib/auth/schemas";
 import type { TranslationKey } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/provider";
 import { useSecureContext } from "@/lib/security/use-secure-context";
@@ -32,6 +38,12 @@ export type LoginSearchParams = {
   modo?: string;
 };
 
+export type LoginViewProps = {
+  search: LoginSearchParams;
+  passwordEnabled: boolean;
+  policy: PasswordPolicy | null;
+};
+
 const MODE_COPY: Record<
   LoginMode,
   {
@@ -42,6 +54,8 @@ const MODE_COPY: Record<
     googleHint: TranslationKey | null;
     footerPrompt: TranslationKey;
     footerAction: TranslationKey;
+    submit: TranslationKey;
+    submitting: TranslationKey;
   }
 > = {
   signin: {
@@ -52,6 +66,8 @@ const MODE_COPY: Record<
     googleHint: null,
     footerPrompt: "auth.login.signupPrompt",
     footerAction: "auth.login.tabSignup",
+    submit: "auth.login.submitSignin",
+    submitting: "auth.login.submittingSignin",
   },
   signup: {
     tab: "auth.login.tabSignup",
@@ -61,19 +77,53 @@ const MODE_COPY: Record<
     googleHint: "auth.login.signupGoogleHint",
     footerPrompt: "auth.login.signinPrompt",
     footerAction: "auth.login.tabSignin",
+    submit: "auth.login.submitSignup",
+    submitting: "auth.login.submittingSignup",
   },
 };
 
-export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
+type FieldErrors = {
+  email?: string;
+  password?: string;
+  name?: string;
+  confirm?: string;
+};
+
+type GeneralError = {
+  messageKey: TranslationKey;
+  retryAfter: number | null;
+  code: string;
+};
+
+export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginViewProps>) {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, setPending] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [acceptError, setAcceptError] = useState(false);
+  const [fields, setFields] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirm: "",
+  });
+  const [touched, setTouched] = useState<Record<keyof FieldErrors, boolean>>({
+    email: false,
+    password: false,
+    name: false,
+    confirm: false,
+  });
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [generalError, setGeneralError] = useState<GeneralError | null>(null);
   const secureContext = useSecureContext();
   const acceptRef = useRef<HTMLInputElement | null>(null);
+  const emailRef = useRef<HTMLInputElement | null>(null);
+  const nameRef = useRef<HTMLInputElement | null>(null);
+  const passwordRef = useRef<HTMLInputElement | null>(null);
+  const confirmRef = useRef<HTMLInputElement | null>(null);
   const tabRefs = useRef<Partial<Record<LoginMode, HTMLButtonElement | null>>>({});
   const termsErrorId = useId();
   const mode = parseLoginMode(searchParams.get("modo") ?? search.modo);
@@ -82,7 +132,8 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
   const errorKey =
     search.reason === "expired" ? loginErrorKey("session_expired") : loginErrorKey(search.code);
   const isDenied = search.reason === "forbidden";
-  const blocked = !accepted || pending;
+  const formsEnabled = passwordEnabled && policy !== null;
+  const identifiers = identifierFragments(fields.email, fields.name);
 
   const changeMode = useCallback(
     (nextMode: LoginMode) => {
@@ -90,6 +141,9 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
         return;
       }
 
+      setGeneralError(null);
+      setFieldErrors({});
+      setTouched({ email: false, password: false, name: false, confirm: false });
       router.push(
         buildLoginModeUrl(
           { pathname, search: searchParams.toString(), hash: window.location.hash },
@@ -130,8 +184,49 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
     tabRefs.current[nextMode]?.focus();
   }
 
-  function startLogin() {
-    if (pending) {
+  function validateEmail(value: string): string | undefined {
+    if (!value.trim()) {
+      return t("auth.login.validation.emailRequired");
+    }
+
+    return emailSchema.safeParse(value).success ? undefined : t("auth.login.validation.email");
+  }
+
+  function validatePasswordField(value: string): string | undefined {
+    if (!value) {
+      return t("auth.login.validation.passwordRequired");
+    }
+
+    if (!formsEnabled || !policy) {
+      return undefined;
+    }
+
+    const issues = passwordIssues(value, policy, identifiers);
+
+    return issues.length === 0 ? undefined : t("auth.login.validation.passwordPolicy");
+  }
+
+  function validateConfirm(value: string): string | undefined {
+    if (!value) {
+      return t("auth.login.validation.confirmRequired");
+    }
+
+    return value === fields.password ? undefined : t("auth.login.validation.passwordMismatch");
+  }
+
+  function syncConfirmError(confirmValue: string, passwordValue: string): void {
+    setFieldErrors((current) => ({
+      ...current,
+      confirm: !confirmValue
+        ? current.confirm
+        : confirmValue === passwordValue
+          ? undefined
+          : t("auth.login.validation.passwordMismatch"),
+    }));
+  }
+
+  function startGoogleLogin() {
+    if (googlePending) {
       return;
     }
 
@@ -141,11 +236,130 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
       return;
     }
 
-    setPending(true);
+    setGooglePending(true);
     const target = next
       ? `/api/v1/auth/login?next=${encodeURIComponent(next)}`
       : "/api/v1/auth/login";
     window.location.assign(target);
+  }
+
+  async function submitPasswordForm(): Promise<void> {
+    if (pending || !formsEnabled) {
+      return;
+    }
+
+    const errors: FieldErrors = {};
+    const emailError = validateEmail(fields.email);
+    const passwordError = validatePasswordField(fields.password);
+
+    if (emailError) {
+      errors.email = emailError;
+    }
+
+    if (passwordError) {
+      errors.password = passwordError;
+    }
+
+    if (mode === "signup") {
+      if (!fields.name.trim()) {
+        errors.name = t("auth.login.validation.nameRequired");
+      }
+
+      const confirmError = validateConfirm(fields.confirm);
+
+      if (confirmError) {
+        errors.confirm = confirmError;
+      }
+
+      if (!accepted) {
+        setAcceptError(true);
+      }
+    }
+
+    setTouched({ email: true, password: true, name: true, confirm: true });
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      if (errors.name) {
+        nameRef.current?.focus();
+      } else if (errors.email) {
+        emailRef.current?.focus();
+      } else if (errors.password) {
+        passwordRef.current?.focus();
+      } else if (errors.confirm) {
+        confirmRef.current?.focus();
+      }
+
+      return;
+    }
+
+    if (mode === "signup" && !accepted) {
+      acceptRef.current?.focus();
+      return;
+    }
+
+    setGeneralError(null);
+    setPending(true);
+
+    if (mode === "signin") {
+      const result = await requestPasswordLogin({
+        email: fields.email,
+        password: fields.password,
+      });
+
+      if (result.ok) {
+        const destination = next ?? "/painel";
+        router.replace(destination);
+        router.refresh();
+        return;
+      }
+
+      setPending(false);
+      setGeneralError({
+        messageKey: result.messageKey,
+        retryAfter: result.retryAfter,
+        code: result.code,
+      });
+
+      if (result.code === "email_not_verified") {
+        setPending(false);
+        const params = new URLSearchParams({ email: fields.email });
+
+        if (next) {
+          params.set("next", next);
+        }
+
+        router.push(`/confirmar-email?${params.toString()}`);
+      }
+
+      return;
+    }
+
+    const result = await requestRegister({
+      name: fields.name,
+      email: fields.email,
+      password: fields.password,
+      acceptedTerms: accepted,
+      acceptedPrivacy: accepted,
+    });
+
+    if (result.ok) {
+      const params = new URLSearchParams({ email: fields.email });
+
+      if (next) {
+        params.set("next", next);
+      }
+
+      router.push(`/confirmar-email?${params.toString()}`);
+      return;
+    }
+
+    setPending(false);
+    setGeneralError({
+      messageKey: result.messageKey,
+      retryAfter: result.retryAfter,
+      code: result.code,
+    });
   }
 
   return (
@@ -220,66 +434,261 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
               </div>
             ) : null}
 
-            <div
-              role="tablist"
-              aria-label={t("auth.login.tabsLabel")}
-              onKeyDown={handleTabKeyDown}
-              className="grid grid-cols-2 gap-1 rounded-[6px] border border-border bg-surface p-1"
-            >
-              {LOGIN_MODES.map((tabMode) => {
-                const selected = tabMode === mode;
+            {formsEnabled ? (
+              <div
+                role="tablist"
+                aria-label={t("auth.login.tabsLabel")}
+                onKeyDown={handleTabKeyDown}
+                className="mb-8 grid grid-cols-2 gap-1 rounded-[6px] border border-border bg-surface p-1"
+              >
+                {LOGIN_MODES.map((tabMode) => {
+                  const selected = tabMode === mode;
 
-                return (
-                  <button
-                    key={tabMode}
-                    ref={(element) => {
-                      tabRefs.current[tabMode] = element;
-                    }}
-                    type="button"
-                    role="tab"
-                    id={`login-tab-${tabMode}`}
-                    aria-selected={selected}
-                    aria-controls="login-panel"
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => changeMode(tabMode)}
-                    className={cn(
-                      "min-h-11 rounded-[4px] px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                      selected
-                        ? "bg-petrol-base text-on-petrol shadow-sm"
-                        : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
-                    )}
-                  >
-                    {t(MODE_COPY[tabMode].tab)}
-                  </button>
-                );
-              })}
-            </div>
+                  return (
+                    <button
+                      key={tabMode}
+                      ref={(element) => {
+                        tabRefs.current[tabMode] = element;
+                      }}
+                      type="button"
+                      role="tab"
+                      id={`login-tab-${tabMode}`}
+                      aria-selected={selected}
+                      aria-controls="login-panel"
+                      tabIndex={selected ? 0 : -1}
+                      onClick={() => changeMode(tabMode)}
+                      className={cn(
+                        "min-h-11 rounded-[4px] px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                        selected
+                          ? "bg-petrol-base text-on-petrol shadow-sm"
+                          : "text-muted-foreground hover:bg-surface-elevated hover:text-foreground",
+                      )}
+                    >
+                      {t(MODE_COPY[tabMode].tab)}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
 
             <div
-              role="tabpanel"
-              id="login-panel"
-              aria-labelledby={`login-tab-${mode}`}
-              className="min-h-[28rem] pt-8"
+              role={formsEnabled ? "tabpanel" : undefined}
+              id={formsEnabled ? "login-panel" : undefined}
+              aria-labelledby={formsEnabled ? `login-tab-${mode}` : undefined}
+              className="min-h-[28rem]"
             >
-              <h1 className="font-serif text-4xl leading-tight tracking-tight lg:hidden">
-                {t(copy.title)}
-              </h1>
-              <h2 className="hidden font-serif text-4xl leading-tight tracking-tight lg:block">
-                {t(copy.title)}
-              </h2>
+              <h2 className="font-serif text-4xl leading-tight tracking-tight">{t(copy.title)}</h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 {t(copy.subtitle)}
               </p>
 
+              {generalError ? (
+                <div
+                  className="mt-6 rounded-[6px] border border-border bg-surface p-3"
+                  role="alert"
+                >
+                  <p className="text-sm font-medium">{t("auth.login.errorTitle")}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {t(generalError.messageKey)}
+                  </p>
+                  {generalError.retryAfter ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t("auth.login.blockedDescription", {
+                        seconds: generalError.retryAfter,
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
               <form
                 key={mode}
-                className="auth-form-enter mt-8"
+                className="auth-form-enter mt-6 space-y-4"
                 noValidate
                 onSubmit={(event) => {
                   event.preventDefault();
-                  startLogin();
+                  void submitPasswordForm();
                 }}
               >
+                {formsEnabled && mode === "signup" ? (
+                  <div className="mb-4">
+                    <FormField label={t("auth.login.fullName")} error={fieldErrors.name}>
+                      {({ inputId, describedBy }) => (
+                        <TextField
+                          ref={nameRef}
+                          id={inputId}
+                          name="name"
+                          type="text"
+                          autoComplete="name"
+                          value={fields.name}
+                          disabled={pending}
+                          invalid={Boolean(fieldErrors.name)}
+                          aria-describedby={describedBy}
+                          onChange={(event) => {
+                            setFields((current) => ({ ...current, name: event.target.value }));
+
+                            if (touched.name) {
+                              setFieldErrors((current) => ({
+                                ...current,
+                                name: event.target.value.trim()
+                                  ? undefined
+                                  : t("auth.login.validation.nameRequired"),
+                              }));
+                            }
+                          }}
+                          onBlur={() => {
+                            setTouched((current) => ({ ...current, name: true }));
+                            setFieldErrors((current) => ({
+                              ...current,
+                              name: fields.name.trim()
+                                ? undefined
+                                : t("auth.login.validation.nameRequired"),
+                            }));
+                          }}
+                        />
+                      )}
+                    </FormField>
+                  </div>
+                ) : null}
+
+                {formsEnabled ? (
+                  <>
+                    <div className="mb-4">
+                      <FormField label={t("auth.login.email")} error={fieldErrors.email}>
+                        {({ inputId, describedBy }) => (
+                          <TextField
+                            ref={emailRef}
+                            id={inputId}
+                            name="email"
+                            type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            placeholder={t("auth.login.emailPlaceholder")}
+                            value={fields.email}
+                            disabled={pending}
+                            invalid={Boolean(fieldErrors.email)}
+                            aria-describedby={describedBy}
+                            onChange={(event) => {
+                              setFields((current) => ({
+                                ...current,
+                                email: event.target.value,
+                              }));
+
+                              if (touched.email) {
+                                setFieldErrors((current) => ({
+                                  ...current,
+                                  email: validateEmail(event.target.value),
+                                }));
+                              }
+                            }}
+                            onBlur={() => {
+                              setTouched((current) => ({ ...current, email: true }));
+                              setFieldErrors((current) => ({
+                                ...current,
+                                email: validateEmail(fields.email),
+                              }));
+                            }}
+                          />
+                        )}
+                      </FormField>
+                    </div>
+
+                    <div className="mb-1">
+                      <FormField label={t("auth.login.password")} error={fieldErrors.password}>
+                        {({ inputId, describedBy }) => (
+                          <PasswordField
+                            ref={passwordRef}
+                            id={inputId}
+                            name="password"
+                            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                            value={fields.password}
+                            disabled={pending}
+                            invalid={Boolean(fieldErrors.password)}
+                            aria-describedby={describedBy}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setFields((current) => ({ ...current, password: value }));
+
+                              if (touched.password) {
+                                setFieldErrors((current) => ({
+                                  ...current,
+                                  password: validatePasswordField(value),
+                                }));
+                              }
+
+                              if (touched.confirm && fields.confirm) {
+                                syncConfirmError(fields.confirm, value);
+                              }
+                            }}
+                            onBlur={() => {
+                              setTouched((current) => ({ ...current, password: true }));
+                              setFieldErrors((current) => ({
+                                ...current,
+                                password: validatePasswordField(fields.password),
+                              }));
+                            }}
+                          />
+                        )}
+                      </FormField>
+                    </div>
+
+                    {mode === "signin" ? (
+                      <div className="mb-5 flex justify-end">
+                        <Link
+                          href="/esqueci-senha"
+                          className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline decoration-border underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground"
+                        >
+                          {t("auth.login.forgotPassword")}
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="mb-5 mt-2">
+                        {policy ? (
+                          <PasswordStrengthMeter
+                            value={fields.password}
+                            policy={policy}
+                            identifiers={identifiers}
+                          />
+                        ) : null}
+                      </div>
+                    )}
+
+                    {mode === "signup" ? (
+                      <div className="mb-5">
+                        <FormField
+                          label={t("auth.login.confirmPassword")}
+                          error={fieldErrors.confirm}
+                        >
+                          {({ inputId, describedBy }) => (
+                            <PasswordField
+                              ref={confirmRef}
+                              id={inputId}
+                              name="confirm-password"
+                              autoComplete="new-password"
+                              value={fields.confirm}
+                              disabled={pending}
+                              invalid={Boolean(fieldErrors.confirm)}
+                              aria-describedby={describedBy}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setFields((current) => ({ ...current, confirm: value }));
+                                syncConfirmError(value, fields.password);
+                              }}
+                              onBlur={() => {
+                                setTouched((current) => ({ ...current, confirm: true }));
+                                setFieldErrors((current) => ({
+                                  ...current,
+                                  confirm: validateConfirm(fields.confirm),
+                                }));
+                              }}
+                            />
+                          )}
+                        </FormField>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+
                 <div className="flex items-start gap-3">
                   <input
                     ref={acceptRef}
@@ -308,8 +717,6 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
                     {t("auth.login.acceptPrefix")}{" "}
                     <Link
                       href="/termos"
-                      target="_blank"
-                      rel="noreferrer"
                       className="underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
                     >
                       {t("auth.login.terms")}
@@ -317,8 +724,6 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
                     {t("auth.login.and")}{" "}
                     <Link
                       href="/privacidade"
-                      target="_blank"
-                      rel="noreferrer"
                       className="underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
                     >
                       {t("auth.login.privacy")}
@@ -337,23 +742,50 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
                   </p>
                 ) : null}
 
+                {formsEnabled ? (
+                  <Button
+                    type="submit"
+                    size="lg"
+                    aria-disabled={!accepted || pending}
+                    aria-busy={pending}
+                    className={cn(
+                      "mt-5 h-12 w-full gap-2 bg-petrol-base text-on-petrol transition-[background-color,opacity] hover:bg-petrol-base/90 active:translate-y-px",
+                      (!accepted || pending) &&
+                        "cursor-not-allowed opacity-60 hover:bg-petrol-base",
+                    )}
+                  >
+                    {pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
+                    {pending ? t(copy.submitting) : t(copy.submit)}
+                  </Button>
+                ) : null}
+
+                {formsEnabled ? (
+                  <p className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                    {t("auth.login.or")}
+                    <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                  </p>
+                ) : null}
+
                 <Button
-                  type="submit"
+                  type="button"
                   size="lg"
                   variant="outline"
-                  aria-disabled={blocked}
-                  aria-busy={pending}
+                  aria-disabled={!accepted || googlePending}
+                  aria-busy={googlePending}
+                  onClick={startGoogleLogin}
                   className={cn(
-                    "mt-6 h-12 w-full gap-3 border-border bg-surface text-foreground transition-[background-color,border-color,box-shadow] hover:bg-surface-elevated active:translate-y-px [&_svg]:size-5",
-                    blocked && "cursor-not-allowed opacity-70 hover:bg-surface",
+                    "mt-4 h-12 w-full gap-3 border-border bg-surface text-foreground transition-[background-color,border-color] hover:bg-surface-elevated active:translate-y-px [&_svg]:size-5",
+                    (!accepted || googlePending) &&
+                      "cursor-not-allowed opacity-70 hover:bg-surface",
                   )}
                 >
-                  {pending ? (
+                  {googlePending ? (
                     <LoaderCircle className="animate-spin" aria-hidden="true" />
                   ) : (
                     <GoogleIcon className="size-5" />
                   )}
-                  {pending ? t("auth.login.redirecting") : t(copy.google)}
+                  {googlePending ? t("auth.login.redirecting") : t(copy.google)}
                 </Button>
 
                 {copy.googleHint ? (
@@ -362,27 +794,38 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
                   </p>
                 ) : null}
 
-                {pending ? (
-                  <p className="mt-3 text-center text-xs text-muted-foreground" aria-live="polite">
-                    {t("auth.login.redirecting")}
-                  </p>
+                {generalError?.code === "email_not_verified" ? (
+                  <div className="mt-4 rounded-[6px] border border-border bg-surface p-3">
+                    <p className="text-sm font-medium">{t("auth.login.unverifiedTitle")}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      {t("auth.login.unverifiedDescription")}
+                    </p>
+                    <Link
+                      href="/confirmar-email"
+                      className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground"
+                    >
+                      {t("auth.login.resend")}
+                    </Link>
+                  </div>
                 ) : null}
               </form>
 
-              <p className="mt-8 text-sm text-muted-foreground">
-                {t(copy.footerPrompt)}{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextMode = mode === "signup" ? "signin" : "signup";
-                    changeMode(nextMode);
-                    tabRefs.current[nextMode]?.focus();
-                  }}
-                  className="min-h-11 font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  {t(copy.footerAction)}
-                </button>
-              </p>
+              {formsEnabled ? (
+                <p className="mt-6 text-sm text-muted-foreground">
+                  {t(copy.footerPrompt)}{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextMode = mode === "signup" ? "signin" : "signup";
+                      changeMode(nextMode);
+                      tabRefs.current[nextMode]?.focus();
+                    }}
+                    className="min-h-11 font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    {t(copy.footerAction)}
+                  </button>
+                </p>
+              ) : null}
 
               {secureContext ? (
                 <p className="mt-8 flex items-start gap-2 border-t border-border pt-6 text-xs leading-relaxed text-muted-foreground">

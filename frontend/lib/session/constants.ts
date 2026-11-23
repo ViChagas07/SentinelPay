@@ -15,7 +15,16 @@ export const OIDC_NEXT_MAX_AGE_SECONDS = 600;
 export const SESSION_COOKIE_MAX_AGE_FALLBACK = 900;
 export const SESSION_MARKER_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
-export const PUBLIC_PATHS = ["/", LOGIN_PATH, "/termos", "/privacidade"] as const;
+export const PUBLIC_PATHS = [
+  "/",
+  LOGIN_PATH,
+  "/termos",
+  "/privacidade",
+  "/verificar-email",
+  "/confirmar-email",
+  "/esqueci-senha",
+  "/redefinir-senha",
+] as const;
 
 export const PRIVATE_PATHS = [
   "/painel",

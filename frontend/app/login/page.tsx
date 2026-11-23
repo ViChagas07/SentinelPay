@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LoginView } from "@/features/auth/components/login-view";
+import { loadLoginCapabilities } from "@/lib/auth/login-capabilities";
 import { getServerLocale, serverTranslate } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +30,12 @@ export default async function LoginPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, SearchValue>> }>) {
   const params = await searchParams;
+  const { passwordEnabled, policy } = await loadLoginCapabilities();
 
   return (
     <LoginView
+      passwordEnabled={passwordEnabled}
+      policy={policy}
       search={{
         next: readParam(params.next),
         reason: readParam(params.reason),

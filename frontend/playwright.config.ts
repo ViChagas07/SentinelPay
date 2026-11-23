@@ -22,6 +22,7 @@ export default defineConfig({
     env: {
       API_INTERNAL_URL: process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8000",
       NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000",
+      AUTH_PASSWORD_ENABLED: process.env.AUTH_PASSWORD_ENABLED ?? "true",
       NEXT_PUBLIC_SUPPORT_URL:
         process.env.NEXT_PUBLIC_SUPPORT_URL ?? "https://support.sentinelpay.test",
       NEXT_PUBLIC_PRIVACY_CONTACT_URL:
