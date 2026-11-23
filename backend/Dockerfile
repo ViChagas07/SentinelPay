@@ -10,11 +10,11 @@ ENV POETRY_VERSION=2.4.1 \
 
 WORKDIR /app
 RUN python -m pip install --no-cache-dir "poetry==${POETRY_VERSION}"
-COPY pyproject.toml poetry.lock ./
+COPY backend/pyproject.toml backend/poetry.lock ./
 RUN poetry install --only main --no-root --no-ansi
-COPY src ./src
-COPY alembic.ini ./
-COPY migrations ./migrations
+COPY backend/src ./src
+COPY backend/alembic.ini ./
+COPY backend/migrations ./migrations
 RUN poetry install --only main --no-ansi
 
 FROM python:3.11.18-slim-bookworm AS runtime
