@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AuthNotice, AuthShell } from "@/features/auth/components/auth-shell";
 import { requestEmailVerification } from "@/lib/auth/client";
@@ -14,20 +14,30 @@ export type VerifyEmailViewProps = {
 
 type Status = "idle" | "pending" | "success" | "error";
 
+function stripTokenFromUrl(): void {
+  const url = new URL(window.location.href);
+
+  if (!url.searchParams.has("token")) {
+    return;
+  }
+
+  url.searchParams.delete("token");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
 export function VerifyEmailView({ token }: Readonly<VerifyEmailViewProps>) {
   const { t } = useI18n();
+  const initialToken = useRef(token);
   const [status, setStatus] = useState<Status>(token ? "pending" : "error");
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
 
   useEffect(() => {
-    if (!token) {
+    if (!initialToken.current) {
       return;
     }
 
-    const url = new URL(window.location.href);
-    url.searchParams.delete("token");
-    window.history.replaceState(null, "", url.pathname + url.search);
-  }, [token]);
+    stripTokenFromUrl();
+  }, []);
 
   useEffect(() => {
     if (!token) {
