@@ -88,6 +88,9 @@ async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse
         isinstance(item, str) for item in raw_evidence
     ):
         extra_fields = {"evidence": list(raw_evidence)}
+    raw_extra_fields = getattr(exc, "extra_fields", None)
+    if isinstance(raw_extra_fields, dict):
+        extra_fields = {**(extra_fields or {}), **raw_extra_fields}
 
     return build_problem_response(
         request,

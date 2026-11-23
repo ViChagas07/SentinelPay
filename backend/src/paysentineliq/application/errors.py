@@ -139,6 +139,57 @@ class TooManyAttemptsError(ApplicationError):
         self.retry_after_seconds = retry_after_seconds
 
 
+class InvalidCredentialsError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_credentials",
+            message="E-mail or password is incorrect.",
+            status_code=401,
+            title="Unauthorized",
+        )
+
+
+class AccountNotVerifiedError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="email_not_verified",
+            message="Confirm your e-mail before signing in.",
+            status_code=403,
+            title="Forbidden",
+        )
+
+
+class InvalidAuthTokenError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_auth_token",
+            message="Token is invalid or expired.",
+            status_code=400,
+            title="Bad request",
+        )
+
+
+class EmailAlreadyExistsError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="email_conflict",
+            message="E-mail is already registered.",
+            status_code=409,
+            title="Conflict",
+        )
+
+
+class PasswordPolicyError(ApplicationError):
+    def __init__(self, violations: tuple[str, ...]) -> None:
+        super().__init__(
+            code="password_policy_violation",
+            message="Password does not meet the required policy.",
+            status_code=422,
+            title="Unprocessable entity",
+        )
+        self.extra_fields = {"violations": list(violations)}
+
+
 class UploadTooLargeError(ApplicationError):
     def __init__(self) -> None:
         super().__init__(

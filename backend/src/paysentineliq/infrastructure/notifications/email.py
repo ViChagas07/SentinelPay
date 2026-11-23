@@ -30,15 +30,24 @@ class SmtpEmailAdapter:
         self._starttls = starttls
         self._timeout = timeout
 
-    async def send(self, *, to: str, subject: str, body: str) -> None:
-        await asyncio.to_thread(self._send_sync, to, subject, body)
+    async def send(
+        self,
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        await asyncio.to_thread(self._send_sync, to, subject, body, html_body)
 
-    def _send_sync(self, to: str, subject: str, body: str) -> None:
+    def _send_sync(self, to: str, subject: str, body: str, html_body: str | None) -> None:
         message = EmailMessage()
         message["From"] = self._sender
         message["To"] = to
         message["Subject"] = subject
         message.set_content(body)
+        if html_body:
+            message.add_alternative(html_body, subtype="html")
         with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as smtp:
             if self._starttls:
                 smtp.starttls()

@@ -11,6 +11,9 @@ from paysentineliq.infrastructure.cache.swr import SWRCache
 from paysentineliq.infrastructure.config import Settings, get_settings
 from paysentineliq.infrastructure.db.engine import build_engine, build_session_factory
 from paysentineliq.infrastructure.logging import configure_logging
+from paysentineliq.infrastructure.notifications.auth_email_factory import (
+    build_auth_email_sender,
+)
 from paysentineliq.infrastructure.observability.langfuse_tracer import (
     build_observability_tracer,
 )
@@ -28,10 +31,15 @@ from paysentineliq.infrastructure.observability.tracing import (
     instrument_sqlalchemy_engine,
 )
 from paysentineliq.infrastructure.retrieval.runtime import RetrievalRuntime
+from paysentineliq.infrastructure.security.auth_rate_limit import (
+    AuthRateLimiter,
+    AuthRateLimitSpec,
+)
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.google_oidc import GoogleOIDCClient
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService
 from paysentineliq.infrastructure.security.oidc_state import RedisOIDCStateStore
+from paysentineliq.infrastructure.security.passwords import Argon2PasswordHasher
 from paysentineliq.infrastructure.security.rate_limit import TokenBucketRateLimiter
 from paysentineliq.infrastructure.security.revoked_tokens import (
     RedisRevokedTokenStore,
@@ -105,6 +113,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             max_block_seconds=resolved_settings.bruteforce_max_block_seconds,
             hash_secret=resolved_settings.security_hash_secret,
         )
+        application.state.auth_rate_limiter = AuthRateLimiter(
+            redis,
+            hash_secret=resolved_settings.security_hash_secret,
+            specs=(
+                AuthRateLimitSpec(
+                    scope="login",
+                    window_seconds=resolved_settings.auth_rate_limit_window_seconds,
+                    ip_capacity=resolved_settings.auth_rate_limit_login_ip,
+                    identifier_capacity=resolved_settings.auth_rate_limit_login_identifier,
+                ),
+                AuthRateLimitSpec(
+                    scope="register",
+                    window_seconds=resolved_settings.auth_rate_limit_sensitive_window_seconds,
+                    ip_capacity=resolved_settings.auth_rate_limit_register_ip,
+                    identifier_capacity=resolved_settings.auth_rate_limit_register_identifier,
+                ),
+                AuthRateLimitSpec(
+                    scope="forgot",
+                    window_seconds=resolved_settings.auth_rate_limit_sensitive_window_seconds,
+                    ip_capacity=resolved_settings.auth_rate_limit_forgot_ip,
+                    identifier_capacity=resolved_settings.auth_rate_limit_forgot_identifier,
+                ),
+                AuthRateLimitSpec(
+                    scope="resend",
+                    window_seconds=resolved_settings.auth_rate_limit_sensitive_window_seconds,
+                    ip_capacity=resolved_settings.auth_rate_limit_resend_ip,
+                    identifier_capacity=resolved_settings.auth_rate_limit_resend_identifier,
+                ),
+            ),
+        )
+        application.state.password_hasher = Argon2PasswordHasher(
+            time_cost=resolved_settings.argon2_time_cost,
+            memory_cost_kib=resolved_settings.argon2_memory_cost_kib,
+            parallelism=resolved_settings.argon2_parallelism,
+            hash_len=resolved_settings.argon2_hash_len,
+            salt_len=resolved_settings.argon2_salt_len,
+        )
+        application.state.auth_email_sender = build_auth_email_sender(resolved_settings)
         application.state.token_service = JwtAccessTokenService(
             secret=resolved_settings.jwt_secret,
             ttl_minutes=resolved_settings.access_token_ttl_minutes,

@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from paysentineliq.application.ports.analysis_unit_of_work import (
     AnalysisCreationRepositoryPort,
 )
+from paysentineliq.application.ports.auth_event_repository import AuthEventRepository
+from paysentineliq.application.ports.auth_token_repository import AuthTokenRepository
 from paysentineliq.application.ports.document_repository import DocumentRepository
+from paysentineliq.application.ports.legal_consent_repository import (
+    LegalConsentRepository,
+)
 from paysentineliq.application.ports.refresh_token_repository import (
     RefreshTokenRepository,
 )
@@ -15,11 +20,20 @@ from paysentineliq.application.ports.user_repository import UserRepository
 from paysentineliq.infrastructure.db.repositories.analyses import (
     SqlAlchemyAnalysisCreationRepository,
 )
+from paysentineliq.infrastructure.db.repositories.auth_events import (
+    SqlAlchemyAuthEventRepository,
+)
+from paysentineliq.infrastructure.db.repositories.auth_tokens import (
+    SqlAlchemyAuthTokenRepository,
+)
 from paysentineliq.infrastructure.db.repositories.documents import (
     SqlAlchemyDocumentRepository,
 )
 from paysentineliq.infrastructure.db.repositories.example import (
     SqlAlchemyExampleRepository,
+)
+from paysentineliq.infrastructure.db.repositories.legal_consents import (
+    SqlAlchemyLegalConsentRepository,
 )
 from paysentineliq.infrastructure.db.repositories.refresh_tokens import (
     SqlAlchemyRefreshTokenRepository,
@@ -35,6 +49,9 @@ class SqlAlchemyUnitOfWork:
         self.examples: ExampleRepository = SqlAlchemyExampleRepository(session)
         self.users: UserRepository = SqlAlchemyUserRepository(session)
         self.refresh_tokens: RefreshTokenRepository = SqlAlchemyRefreshTokenRepository(session)
+        self.auth_tokens: AuthTokenRepository = SqlAlchemyAuthTokenRepository(session)
+        self.legal_consents: LegalConsentRepository = SqlAlchemyLegalConsentRepository(session)
+        self.auth_events: AuthEventRepository = SqlAlchemyAuthEventRepository(session)
         self.documents: DocumentRepository = SqlAlchemyDocumentRepository(session)
         self.analyses: AnalysisCreationRepositoryPort = SqlAlchemyAnalysisCreationRepository(
             session,

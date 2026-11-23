@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 
-from paysentineliq.application.commands.auth import AuthService
+from paysentineliq.application.commands.auth import AuthRequestContext, AuthService
 from paysentineliq.application.commands.cancel_analysis import CancelAnalysisHandler
 from paysentineliq.application.commands.create_analysis import CreateAnalysisHandler
 from paysentineliq.application.commands.documents import (
@@ -25,6 +25,7 @@ from paysentineliq.application.commands.payables import (
     ReminderPreferenceHandler,
 )
 from paysentineliq.application.errors import (
+    AuthNotConfiguredError,
     ForbiddenError,
     InvalidAccessTokenError,
     StorageNotConfiguredError,
@@ -43,6 +44,7 @@ from paysentineliq.application.ports.cancellation import CancellationPort
 from paysentineliq.application.ports.document_inspector import DocumentInspector
 from paysentineliq.application.ports.document_read_repository import DocumentReadRepository
 from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
+from paysentineliq.application.ports.messaging import EmailPort
 from paysentineliq.application.ports.notifications import (
     NotificationCenterRepositoryPort,
     NotificationDeliveryRepositoryPort,
@@ -50,6 +52,7 @@ from paysentineliq.application.ports.notifications import (
 )
 from paysentineliq.application.ports.oidc import OIDCClient
 from paysentineliq.application.ports.oidc_state import OIDCStateStore
+from paysentineliq.application.ports.password_hasher import PasswordHasher
 from paysentineliq.application.ports.payables import (
     PayableReadRepositoryPort,
     PayableWriteRepositoryPort,
@@ -103,6 +106,7 @@ from paysentineliq.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from paysentineliq.infrastructure.messaging.celery_app import build_celery_app
 from paysentineliq.infrastructure.messaging.dispatcher import CeleryTaskDispatcher
 from paysentineliq.infrastructure.readiness import SqlAlchemyRedisReadinessChecker
+from paysentineliq.infrastructure.security.auth_rate_limit import AuthRateLimiter
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.destination_cipher import DestinationCipher
 
@@ -433,17 +437,63 @@ def get_document_download_query(
     )
 
 
+def get_password_hasher(request: Request) -> PasswordHasher:
+    hasher: PasswordHasher = request.app.state.password_hasher
+    return hasher
+
+
 def get_auth_service(
     uow: Annotated[AuthUnitOfWork, Depends(get_auth_unit_of_work)],
     token_service: Annotated[AccessTokenService, Depends(get_token_service)],
     revoked: Annotated[RevokedTokenStore, Depends(get_revoked_token_store)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    password_hasher: Annotated[PasswordHasher, Depends(get_password_hasher)],
 ) -> AuthService:
     return AuthService(
         uow,
         token_service,
         revoked,
         refresh_ttl_days=settings.refresh_token_ttl_days,
+        password_hasher=password_hasher,
+        password_min_length=settings.password_min_length,
+        password_max_length=settings.password_max_length,
+        verification_ttl_minutes=settings.auth_verification_token_ttl_minutes,
+        reset_ttl_minutes=settings.auth_reset_token_ttl_minutes,
+        public_base_url=settings.public_base_url,
+        lockout_max_attempts=settings.account_lockout_max_attempts,
+        lockout_base_seconds=settings.account_lockout_base_seconds,
+        lockout_max_seconds=settings.account_lockout_max_seconds,
+    )
+
+
+def get_auth_rate_limiter(request: Request) -> AuthRateLimiter:
+    limiter: AuthRateLimiter = request.app.state.auth_rate_limiter
+    return limiter
+
+
+def get_auth_email_sender(request: Request) -> EmailPort:
+    sender: EmailPort | None = getattr(request.app.state, "auth_email_sender", None)
+    if sender is None:
+        raise AuthNotConfiguredError()
+    return sender
+
+
+def require_password_auth(
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> None:
+    if not settings.password_auth_enabled:
+        raise AuthNotConfiguredError()
+
+
+def get_auth_request_context(
+    request: Request,
+    locale: Annotated[str, Depends(get_locale)],
+) -> AuthRequestContext:
+    client = request.client
+    return AuthRequestContext(
+        ip=client.host if client is not None else None,
+        user_agent=request.headers.get("user-agent"),
+        locale=locale,
     )
 
 

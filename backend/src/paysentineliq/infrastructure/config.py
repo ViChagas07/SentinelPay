@@ -114,6 +114,37 @@ class Settings(BaseSettings):
     frontend_url: str = ""
     cookie_domain: str = ""
     oidc_state_ttl_seconds: int = 600
+    auth_password_enabled: bool = False
+    auth_email_provider: Literal["disabled", "development", "smtp"] = "disabled"
+    auth_email_development_dir: str = "var/auth-outbox"
+    auth_email_max_attempts: int = 3
+    app_base_url: str = ""
+    auth_verification_token_ttl_minutes: int = 1440
+    auth_reset_token_ttl_minutes: int = 30
+    auth_max_tokens_per_hour: int = 3
+    password_min_length: int = 10
+    password_max_length: int = 128
+    password_hibp_enabled: bool = False
+    argon2_time_cost: int = 3
+    argon2_memory_cost_kib: int = 65536
+    argon2_parallelism: int = 4
+    argon2_hash_len: int = 32
+    argon2_salt_len: int = 16
+    account_lockout_max_attempts: int = 5
+    account_lockout_base_seconds: int = 30
+    account_lockout_max_seconds: int = 3600
+    auth_rate_limit_window_seconds: int = 900
+    auth_rate_limit_sensitive_window_seconds: int = 3600
+    auth_rate_limit_login_ip: int = 20
+    auth_rate_limit_login_identifier: int = 10
+    auth_rate_limit_register_ip: int = 10
+    auth_rate_limit_register_identifier: int = 5
+    auth_rate_limit_forgot_ip: int = 10
+    auth_rate_limit_forgot_identifier: int = 5
+    auth_rate_limit_resend_ip: int = 10
+    auth_rate_limit_resend_identifier: int = 3
+    captcha_enabled: bool = False
+
     s3_endpoint_url: str = ""
     s3_region: str = Field(
         default="us-east-1",
@@ -207,6 +238,23 @@ class Settings(BaseSettings):
         return bool(
             self.google_client_id and self.google_client_secret and self.google_redirect_uri
         )
+
+    @property
+    def public_base_url(self) -> str:
+        base = self.app_base_url.strip() or self.frontend_url.strip()
+        return base.rstrip("/")
+
+    @property
+    def auth_email_ready(self) -> bool:
+        if self.auth_email_provider == "development":
+            return self.app_env == "local"
+        if self.auth_email_provider == "smtp":
+            return bool(self.smtp_host.strip() and self.smtp_from.strip())
+        return False
+
+    @property
+    def password_auth_enabled(self) -> bool:
+        return self.auth_password_enabled and self.auth_email_ready
 
     @property
     def s3_configured(self) -> bool:
@@ -513,6 +561,59 @@ class Settings(BaseSettings):
             raise ValueError("LANGFUSE_BASE_URL must use http or https")
         if self.queue_depth_refresh_seconds <= 0:
             raise ValueError("QUEUE_DEPTH_REFRESH_SECONDS must be positive")
+
+        if self.password_min_length < 8:
+            raise ValueError("PASSWORD_MIN_LENGTH must be at least 8")
+        if self.password_min_length >= self.password_max_length:
+            raise ValueError("PASSWORD_MAX_LENGTH must be greater than PASSWORD_MIN_LENGTH")
+        if self.password_max_length > 256:
+            raise ValueError("PASSWORD_MAX_LENGTH must not exceed 256")
+        if self.auth_verification_token_ttl_minutes <= 0:
+            raise ValueError("AUTH_VERIFICATION_TOKEN_TTL_MINUTES must be positive")
+        if self.auth_reset_token_ttl_minutes <= 0:
+            raise ValueError("AUTH_RESET_TOKEN_TTL_MINUTES must be positive")
+        if self.auth_max_tokens_per_hour <= 0:
+            raise ValueError("AUTH_MAX_TOKENS_PER_HOUR must be positive")
+        if self.argon2_time_cost <= 0:
+            raise ValueError("ARGON2_TIME_COST must be positive")
+        if self.argon2_memory_cost_kib < 8192:
+            raise ValueError("ARGON2_MEMORY_COST_KIB must be at least 8192")
+        if self.argon2_parallelism <= 0:
+            raise ValueError("ARGON2_PARALLELISM must be positive")
+        if self.argon2_hash_len < 16:
+            raise ValueError("ARGON2_HASH_LEN must be at least 16")
+        if self.argon2_salt_len < 8:
+            raise ValueError("ARGON2_SALT_LEN must be at least 8")
+        if self.account_lockout_max_attempts <= 0:
+            raise ValueError("ACCOUNT_LOCKOUT_MAX_ATTEMPTS must be positive")
+        if self.account_lockout_base_seconds <= 0:
+            raise ValueError("ACCOUNT_LOCKOUT_BASE_SECONDS must be positive")
+        if self.account_lockout_max_seconds < self.account_lockout_base_seconds:
+            raise ValueError(
+                "ACCOUNT_LOCKOUT_MAX_SECONDS must be >= ACCOUNT_LOCKOUT_BASE_SECONDS",
+            )
+        for limit_name, limit_value in (
+            ("AUTH_RATE_LIMIT_LOGIN_IP", self.auth_rate_limit_login_ip),
+            ("AUTH_RATE_LIMIT_LOGIN_IDENTIFIER", self.auth_rate_limit_login_identifier),
+            ("AUTH_RATE_LIMIT_REGISTER_IP", self.auth_rate_limit_register_ip),
+            ("AUTH_RATE_LIMIT_REGISTER_IDENTIFIER", self.auth_rate_limit_register_identifier),
+            ("AUTH_RATE_LIMIT_FORGOT_IP", self.auth_rate_limit_forgot_ip),
+            ("AUTH_RATE_LIMIT_FORGOT_IDENTIFIER", self.auth_rate_limit_forgot_identifier),
+            ("AUTH_RATE_LIMIT_RESEND_IP", self.auth_rate_limit_resend_ip),
+            ("AUTH_RATE_LIMIT_RESEND_IDENTIFIER", self.auth_rate_limit_resend_identifier),
+        ):
+            if limit_value <= 0:
+                raise ValueError(f"{limit_name} must be positive")
+        if self.auth_rate_limit_window_seconds <= 0:
+            raise ValueError("AUTH_RATE_LIMIT_WINDOW_SECONDS must be positive")
+        if self.auth_rate_limit_sensitive_window_seconds <= 0:
+            raise ValueError("AUTH_RATE_LIMIT_SENSITIVE_WINDOW_SECONDS must be positive")
+        if self.app_env != "local" and self.auth_email_provider == "development":
+            raise ValueError("AUTH_EMAIL_PROVIDER=development is only allowed in local")
+        if self.app_base_url.strip() and not self.app_base_url.strip().startswith(
+            ("http://", "https://"),
+        ):
+            raise ValueError("APP_BASE_URL must start with http:// or https://")
 
         if missing:
             raise ValueError(f"missing required environment variables: {', '.join(missing)}")

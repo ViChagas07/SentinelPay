@@ -2,7 +2,14 @@ from typing import Protocol
 
 
 class EmailPort(Protocol):
-    async def send(self, *, to: str, subject: str, body: str) -> None: ...
+    async def send(
+        self,
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None: ...
 
 
 class SmsPort(Protocol):

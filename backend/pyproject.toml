@@ -48,6 +48,7 @@ huggingface-hub = "^2.4.0"
 ftfy = "^6.3.1"
 onnx = "^1.19.0"
 langfuse = "5.2.0"
+argon2-cffi = "^25.1.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]

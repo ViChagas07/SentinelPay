@@ -25,11 +25,38 @@ from paysentineliq.infrastructure.db.base import Base
 
 class UserModel(Base):
     __tablename__ = "users"
-    __table_args__ = (CheckConstraint("role IN ('user', 'admin')", name="ck_users_role"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('user', 'admin')", name="ck_users_role"),
+        Index("uq_users_email_lower", text("lower(email)"), unique=True),
+    )
 
-    google_sub: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(320), index=True, nullable=False)
+    google_sub: Mapped[str | None] = mapped_column(
+        String(255),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    failed_login_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     preferred_locale: Mapped[str] = mapped_column(
         String(16),
         default="pt-BR",
@@ -404,3 +431,80 @@ class NotificationDeliveryModel(Base):
     )
     last_error_safe: Mapped[str | None] = mapped_column(String(200), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AuthTokenModel(Base):
+    __tablename__ = "auth_tokens"
+    __table_args__ = (
+        CheckConstraint(
+            "token_type IN ('email_verification', 'password_reset')",
+            name="ck_auth_tokens_type",
+        ),
+        Index("ix_auth_tokens_user_type", "user_id", "token_type"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+
+class LegalConsentModel(Base):
+    __tablename__ = "legal_consents"
+    __table_args__ = (
+        CheckConstraint("document IN ('terms', 'privacy')", name="ck_legal_consents_document"),
+        UniqueConstraint(
+            "user_id",
+            "document",
+            "version",
+            name="uq_legal_consents_user_document_version",
+        ),
+        Index("ix_legal_consents_user_id", "user_id"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document: Mapped[str] = mapped_column(String(16), nullable=False)
+    version: Mapped[str] = mapped_column(String(32), nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(32),
+        default="signup",
+        server_default="signup",
+        nullable=False,
+    )
+    created_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+
+class AuthEventModel(Base):
+    __tablename__ = "auth_events"
+    __table_args__ = (
+        Index("ix_auth_events_user_created", "user_id", "created_at"),
+        Index("ix_auth_events_type_created", "event_type", "created_at"),
+    )
+
+    user_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    created_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    event_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    )
