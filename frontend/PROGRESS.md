@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Fase atual: F15 (painel direito da tela de login) concluída.
+- Fase atual: F17 (Termos de uso e Política de privacidade) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
 - Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta ligadas ao Google OIDC real, aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS. Sem campos de e-mail e senha porque o backend não tem essas rotas; contrato proposto na seção 23 de `docs/BACKEND_GAPS.md`.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
@@ -73,6 +73,37 @@ Resultados reais em 2026-11-17 (F12):
 - Botão "Cancelar análise" com diálogo de confirmação, estado "Cancelando...", retorno ao envio e tratamento de 409.
 - Fluxos de boleto, folha, Central de Verificação e recibo usam o mesmo painel; o dossiê de recibo também acompanha e cancela a análise.
 - Testes novos para progresso, parser SSE, fallback de polling e confirmação de cancelamento. 244 testes unitários verdes.
+
+## Feito em F17
+
+- Spec em `docs/specs/F17.md` e ADR em `docs/adr/0015-paginas-legais.md`.
+- Conteúdo jurídico em `lib/legal/content/{pt,es,en}.ts`, estrutura tipada em `types.ts` e versão única em `lib/legal/version.ts` (`LEGAL_VERSION` 1.0, `LEGAL_UPDATED_AT` 2026-11-23).
+- Política com 15 seções e Termos com 12, em pt, es e en, com aviso de prevalência do português fora do pt.
+- `lib/legal/identity.ts` lê `NEXT_PUBLIC_LEGAL_*` e omite campo ausente, sem placeholder. Testado.
+- Componentes `features/legal/components/legal-document.tsx`, `legal-blocks.tsx` e `legal-toc.tsx`: sumário sticky no desktop e recolhível no mobile, destaque da seção visível por IntersectionObserver, âncoras copiáveis, tabelas com rolagem horizontal, botão "Voltar ao topo" e links cruzados com `/account`.
+- Estilo de impressão em `styles/globals.css` para `@media print`, com fundo branco e texto preto.
+- Os links de `/termos` e `/privacidade` no aceite do login abrem em nova aba, preservando o checkbox marcado.
+- Testes Vitest `lib/legal/content/content.test.ts` (paridade de seções e âncoras entre idiomas, tabelas bem formadas, sem travessão longo) e `lib/legal/identity.test.ts`. Playwright `e2e/legal.spec.ts` com 3 casos.
+- `/termos` e `/privacidade` continuam nas mesmas rotas. Nenhum endpoint, migration, tabela ou alteração de autenticação.
+
+### Fase 0: inventário factual que sustenta o texto
+
+- Login: Google OIDC com escopos `openid email profile`. Persistimos `google_sub`, `email`, `name`, `preferred_locale`, `timezone` e `role`. A foto do perfil não é armazenada; o shell usa iniciais.
+- Documentos: upload multipart com PDF, PNG e JPG, até 25 MB (`UPLOAD_MAX_MB=25`), 50 páginas no PDF (`PDF_MAX_PAGES=50`) e 20 páginas de OCR (`OCR_MAX_PAGES=20`). PDF criptografado é recusado. Guardamos `s3_key`, `sha256`, tamanho, `content_type`, nome sanitizado e tipo. O texto do OCR não é persistido.
+- Resultado: `score` 0 a 100, `band` (`low`, `attention`, `high`), evidências por regra, justificativa, campos extraídos (linha, código de barras, valor, vencimento, beneficiário, pagador, banco, empregador, competência, itens, líquido, IRRF, dependentes, emissor, referência), versões de regra, modelo e prompt, além de `degradation_flags`. CPF e CNPJ saem mascarados no relatório.
+- Armazenamento: PostgreSQL e Redis na Railway (`postgres.railway.internal`); arquivos e relatórios em bucket S3 privado na região `us-east-2` com SSE AES-256; traces no Langfuse em `us.cloud.langfuse.com` quando habilitado; front-end na Vercel.
+- IA: regras determinísticas, classificador estatístico treinado com dados 100% sintéticos e modelo de linguagem via endpoint compatível com OpenAI, configurado para LM Studio local (`LLM_BASE_URL`). O trecho enviado ao LLM é mascarado (CPF, CNPJ, nomes, valores, e-mail, telefone, endereço, chave Pix, sequência longa de dígitos) e limitado a 6.000 caracteres. Não há treinamento com dados de usuário.
+- Observabilidade: Langfuse com `ObservabilityMasker` aplicado como `mask` do cliente, hash de identificadores e remoção de PII; OpenTelemetry com coletor local e Prometheus; logs com `PIIMaskingFilter`. O Sentry do front-end só é carregado com DSN e envia eventos sem cookies, cabeçalhos ou dados pessoais.
+- Notificações: e-mail por SMTP. SMS e WhatsApp têm preferência, consentimento e destino cifrado em AES-GCM, mas os adaptadores são apenas de console, sem provedor externo integrado. A política diz isso de forma explícita.
+- Cookies: `sp_session`, `sp_session_exp`, `sp_refresh`, `sp_csrf`, `sp_oidc`, `refresh_token`, `csrf_token`, `theme`, `locale`, `date_format` e `sp_sidebar`. Sem localStorage, sessionStorage, analytics ou rastreadores de terceiros.
+- Retenção e exclusão: não há expurgo automático de documentos e análises nem `DELETE` de conta, documentos ou análises. Cancelar remove o relatório parcial. A política descreve esse comportamento real e remete ao canal de privacidade.
+- Segurança: HTTPS com HSTS, CSP, cookies HttpOnly, SameSite=Lax e Secure, rotação de refresh token com detecção de reuso, CSRF nas rotas autenticadas, rate limit Token Bucket em Redis por IP e por usuário (429 com `Retry-After`), verificação de tipo real, tamanho e páginas, SSE AES-256 no S3, AES-GCM nos destinos de notificação, mascaramento em logs e traces e guardrails de prompt. Sem certificação declarada.
+
+## Resultados reais em 2026-11-23 (F17)
+
+- `npm run lint`, `npm run typecheck`, `npm run test` (266 testes), `npm run check:content` e `npm run build`: verdes.
+- `e2e/legal.spec.ts`: 3 testes verdes. `axe matrix`, `responsivo` e `teclado` para `/termos` e `/privacidade`: verdes.
+- Verificação visual em 1440x900 e 390x844, nos temas claro e escuro, em pt e en, além de `emulateMedia` de impressão com fundo branco e texto preto.
 
 ## Feito em F15
 
@@ -278,6 +309,7 @@ Resultados reais em 2026-11-17 (F12):
 - O backend de testes compartilhado ocasionalmente demora a responder à consulta de sessão ou à primeira compilação do dev server. O e2e usa 1 worker e retry local para evitar falso negativo. Em CI, o retry é 2.
 - `NEXT_PUBLIC_SITE_URL` precisa ser configurada em produção para os metadados absolutos. `NEXT_PUBLIC_SUPPORT_URL` continua opcional.
 - O motion emite aviso de movimento reduzido no ambiente de teste. As transições ficam com duração zero e o estado final aparece.
+- As páginas legais (Termos e Política) descrevem apenas o comportamento confirmado no código. Ficam pendentes de definição: identificação do controlador, CNPJ ou CPF, endereço, e-mail de contato e Encarregado (DPO), todos por variáveis `NEXT_PUBLIC_LEGAL_*`; prazos de retenção de documentos, análises, logs e traces; exclusão e exportação automáticas de dados; e confirmação jurídica das salvaguardas de transferência internacional.
 - O middleware continua com a convenção `middleware.ts` herdada da F03 e o aviso de depreciação do Next 16.
 
 ## Próximos passos
@@ -291,7 +323,8 @@ Resultados reais em 2026-11-17 (F12):
 7. Implementar logout global, lista de sessões, uso, exportação e exclusão quando os endpoints das seções 19 existirem.
 8. Abrir o visualizador do dossiê a partir da lista quando `document_id` e `document_url` forem expostos.
 9. Construir a visão de inteligência quando o backend expuser regras, casos e métricas do classificador.
-10. Revisar juridicamente os textos de Termos e Privacidade e o canal LGPD antes de produção.
+10. Definir a identificação do controlador e do Encarregado em `NEXT_PUBLIC_LEGAL_*`, os prazos de retenção e as rotas de exclusão e exportação, e então atualizar a Política de privacidade com os valores reais.
+11. Revisar juridicamente os textos de Termos e Privacidade e o canal LGPD antes de produção.
 
 ## O que não foi tocado
 
@@ -301,4 +334,5 @@ Resultados reais em 2026-11-17 (F12):
 - Shell autenticado da F04, auth da F03 e componentes base da F02 não foram alterados. As preferências de notificação usaram os hooks existentes, ampliados apenas com atualização otimista e feed por cursor.
 - A F10 estendeu o `I18nProvider` e o layout raiz para o formato de data, acrescentou `react-hook-form` e `@hookform/resolvers` e criou a rota `/account`. Nenhum arquivo de auth, shell ou componente base foi editado.
 - Nenhum endpoint, migration ou configuração de infraestrutura.
+- Na F17, nenhum arquivo de backend, autenticação, pipeline, landing, shell ou sidebar foi alterado. As únicas mudanças fora de `lib/legal`, `features/legal`, `app/termos` e `app/privacidade` foram o `target="_blank"` nos links de aceite de `login-view.tsx`, os rótulos legais nos dicionários e o CSS de impressão.
 - Nenhum commit foi criado nesta fase.

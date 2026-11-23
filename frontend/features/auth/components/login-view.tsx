@@ -308,6 +308,8 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
                     {t("auth.login.acceptPrefix")}{" "}
                     <Link
                       href="/termos"
+                      target="_blank"
+                      rel="noreferrer"
                       className="underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
                     >
                       {t("auth.login.terms")}
@@ -315,6 +317,8 @@ export function LoginView({ search }: Readonly<{ search: LoginSearchParams }>) {
                     {t("auth.login.and")}{" "}
                     <Link
                       href="/privacidade"
+                      target="_blank"
+                      rel="noreferrer"
                       className="underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
                     >
                       {t("auth.login.privacy")}

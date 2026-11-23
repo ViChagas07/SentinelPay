@@ -1,15 +1,20 @@
-// Revisão jurídica pendente: o texto desta página é um rascunho funcional e
-// precisa ser validado por responsável legal antes do uso público em produção.
 import type { Metadata } from "next";
 
 import { LegalPage } from "@/features/legal/components/legal-page";
-import { getServerLocale, serverTranslate } from "@/lib/i18n/server";
+import { legalContent } from "@/lib/legal/content";
+import { resolveLegalIdentity } from "@/lib/legal/identity";
+import { getServerLocale } from "@/lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getServerLocale();
-  return { title: serverTranslate(locale, "privacy.title") };
+  const document = legalContent[locale].privacy;
+
+  return { title: document.title, description: document.subtitle };
 }
 
-export default function Page() {
-  return <LegalPage kind="privacy" />;
+export default async function Page() {
+  const locale = await getServerLocale();
+  const identity = resolveLegalIdentity(process.env);
+
+  return <LegalPage kind="privacy" content={legalContent[locale].privacy} identity={identity} />;
 }
