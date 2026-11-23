@@ -12,7 +12,7 @@ export const pt: LegalContent = {
         blocks: [
           {
             type: "paragraph",
-            text: "Estes Termos regulam o uso do SentinelPay. Ao marcar a caixa de aceite na tela de login e concluir a autenticação com o Google, você concorda com estes Termos e com a Política de privacidade.",
+            text: "Estes Termos regulam o uso do SentinelPay. Ao marcar a caixa de aceite na tela de login e concluir o cadastro ou a autenticação, por Google ou por e-mail e senha, você concorda com estes Termos e com a Política de privacidade.",
           },
           {
             type: "paragraph",
@@ -22,11 +22,11 @@ export const pt: LegalContent = {
             type: "list",
             items: [
               "SentinelPay: a plataforma, incluindo o site, a aplicação web, a API e o pipeline de análise.",
-              "Usuário: pessoa física maior de 18 anos, autenticada por uma conta Google.",
+              "Usuário: pessoa física maior de 18 anos, autenticada por uma conta Google ou por e-mail e senha.",
               "Documento: arquivo PDF, PNG ou JPG enviado pelo usuário, como boleto, contracheque ou recibo.",
               "Análise: processamento do documento que gera pontuação de risco de 0 a 100, classe de risco, evidências, justificativa e campos extraídos.",
               "Dossiê: conjunto exibido na plataforma com o resultado da análise, as evidências e os campos extraídos.",
-              "Conta: registro criado a partir da autenticação Google, vinculado a um identificador da conta Google e a um e-mail verificado.",
+              "Conta: registro criado pelo primeiro acesso com Google ou pelo cadastro por e-mail e senha, vinculado a um e-mail verificado.",
             ],
           },
           {
@@ -70,15 +70,17 @@ export const pt: LegalContent = {
         blocks: [
           {
             type: "paragraph",
-            text: "O acesso é feito exclusivamente com login Google por OpenID Connect. Não criamos senha própria. Do perfil Google armazenamos o nome, o e-mail verificado e o identificador da conta Google. A foto do perfil não é armazenada.",
+            text: "O acesso pode ser feito com login Google por OpenID Connect ou com e-mail e senha. No acesso por senha, guardamos apenas o hash Argon2id da senha, nunca a senha em texto. Do perfil Google armazenamos o nome, o e-mail verificado e o identificador da conta Google. A foto do perfil não é armazenada.",
           },
           {
             type: "list",
             items: [
               "Você declara ter 18 anos ou mais e que as informações da conta são verdadeiras.",
-              "Você é responsável por manter o acesso à sua conta Google seguro.",
+              "Você é responsável por manter o acesso à sua conta Google e à sua senha seguros.",
+              "A senha deve ter entre 10 e 128 caracteres, não pode estar entre as mais usadas e não pode conter seu nome nem seu e-mail.",
+              "O cadastro por e-mail e senha só é ativado depois da confirmação do e-mail.",
               "A sessão usa cookies HttpOnly e tokens de curta duração.",
-              "O uso é pessoal e intransferível. Uma conta Google corresponde a uma conta no SentinelPay.",
+              "O uso é pessoal e intransferível. Cada e-mail corresponde a uma conta no SentinelPay.",
             ],
           },
           {
@@ -303,6 +305,22 @@ export const pt: LegalContent = {
                   "Nome, e-mail verificado, identificador da conta Google, papel na plataforma, idioma preferido e fuso horário. A foto do perfil não é armazenada.",
                 ],
                 [
+                  "Dados de conta (e-mail e senha)",
+                  "Nome, e-mail normalizado, hash Argon2id da senha (nunca a senha em texto), data da última troca de senha, contador de falhas de login e bloqueio temporário.",
+                ],
+                [
+                  "Tokens de verificação e redefinição",
+                  "Hash SHA-256 do token de uso único, finalidade, validade, data de uso, IP e user agent do pedido. O token em texto existe apenas no link enviado por e-mail.",
+                ],
+                [
+                  "Consentimentos",
+                  "Documento aceito, versão vigente, data e hora do aceite, origem, IP e user agent, como prova de consentimento.",
+                ],
+                [
+                  "Eventos de segurança",
+                  "Cadastro, login, falha de login, bloqueio, verificação de e-mail, pedido de redefinição, redefinição concluída, troca de senha e logout, com data, IP e user agent. Nunca incluem senha, hash ou token.",
+                ],
+                [
                   "Dados dos documentos enviados",
                   "Arquivo PDF, PNG ou JPG, nome do arquivo sanitizado, tipo, tamanho, hash SHA-256 e data do envio. O conteúdo pode incluir nome, CPF, CNPJ, endereço, dados bancários, salário e descontos.",
                 ],
@@ -497,6 +515,12 @@ export const pt: LegalContent = {
                   "Infraestrutura global do Google",
                 ],
                 [
+                  "Provedor de e-mail transacional",
+                  "Envio dos e-mails de verificação, redefinição, aviso de senha alterada e aviso de e-mail já cadastrado",
+                  "Endereço de e-mail do destinatário e conteúdo da mensagem. Definido por configuração de SMTP do controlador.",
+                  "A definir conforme o provedor contratado",
+                ],
+                [
                   "Railway",
                   "Hospedagem da API, do PostgreSQL e do Redis",
                   "Dados de conta, documentos, análises, vencimentos, notificações e logs",
@@ -573,7 +597,11 @@ export const pt: LegalContent = {
           },
           {
             type: "paragraph",
-            text: "A exclusão automática de conta, de documentos e de análises ainda não está disponível na API. O pedido de exclusão é registrado pelo canal de privacidade e tratado pelo controlador. O cancelamento de uma análise em andamento remove o relatório parcial gerado até aquele momento.",
+            text: "Tokens de verificação de e-mail expiram em 24 horas e tokens de redefinição de senha em 30 minutos, sempre de uso único. Pedidos de redefinição substituem os pedidos anteriores.",
+          },
+          {
+            type: "paragraph",
+            text: "A exclusão automática de conta, de documentos e de análises ainda não está disponível na API. O pedido de exclusão é registrado pelo canal de privacidade e tratado pelo controlador. A exclusão remove o hash da senha, os tokens de verificação e de redefinição e os registros de consentimento. Os eventos de segurança associados ao usuário perdem o vínculo direto com a conta, para preservar a guarda legal dos registros de segurança. O cancelamento de uma análise em andamento remove o relatório parcial gerado até aquele momento.",
           },
           {
             type: "links",
@@ -597,6 +625,8 @@ export const pt: LegalContent = {
             items: [
               "HTTPS com HSTS em produção e cookies HttpOnly, SameSite=Lax e Secure.",
               "Política de segurança de conteúdo e cabeçalhos de proteção no front-end.",
+              "Senhas guardadas apenas como hash Argon2id, com parâmetros configuráveis e rehash no login.",
+              "Tokens de verificação e de redefinição de senha de uso único, guardados apenas como hash SHA-256, com expiração curta.",
               "Tokens de acesso de curta duração, rotação de tokens de atualização e detecção de reuso.",
               "Proteção contra CSRF nas rotas autenticadas.",
               "Controle de acesso por dono em cada consulta de documento, análise e vencimento.",
@@ -637,7 +667,7 @@ export const pt: LegalContent = {
                 ],
                 [
                   "Correção",
-                  "Dados de conta podem ser corrigidos na conta Google. Demais dados, pelo canal de privacidade.",
+                  "Dados de conta podem ser corrigidos no perfil ou pelo canal de privacidade. Contas Google também podem ser corrigidas na própria conta Google.",
                 ],
                 [
                   "Anonimização, bloqueio ou eliminação",

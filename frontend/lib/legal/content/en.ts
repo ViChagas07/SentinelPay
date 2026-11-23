@@ -14,7 +14,7 @@ export const en: LegalContent = {
         blocks: [
           {
             type: "paragraph",
-            text: "These Terms govern the use of SentinelPay. By checking the acceptance box on the login screen and completing authentication with Google, you agree to these Terms and to the Privacy Policy.",
+            text: "These Terms govern the use of SentinelPay. By checking the acceptance box on the login screen and completing registration or authentication, with Google or with e-mail and password, you agree to these Terms and to the Privacy Policy.",
           },
           {
             type: "paragraph",
@@ -24,11 +24,11 @@ export const en: LegalContent = {
             type: "list",
             items: [
               "SentinelPay: the platform, including the website, web application, API and analysis pipeline.",
-              "User: an individual aged 18 or older, authenticated through a Google account.",
+              "User: an individual aged 18 or older, authenticated with a Google account or with e-mail and password.",
               "Document: a PDF, PNG or JPG file uploaded by the user, such as a payment slip, payslip or receipt.",
               "Analysis: processing of the document that generates a risk score from 0 to 100, risk band, evidence, justification and extracted fields.",
               "Dossier: the set displayed in the platform with the analysis result, evidence and extracted fields.",
-              "Account: a record created from Google authentication, linked to a Google account identifier and a verified email address.",
+              "Account: a record created on the first Google sign-in or by the e-mail and password sign-up, linked to a verified e-mail address.",
             ],
           },
           {
@@ -72,15 +72,17 @@ export const en: LegalContent = {
         blocks: [
           {
             type: "paragraph",
-            text: "Access is provided exclusively through Google sign-in with OpenID Connect. We do not create a separate password. From the Google profile we store the name, verified email and Google account identifier. The profile picture is not stored.",
+            text: "Access can be done with Google sign-in through OpenID Connect or with e-mail and password. With a password, we store only the Argon2id hash, never the plain password. From the Google profile we store the name, verified email and Google account identifier. The profile picture is not stored.",
           },
           {
             type: "list",
             items: [
               "You declare that you are 18 or older and that the account information is accurate.",
-              "You are responsible for keeping access to your Google account secure.",
+              "You are responsible for keeping access to your Google account and to your password secure.",
+              "The password must have between 10 and 128 characters, cannot be among the most used ones and cannot contain your name or e-mail.",
+              "Sign-up with e-mail and password only becomes active after the e-mail confirmation.",
               "The session uses HttpOnly cookies and short-lived tokens.",
-              "Use is personal and non-transferable. One Google account corresponds to one SentinelPay account.",
+              "Use is personal and non-transferable. Each e-mail corresponds to one SentinelPay account.",
             ],
           },
           {
@@ -307,6 +309,22 @@ export const en: LegalContent = {
                   "Name, verified email, Google account identifier, platform role, preferred language and time zone. The profile picture is not stored.",
                 ],
                 [
+                  "Account data (e-mail and password)",
+                  "Name, normalized e-mail, Argon2id password hash (never the plain password), date of the last password change, failed login counter and temporary lock.",
+                ],
+                [
+                  "Verification and reset tokens",
+                  "SHA-256 hash of the single-use token, purpose, validity, use date, IP and user agent of the request. The plain token exists only in the link sent by e-mail.",
+                ],
+                [
+                  "Consents",
+                  "Accepted document, current version, acceptance date and time, origin, IP and user agent, as proof of consent.",
+                ],
+                [
+                  "Security events",
+                  "Sign-up, sign-in, failed sign-in, lock, e-mail verification, reset request, completed reset, password change and sign-out, with date, IP and user agent. They never include password, hash or token.",
+                ],
+                [
                   "Uploaded document data",
                   "PDF, PNG or JPG file, sanitized file name, type, size, SHA-256 hash and upload date. The content may include name, CPF, CNPJ, address, bank details, salary and deductions.",
                 ],
@@ -498,6 +516,12 @@ export const en: LegalContent = {
                   "Google global infrastructure",
                 ],
                 [
+                  "Transactional e-mail provider",
+                  "Delivery of verification, reset, password changed and already registered e-mail notices",
+                  "Recipient e-mail address and message content. Defined by the controller SMTP configuration.",
+                  "To be defined with the contracted provider",
+                ],
+                [
                   "Railway",
                   "Hosting of the API, PostgreSQL and Redis",
                   "Account data, documents, analyses, due dates, notifications and logs",
@@ -574,7 +598,11 @@ export const en: LegalContent = {
           },
           {
             type: "paragraph",
-            text: "Automatic deletion of accounts, documents and analyses is not yet available in the API. Deletion requests are recorded through the privacy channel and handled by the controller. Cancelling an ongoing analysis removes the partial report generated up to that point.",
+            text: "E-mail verification tokens expire in 24 hours and password reset tokens in 30 minutes, always single-use. New reset requests replace previous ones.",
+          },
+          {
+            type: "paragraph",
+            text: "Automatic deletion of accounts, documents and analyses is not yet available in the API. Deletion requests are recorded through the privacy channel and handled by the controller. Deletion removes the password hash, verification and reset tokens and consent records. Security events tied to the user lose the direct link to the account, preserving the legal retention of security records. Cancelling an ongoing analysis removes the partial report generated up to that point.",
           },
           {
             type: "links",
@@ -598,6 +626,8 @@ export const en: LegalContent = {
             items: [
               "HTTPS with HSTS in production and HttpOnly, SameSite=Lax and Secure cookies.",
               "Content Security Policy and protective headers in the front-end.",
+              "Passwords stored only as Argon2id hashes, with configurable parameters and rehash on sign-in.",
+              "Single-use verification and password reset tokens, stored only as SHA-256 hashes, with short expiration.",
               "Short-lived access tokens, refresh token rotation and reuse detection.",
               "CSRF protection on authenticated routes.",
               "Owner-based access control on every document, analysis and due date query.",
@@ -638,7 +668,7 @@ export const en: LegalContent = {
                 ],
                 [
                   "Correction",
-                  "Account data can be corrected in your Google account. Other data through the privacy channel.",
+                  "Account data can be corrected in your profile or through the privacy channel. Google accounts can also be corrected in the Google account itself.",
                 ],
                 [
                   "Anonymization, blocking or deletion",

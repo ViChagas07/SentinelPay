@@ -1,4 +1,4 @@
-export const LEGAL_VERSION = "1.0";
+export const LEGAL_VERSION = "1.1";
 
 export const LEGAL_UPDATED_AT = "2026-11-23";
 

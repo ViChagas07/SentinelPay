@@ -14,7 +14,7 @@ export const es: LegalContent = {
         blocks: [
           {
             type: "paragraph",
-            text: "Estos Términos regulan el uso de SentinelPay. Al marcar la casilla de aceptación en la pantalla de inicio de sesión y completar la autenticación con Google, usted acepta estos Términos y la Política de privacidad.",
+            text: "Estos Términos regulan el uso de SentinelPay. Al marcar la casilla de aceptación en la pantalla de inicio de sesión y completar el registro o la autenticación, con Google o con correo y contraseña, usted acepta estos Términos y la Política de privacidad.",
           },
           {
             type: "paragraph",
@@ -24,11 +24,11 @@ export const es: LegalContent = {
             type: "list",
             items: [
               "SentinelPay: la plataforma, incluidos el sitio, la aplicación web, la API y el pipeline de análisis.",
-              "Usuario: persona física mayor de 18 años, autenticada mediante una cuenta de Google.",
+              "Usuario: persona física mayor de 18 años, autenticada con una cuenta de Google o con correo y contraseña.",
               "Documento: archivo PDF, PNG o JPG enviado por el usuario, como boleto, nómina o recibo.",
               "Análisis: procesamiento del documento que genera una puntuación de riesgo de 0 a 100, clase de riesgo, evidencias, justificación y campos extraídos.",
               "Dosier: conjunto mostrado en la plataforma con el resultado del análisis, las evidencias y los campos extraídos.",
-              "Cuenta: registro creado a partir de la autenticación de Google, vinculado a un identificador de cuenta de Google y a un correo verificado.",
+              "Cuenta: registro creado en el primer acceso con Google o en el registro con correo y contraseña, vinculado a un correo verificado.",
             ],
           },
           {
@@ -72,15 +72,17 @@ export const es: LegalContent = {
         blocks: [
           {
             type: "paragraph",
-            text: "El acceso se realiza exclusivamente con inicio de sesión de Google mediante OpenID Connect. No creamos una contraseña propia. Del perfil de Google almacenamos el nombre, el correo verificado y el identificador de la cuenta de Google. La foto del perfil no se almacena.",
+            text: "El acceso puede realizarse con inicio de sesión de Google mediante OpenID Connect o con correo y contraseña. Con contraseña, almacenamos solo el hash Argon2id, nunca la contraseña en texto. Del perfil de Google almacenamos el nombre, el correo verificado y el identificador de la cuenta de Google. La foto del perfil no se almacena.",
           },
           {
             type: "list",
             items: [
               "Usted declara tener 18 años o más y que la información de la cuenta es veraz.",
-              "Usted es responsable de mantener seguro el acceso a su cuenta de Google.",
+              "Usted es responsable de mantener seguros el acceso a su cuenta de Google y su contraseña.",
+              "La contraseña debe tener entre 10 y 128 caracteres, no puede estar entre las más usadas y no puede contener su nombre ni su correo.",
+              "El registro con correo y contraseña solo se activa después de la confirmación del correo.",
               "La sesión usa cookies HttpOnly y tokens de corta duración.",
-              "El uso es personal e intransferible. Una cuenta de Google corresponde a una cuenta en SentinelPay.",
+              "El uso es personal e intransferible. Cada correo corresponde a una cuenta en SentinelPay.",
             ],
           },
           {
@@ -307,6 +309,22 @@ export const es: LegalContent = {
                   "Nombre, correo verificado, identificador de la cuenta de Google, rol en la plataforma, idioma preferido y zona horaria. La foto del perfil no se almacena.",
                 ],
                 [
+                  "Datos de cuenta (correo y contraseña)",
+                  "Nombre, correo normalizado, hash Argon2id de la contraseña (nunca la contraseña en texto), fecha del último cambio de contraseña, contador de fallos de acceso y bloqueo temporal.",
+                ],
+                [
+                  "Tokens de verificación y restablecimiento",
+                  "Hash SHA-256 del token de uso único, finalidad, validez, fecha de uso, IP y user agent de la solicitud. El token en texto existe solo en el enlace enviado por correo.",
+                ],
+                [
+                  "Consentimientos",
+                  "Documento aceptado, versión vigente, fecha y hora de la aceptación, origen, IP y user agent, como prueba de consentimiento.",
+                ],
+                [
+                  "Eventos de seguridad",
+                  "Registro, inicio de sesión, fallo de inicio de sesión, bloqueo, verificación de correo, solicitud de restablecimiento, restablecimiento completado, cambio de contraseña y salida, con fecha, IP y user agent. Nunca incluyen contraseña, hash ni token.",
+                ],
+                [
                   "Datos de los documentos enviados",
                   "Archivo PDF, PNG o JPG, nombre del archivo saneado, tipo, tamaño, hash SHA-256 y fecha de envío. El contenido puede incluir nombre, CPF, CNPJ, dirección, datos bancarios, salario y descuentos.",
                 ],
@@ -501,6 +519,12 @@ export const es: LegalContent = {
                   "Infraestructura global de Google",
                 ],
                 [
+                  "Proveedor de correo transaccional",
+                  "Envío de los correos de verificación, restablecimiento, aviso de contraseña cambiada y aviso de correo ya registrado",
+                  "Dirección de correo del destinatario y contenido del mensaje. Definido por la configuración SMTP del controlador.",
+                  "A definir según el proveedor contratado",
+                ],
+                [
                   "Railway",
                   "Alojamiento de la API, PostgreSQL y Redis",
                   "Datos de cuenta, documentos, análisis, vencimientos, notificaciones y registros",
@@ -577,7 +601,11 @@ export const es: LegalContent = {
           },
           {
             type: "paragraph",
-            text: "La eliminación automática de cuenta, documentos y análisis aún no está disponible en la API. La solicitud de eliminación se registra por el canal de privacidad y la atiende el controlador. La cancelación de un análisis en curso elimina el informe parcial generado hasta ese momento.",
+            text: "Los tokens de verificación de correo expiran en 24 horas y los de restablecimiento de contraseña en 30 minutos, siempre de uso único. Las nuevas solicitudes de restablecimiento sustituyen a las anteriores.",
+          },
+          {
+            type: "paragraph",
+            text: "La eliminación automática de cuenta, documentos y análisis aún no está disponible en la API. La solicitud de eliminación se registra por el canal de privacidad y la atiende el controlador. La eliminación borra el hash de la contraseña, los tokens de verificación y restablecimiento y los registros de consentimiento. Los eventos de seguridad vinculados al usuario pierden el vínculo directo con la cuenta, para preservar la guarda legal de los registros de seguridad. La cancelación de un análisis en curso elimina el informe parcial generado hasta ese momento.",
           },
           {
             type: "links",
@@ -601,6 +629,8 @@ export const es: LegalContent = {
             items: [
               "HTTPS con HSTS en producción y cookies HttpOnly, SameSite=Lax y Secure.",
               "Política de seguridad de contenido y encabezados de protección en el front-end.",
+              "Contraseñas guardadas solo como hash Argon2id, con parámetros configurables y rehash en el inicio de sesión.",
+              "Tokens de verificación y restablecimiento de contraseña de uso único, guardados solo como hash SHA-256, con expiración corta.",
               "Tokens de acceso de corta duración, rotación de tokens de actualización y detección de reutilización.",
               "Protección contra CSRF en las rutas autenticadas.",
               "Control de acceso por propietario en cada consulta de documento, análisis y vencimiento.",
@@ -641,7 +671,7 @@ export const es: LegalContent = {
                 ],
                 [
                   "Corrección",
-                  "Los datos de cuenta pueden corregirse en la cuenta de Google. Los demás datos, por el canal de privacidad.",
+                  "Los datos de cuenta pueden corregirse en el perfil o por el canal de privacidad. Las cuentas de Google también pueden corregirse en la propia cuenta de Google.",
                 ],
                 [
                   "Anonimización, bloqueo o eliminación",

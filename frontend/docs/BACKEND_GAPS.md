@@ -396,37 +396,38 @@ Relatórios PDF e e-mails transacionais não são gerados pelo front. Para aplicar 
 | Relatório PDF, cabeçalho | usar a versão com fundo branco, com proporção e respiro preservados | O relatório JSON existe no bucket, sem template versionado no repositório. | Copiar `logo-symbol-on-white-512.png` para os assets do gerador de PDF e inserir no cabeçalho, com altura entre 24 e 40 px e área de respiro de 25%. | P2 |
 | E-mails transacionais, cabeçalho | usar a versão com fundo branco, com `alt` e proporção preservados | Não há templates de e-mail no backend. | Copiar o mesmo asset para o serviço de e-mail e inserir no cabeçalho. Nunca usar a variante clara em fundo branco nem a versão colorida em fundo escuro. | P2 |
 
-## 23. F15: login com e-mail e senha (2026-11-23)
+## 23. F15 e F16: login com e-mail e senha (2026-11-23)
 
-O redesenho do painel direito de `/login` introduziu as abas "Entrar" e "Criar conta", ambas
-ligadas ao Google OIDC real, porque o primeiro acesso com Google já cria a conta. Nenhum campo de
-e-mail, senha, recuperação ou verificação foi renderizado: o backend não tem essas rotas e a
-interface não simula autenticação.
+O redesenho do painel direito de `/login` introduziu as abas "Entrar" e "Criar conta". A F16 ligou
+essas abas ao fluxo real de e-mail e senha, atrás da flag `AUTH_PASSWORD_ENABLED`, que vem do
+endpoint público de capacidades.
 
-Para habilitar a autenticação por e-mail e senha, o backend precisa dos contratos abaixo. Até
-existirem, a interface permanece apenas com Google.
+Contratos agora atendidos pelo backend (prefixo `/api/v1/auth`):
 
-| Rota desejada | Método | Payload | Resposta | Tela que depende | Prioridade |
-| --- | --- | --- | --- | --- | --- |
-| `/api/v1/auth/register` | POST | `{ name, email, password }` | 201 `{ user, access_token, refresh_token }` com os mesmos cookies do OIDC | Aba "Criar conta", campos nome, e-mail, senha e confirmar senha | P2 |
-| `/api/v1/auth/login` (credenciais) | POST | `{ email, password }` | 200 `{ user, access_token, refresh_token }` e cookies do BFF | Aba "Entrar", campos e-mail e senha, link "Esqueceu a senha?" | P2 |
-| `/api/v1/auth/password/forgot` | POST | `{ email }` | 202 sempre, sem revelar se o e-mail existe | Link "Esqueceu a senha?" e tela de envio | P2 |
-| `/api/v1/auth/password/reset` | POST | `{ token, password }` | 204 e invalidação das sessões ativas | Tela aberta pelo link do e-mail | P2 |
-| `/api/v1/auth/email/verify` | POST | `{ token }` | 204 com `email_verified_at` atualizado | Aviso de e-mail não verificado no login | P2 |
-| `/api/v1/auth/email/resend` | POST | `{ email }` | 202 com limite por janela | Reenvio do e-mail de verificação | P3 |
+| Rota | Método | Payload | Resposta | Status |
+| --- | --- | --- | --- | --- |
+| `/auth/capabilities` | GET | nenhum | `{ password_enabled, google_enabled }` | atendido |
+| `/auth/password-policy` | GET | nenhum | `{ min_length, max_length, requirements, hibp_enabled }` | atendido |
+| `/auth/register` | POST | `{ nome_completo, email, senha, aceite_termos, aceite_privacidade }` | 202 neutro e e-mail de verificação; 503 quando a flag está desligada | atendido |
+| `/auth/login` | POST | `{ email, senha }` | 200 com o mesmo par de cookies do OIDC; 401 genérico; 403 `email_not_verified`; 429 com `Retry-After` | atendido |
+| `/auth/verify-email` | POST | `{ token }` | 204 com `email_verified_at` atualizado; 400 `invalid_auth_token` | atendido |
+| `/auth/resend-verification` | POST | `{ email }` | 202 neutro com limite por IP e e-mail | atendido |
+| `/auth/forgot-password` | POST | `{ email }` | 202 neutro, tempo equalizado e link de 30 minutos | atendido |
+| `/auth/reset-password` | POST | `{ token, nova_senha }` | 204, revoga as sessões ativas e envia aviso | atendido |
+| `/auth/change-password` | POST | `{ senha_atual, nova_senha }` | 204 com sessão autenticada | atendido, sem tela de conta ainda |
 
-Requisitos transversais que a UI vai espelhar literalmente, sem inventar regra própria:
+O BFF expõe os mesmos caminhos em `/api/v1/auth/*`, valida a origem, mantém os cookies HttpOnly e
+nunca devolve tokens ao JavaScript.
 
-- Política de senha do servidor exposta na resposta de erro de validação, com comprimento mínimo,
-  classes exigidas e bloqueio de senhas comuns.
-- Limite de tentativas por conta e por IP, com 429 e `Retry-After`, reaproveitando o rate limit
-  atual.
-- Respostas de login e recuperação sem distinção entre e-mail existente e inexistente, para não
-  permitir enumeração de contas.
-- `email_verified_at` no usuário, com o e-mail já verificado pelo Google marcado como verificado.
-- Auditoria de cadastro, login, reset e verificação, sem registrar senha em log, trace ou URL.
+### Pendências que dependem de decisão externa
 
-Quando esses endpoints existirem, a UI acrescenta: campos com `autocomplete` correto, mostrar e
-ocultar senha, indicador de força com os requisitos reais do servidor, confirmação de senha em
-tempo real, erros por campo com `aria-invalid` e `aria-describedby`, aviso geral do servidor no
-topo e estados de carregamento e desabilitado.
+| Necessidade | Hoje | O que falta | Prioridade |
+| --- | --- | --- | --- |
+| Provedor de e-mail e domínio remetente | O código tem a porta `EmailSender`, um emissor de desenvolvimento que grava em `var/auth-outbox` e um adaptador SMTP genérico por variáveis de ambiente. | Contratar o provedor ou apontar o SMTP para um domínio remetente verificado, com SPF, DKIM e DMARC, e trocar `AUTH_EMAIL_PROVIDER` para `smtp` em produção. | P1 |
+| Cadastro habilitado em produção | `AUTH_PASSWORD_ENABLED` está desligada por padrão e o endpoint de capacidades já esconde o formulário quando ela está fora. | Decidir quando ligar a flag e manter o SMTP pronto antes disso. | P1 |
+| Captcha anti-bot | `CAPTCHA_ENABLED` existe e está desligada. Nenhum provedor foi contratado. | Escolher o provedor, implementar a verificação no backend e só então ligar a flag e renderizar o widget. | P2 |
+| Política de vinculação Google e senha | Implementada: vincula apenas conta com e-mail verificado e `email_verified=true` do Google; caso contrário, bloqueia e registra o evento. | Revisão jurídica e de produto da política registrada no ADR 0029. | P2 |
+| Retenção de `auth_events` | Sem prazo automático de expurgo. A exclusão de conta mantém o evento com `user_id` nulo. | Definir o prazo de guarda dos registros de segurança e agendar a rotina de expurgo no worker. | P2 |
+| Limites de rate limit e bloqueio | Valores padrão configuráveis por ambiente: 20 tentativas de login por IP e 10 por e-mail em 15 minutos; 10 e 5 para cadastro; 10 e 5 para esqueci; 10 e 3 para reenvio; bloqueio progressivo a partir de 5 falhas, até 1 hora. | Validar os números com dados reais de uso e ajustar as variáveis `AUTH_RATE_LIMIT_*` e `ACCOUNT_LOCKOUT_*`. | P2 |
+| Tela de troca de senha na conta | O endpoint `/auth/change-password` existe e segue o mesmo contrato, mas `/account` ainda não tem a seção. | Adicionar a seção em `/account` consumindo o endpoint. | P2 |
+| Verificação de senha vazada (HIBP) | `PASSWORD_HIBP_ENABLED` existe e está desligada. | Aprovar saída de rede para a API do HIBP por k-anonymity antes de ligar. | P3 |

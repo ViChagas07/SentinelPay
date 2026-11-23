@@ -2,9 +2,9 @@
 
 ## Estado atual
 
-- Fase atual: F17 (Termos de uso e Política de privacidade) concluída.
+- Fase atual: F18 (autenticação por e-mail e senha no front) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
-- Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta ligadas ao Google OIDC real, aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS. Sem campos de e-mail e senha porque o backend não tem essas rotas; contrato proposto na seção 23 de `docs/BACKEND_GAPS.md`.
+- Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta ligadas ao Google OIDC e, quando `AUTH_PASSWORD_ENABLED` está ligada, a e-mail, senha, verificação e recuperação com dados reais do backend. Aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
 - Marca: símbolo oficial aplicado no header, sidebar, login, landing, carregamento, progresso, erro, vazio, rodapé e README. Originais em `assets/brand/originals/` e derivados em `public/brand/`.
 - Acessibilidade: matriz axe em 16 rotas, 2 temas e 3 idiomas, com zero violações.
@@ -59,6 +59,24 @@ Resultados reais em 2026-11-17 (F12):
 - Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada após reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem violações.
 - Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
+
+## Feito em F18
+
+- Spec em `docs/specs/F16.md` e ADR em `docs/adr/0017-autenticacao-email-senha-bff.md`.
+- Backend da P20 entregou `/auth/capabilities`, `/auth/password-policy`, `/auth/register`, `/auth/login`, `/auth/verify-email`, `/auth/resend-verification`, `/auth/forgot-password`, `/auth/reset-password` e `/auth/change-password`. O login por senha emite o mesmo par de cookies do Google e o BFF nunca devolve token ao JavaScript.
+- BFF com `lib/session/password-auth.ts`, validação de origem, repasse de `Retry-After` e cookies, e Route Handlers em `/api/v1/auth/*`.
+- `lib/auth` concentra capacidades com fallback desligado, política vinda do servidor, validação Zod, força de senha apenas visual, cliente de requisições e mapeamento de códigos de erro.
+- `/login` renderiza o formulário de e-mail e senha somente com `password_enabled` ligado: e-mail, senha com mostrar e ocultar, "Esqueceu a senha?", botão primário, divisor "ou", nome completo, confirmar senha com validação em tempo real e requisitos reais da política. Com a flag desligada, a tela continua exatamente como antes, só com Google.
+- Estados tratados: erro genérico de credenciais, 429 com tempo de espera, conta não verificada com reenvio, política de senha, erro de rede e sucesso com o mesmo redirecionamento pós-login.
+- Telas novas `/verificar-email`, `/confirmar-email`, `/esqueci-senha` e `/redefinir-senha`, com `Referrer-Policy` no-referrer, remoção do token da URL antes da chamada, cooldown de reenvio e o mesmo design do login.
+- Termos e Privacidade em pt, es e en atualizados para e-mail e senha, tokens, eventos de segurança, consentimentos, provedor de e-mail e exclusão de conta. `LEGAL_VERSION` passou para 1.1.
+- Testes: 6 arquivos novos em `lib/auth` e componentes, 13 e2e em `e2e/password-auth.spec.ts` e 14 em `e2e/login.spec.ts`, incluindo axe nas duas abas e nos dois temas.
+
+## Resultados reais em 2026-11-23 (F18)
+
+- `npx tsc --noEmit`, `npx eslint .`, `npx vitest run` (298 testes), `npm run check:content` e `npm run build`: verdes.
+- `e2e/login.spec.ts` com 14 testes e `e2e/password-auth.spec.ts` com 13: verdes.
+- Backend: `ruff`, `mypy`, `lint-imports` e `pytest` completos verdes, com os testes novos de política, serviço e rotas.
 
 ## Feito em F12
 
