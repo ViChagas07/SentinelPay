@@ -100,7 +100,11 @@ class FakeAuthService:
         self.refresh_calls: list[str] = []
         self.logout_calls: list[tuple[str | None, object]] = []
 
-    async def login_with_google(self, identity: GoogleIdentity) -> AuthResult:
+    async def login_with_google(
+        self,
+        identity: GoogleIdentity,
+        context: object | None = None,
+    ) -> AuthResult:
         self.login_calls.append(identity)
         return self.result
 
@@ -110,7 +114,12 @@ class FakeAuthService:
             raise self.refresh_error
         return self.result
 
-    async def logout(self, raw_refresh_token: str | None, access_claims: object) -> None:
+    async def logout(
+        self,
+        raw_refresh_token: str | None,
+        access_claims: object,
+        context: object | None = None,
+    ) -> None:
         self.logout_calls.append((raw_refresh_token, access_claims))
 
 

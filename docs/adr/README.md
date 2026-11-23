@@ -33,6 +33,8 @@ This index lists the decisions that shaped SentinelPay. The records are kept in 
 | [0026](0026-progresso-sse-cancelamento.md) | Persisted progress, SSE and cooperative cancellation | Accepted |
 | [0027](0027-langfuse-observability.md) | Langfuse Cloud with masking before export | Accepted |
 | [0028](0028-langfuse-pipeline-traces.md) | End-to-end trace per analysis and Langfuse experiments | Accepted |
+| [0029](0029-vinculacao-google-senha.md) | Google and password account linking policy | Accepted |
+| [0030](0030-politica-senha-e-tokens.md) | Password policy, Argon2id and single-use tokens | Accepted |
 
 ## How to add an ADR
 

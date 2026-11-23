@@ -1,7 +1,5 @@
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from types import TracebackType
-from uuid import UUID, uuid4
 
 import pytest
 
@@ -12,9 +10,13 @@ from paysentineliq.application.errors import (
 )
 from paysentineliq.application.ports.oidc import GoogleIdentity
 from paysentineliq.application.security.refresh_tokens import hash_refresh_token
-from paysentineliq.domain.refresh_token import RefreshTokenRecord
-from paysentineliq.domain.user import Role, User
+from paysentineliq.domain.user import Role
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService
+from tests.support.auth_fakes import (
+    FakeRevokedTokenStore,
+    FakeUnitOfWork,
+    MutableClock,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -24,138 +26,6 @@ _IDENTITY = GoogleIdentity(
     email="user@example.com",
     name="User",
 )
-
-
-class MutableClock:
-    def __init__(self, value: datetime) -> None:
-        self.value = value
-
-    def __call__(self) -> datetime:
-        return self.value
-
-
-class FakeUserRepository:
-    def __init__(self) -> None:
-        self.users: dict[UUID, User] = {}
-
-    async def get_by_google_sub(self, google_sub: str) -> User | None:
-        return next(
-            (user for user in self.users.values() if user.google_sub == google_sub),
-            None,
-        )
-
-    async def get_by_id(self, user_id: UUID) -> User | None:
-        return self.users.get(user_id)
-
-    async def create(
-        self,
-        *,
-        google_sub: str,
-        email: str,
-        name: str | None,
-    ) -> User:
-        user = User(
-            id=uuid4(),
-            google_sub=google_sub,
-            email=email,
-            name=name,
-            preferred_locale="pt-BR",
-            timezone="America/Sao_Paulo",
-            role=Role.USER,
-        )
-        self.users[user.id] = user
-        return user
-
-    async def update_profile(
-        self,
-        user_id: UUID,
-        *,
-        email: str,
-        name: str | None,
-    ) -> User | None:
-        user = self.users.get(user_id)
-        if user is None:
-            return None
-        updated = replace(user, email=email, name=name)
-        self.users[user_id] = updated
-        return updated
-
-
-class FakeRefreshTokenRepository:
-    def __init__(self) -> None:
-        self.records: dict[str, RefreshTokenRecord] = {}
-
-    async def add(
-        self,
-        *,
-        user_id: UUID,
-        token_hash: str,
-        family_id: UUID,
-        expires_at: datetime,
-    ) -> None:
-        self.records[token_hash] = RefreshTokenRecord(
-            id=uuid4(),
-            user_id=user_id,
-            token_hash=token_hash,
-            family_id=family_id,
-            expires_at=expires_at,
-            revoked_at=None,
-        )
-
-    async def get_for_update(self, token_hash: str) -> RefreshTokenRecord | None:
-        return self.records.get(token_hash)
-
-    async def revoke(self, token_id: UUID, revoked_at: datetime) -> None:
-        for token_hash, record in list(self.records.items()):
-            if record.id == token_id:
-                self.records[token_hash] = replace(
-                    record,
-                    revoked_at=revoked_at,
-                )
-
-    async def revoke_family(self, family_id: UUID, revoked_at: datetime) -> None:
-        for token_hash, record in list(self.records.items()):
-            if record.family_id == family_id and record.revoked_at is None:
-                self.records[token_hash] = replace(
-                    record,
-                    revoked_at=revoked_at,
-                )
-
-
-class FakeRevokedTokenStore:
-    def __init__(self) -> None:
-        self.revoked: dict[str, int] = {}
-
-    async def revoke(self, jti: str, expires_at: int) -> None:
-        self.revoked[jti] = expires_at
-
-    async def is_revoked(self, jti: str) -> bool:
-        return jti in self.revoked
-
-
-class FakeUnitOfWork:
-    def __init__(self) -> None:
-        self.users = FakeUserRepository()
-        self.refresh_tokens = FakeRefreshTokenRepository()
-        self.commits = 0
-        self.rollbacks = 0
-
-    async def __aenter__(self) -> "FakeUnitOfWork":
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        tb: TracebackType | None,
-    ) -> None:
-        return None
-
-    async def commit(self) -> None:
-        self.commits += 1
-
-    async def rollback(self) -> None:
-        self.rollbacks += 1
 
 
 def _service() -> tuple[
@@ -192,6 +62,7 @@ async def test_login_creates_user_and_stores_only_refresh_hash() -> None:
     assert result.user.role is Role.USER
     assert result.user.preferred_locale == "pt-BR"
     assert result.user.timezone == "America/Sao_Paulo"
+    assert result.user.email_verified_at is not None
 
     claims = token_service.decode(result.access_token)
     assert claims.sub == result.user.id
@@ -224,6 +95,17 @@ async def test_login_updates_existing_profile_without_changing_role() -> None:
     assert result.user.id == admin.id
     assert result.user.email == "new@example.com"
     assert result.user.role is Role.ADMIN
+
+
+async def test_google_first_access_records_consents_and_event() -> None:
+    service, uow, _, _, _ = _service()
+
+    await service.login_with_google(_IDENTITY)
+
+    documents = sorted(entry.document.value for entry in uow.legal_consents.entries)
+    assert documents == ["privacy", "terms"]
+    assert all(entry.version == "1.1" for entry in uow.legal_consents.entries)
+    assert uow.auth_events.types() == ["google_signup"]
 
 
 async def test_refresh_rotates_token_in_same_family() -> None:
@@ -281,3 +163,43 @@ async def test_logout_revokes_family_and_jti() -> None:
     records = list(uow.refresh_tokens.records.values())
     assert all(record.revoked_at is not None for record in records)
     assert revoked.revoked[claims.jti] == claims.exp
+    assert "logout" in uow.auth_events.types()
+
+
+async def test_google_new_sub_with_unverified_local_email_is_blocked() -> None:
+    service, uow, _, _, _ = _service()
+    existing = await uow.users.create_password_user(
+        email="user@example.com",
+        name="User",
+        password_hash="$argon2id$placeholder",
+    )
+    assert existing.email_verified_at is None
+    uow.auth_events.events.clear()
+
+    from paysentineliq.application.errors import OAuthAuthenticationError
+
+    with pytest.raises(OAuthAuthenticationError):
+        await service.login_with_google(_IDENTITY)
+
+    stored = uow.users.users[existing.id]
+    assert stored.google_sub is None
+    assert "google_link_blocked" in uow.auth_events.types()
+
+
+async def test_google_links_verified_password_account() -> None:
+    service, uow, _, _, _ = _service()
+    verified_at = datetime(2026, 1, 1, tzinfo=UTC)
+    user = await uow.users.create_password_user(
+        email="user@example.com",
+        name="User",
+        password_hash="$argon2id$placeholder",
+    )
+    await uow.users.mark_email_verified(user.id, verified_at=verified_at)
+    uow.auth_events.events.clear()
+
+    result = await service.login_with_google(_IDENTITY)
+
+    assert result.user.id == user.id
+    assert result.user.google_sub == _IDENTITY.google_sub
+    assert "google_linked" in uow.auth_events.types()
+    assert len(uow.users.users) == 1
