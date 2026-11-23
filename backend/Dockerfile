@@ -11,8 +11,7 @@ ENV POETRY_VERSION=2.4.1 \
 WORKDIR /app
 RUN python -m pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 COPY pyproject.toml poetry.lock ./
-RUN --mount=type=cache,target=/root/.cache/pypoetry \
-    poetry install --only main --no-root --no-ansi
+RUN poetry install --only main --no-root --no-ansi
 COPY src ./src
 COPY alembic.ini ./
 COPY migrations ./migrations
