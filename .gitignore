@@ -44,3 +44,8 @@ Thumbs.db
 
 # Graphify: grafo gerado localmente (ver docs/adr/0003-artefato-graphify.md)
 graphify-out/
+
+# Saida do emissor de e-mail de desenvolvimento
+backend/var/
+var/auth-outbox/
+
