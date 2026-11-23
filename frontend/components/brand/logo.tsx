@@ -84,11 +84,32 @@ export function Logo({
   );
 }
 
+export type WordmarkSize = "default" | "large";
+
+const WORDMARK_SIZES: Record<
+  WordmarkSize,
+  { container: string; logo: string; logoSize: string; text: string }
+> = {
+  default: {
+    container: "gap-2.5",
+    logo: "h-7 w-auto",
+    logoSize: "28px",
+    text: "text-xl",
+  },
+  large: {
+    container: "gap-3.5",
+    logo: "h-11 w-auto",
+    logoSize: "44px",
+    text: "text-[2rem] leading-none",
+  },
+};
+
 export type WordmarkProps = {
   name: string;
   className?: string;
   variant?: Extract<LogoVariant, "compact" | "compactLight">;
   priority?: boolean;
+  size?: WordmarkSize;
 };
 
 export function Wordmark({
@@ -96,17 +117,20 @@ export function Wordmark({
   className,
   variant = "compact",
   priority = false,
+  size = "default",
 }: WordmarkProps) {
+  const sizing = WORDMARK_SIZES[size];
+
   return (
-    <span className={cn("inline-flex items-center gap-2.5", className)}>
+    <span className={cn("inline-flex items-center", sizing.container, className)}>
       <Logo
-        className="h-7 w-auto"
+        className={sizing.logo}
         variant={variant}
         title={name}
         priority={priority}
-        sizes="28px"
+        sizes={sizing.logoSize}
       />
-      <span aria-hidden="true" className="font-serif text-xl tracking-tight">
+      <span aria-hidden="true" className={cn("font-serif tracking-tight", sizing.text)}>
         {name}
       </span>
     </span>

@@ -28,6 +28,7 @@ test.describe("session lifecycle against the real backend", () => {
 
   test("OIDC start goes to Google through the backend", async ({ page }) => {
     await page.goto("/login");
+    await page.getByRole("checkbox").check();
 
     const [request] = await Promise.all([
       page.waitForRequest((req) => req.url().includes("/api/v1/auth/login")),

@@ -2,8 +2,9 @@
 
 ## Estado atual
 
-- Fase atual: F14 (correções da landing pública) concluída.
+- Fase atual: F15 (painel direito da tela de login) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
+- Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta ligadas ao Google OIDC real, aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS. Sem campos de e-mail e senha porque o backend não tem essas rotas; contrato proposto na seção 23 de `docs/BACKEND_GAPS.md`.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
 - Marca: símbolo oficial aplicado no header, sidebar, login, landing, carregamento, progresso, erro, vazio, rodapé e README. Originais em `assets/brand/originals/` e derivados em `public/brand/`.
 - Acessibilidade: matriz axe em 16 rotas, 2 temas e 3 idiomas, com zero violações.
@@ -72,6 +73,25 @@ Resultados reais em 2026-11-17 (F12):
 - Botão "Cancelar análise" com diálogo de confirmação, estado "Cancelando...", retorno ao envio e tratamento de 409.
 - Fluxos de boleto, folha, Central de Verificação e recibo usam o mesmo painel; o dossiê de recibo também acompanha e cancela a análise.
 - Testes novos para progresso, parser SSE, fallback de polling e confirmação de cancelamento. 244 testes unitários verdes.
+
+## Feito em F15
+
+- Spec em `docs/specs/F15.md` e ADR em `docs/adr/0016-login-google-aceite.md`.
+- Diagnóstico: o backend só tem Google OIDC (Authlib) com JWT de sessão no BFF, e o modelo `users` não tem senha. Não existe cadastro, login, recuperação nem verificação por e-mail e senha, então nada disso foi renderizado e o contrato desejado ficou na seção 23 de `docs/BACKEND_GAPS.md`.
+- Painel esquerdo preservado. O logo passou de 28 px para 44 px de ícone, com wordmark proporcional via prop `size` no `Wordmark`, usando os assets atuais sem recriar.
+- Botão "Voltar" em ghost com `ArrowLeft` e `ArrowUp` acima do logo no desktop e no topo do cabeçalho no mobile. Usa `router.back()` e cai em `/` com `router.replace` quando não há histórico, detectado pelo `history.length` e por um `popstate` em 500 ms.
+- Painel direito refeito: sem losango solto e sem repetição de título. Agora tem abas Entrar e Criar conta (`role=tablist`, setas, Home e End, estado em `?modo=cadastro`), título e subtítulo próprios por aba, checkbox de aceite com links reais para `/termos` e `/privacidade`, botão do Google com ícone oficial, estado de carregamento e `aria-busy`, rodapé de alternância e selo de confiança apenas em contexto HTTPS.
+- O botão do Google usa `aria-disabled` e continua focável, para anunciar o erro de aceite com `role="alert"`, `aria-invalid` e `aria-describedby` em vez de sumir do fluxo de teclado.
+- Logo oficial do Google em SVG local (`components/brand/google-icon.tsx`), sem requisição externa, compatível com a CSP.
+- Entrada do formulário e troca de aba com fade e translate por CSS, desligados em `prefers-reduced-motion`. Altura mínima de 28 rem no painel evita salto de layout.
+- i18n em pt, es e en para abas, títulos, subtítulos, aviso de primeiro acesso, rodapés, aceite, erro de aceite, voltar e selo.
+- Testes: `lib/auth/login-mode.test.ts` e `lib/session/back-navigation.test.ts` novos. `e2e/login.spec.ts` cresceu para 12 casos, incluindo axe nas duas abas e dois temas, bloqueio sem aceite, troca por clique e por seta com URL, ausência de campos de e-mail e senha e o botão de voltar.
+
+## Resultados reais em 2026-11-23 (F15)
+
+- `npx tsc --noEmit`, `npx eslint .`, `npx vitest run` (253 testes) e `npm run check:content`: verdes.
+- `e2e/login.spec.ts`: 12 testes verdes. `e2e/a11y-matrix.spec.ts`, `e2e/responsive.spec.ts` e `e2e/keyboard.spec.ts` para `/login`: verdes.
+- Verificação visual em 1440x900, 1440x740 e 390x844, nos temas claro e escuro, nas abas Entrar e Criar conta, sem erro de console e sem divergência de hidratação.
 
 ## Feito em F14
 
