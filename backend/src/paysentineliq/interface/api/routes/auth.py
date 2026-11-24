@@ -62,6 +62,7 @@ from paysentineliq.interface.api.dependencies import (
     get_oidc_state_store,
     get_optional_access_claims,
     require_password_auth,
+    require_password_email,
 )
 from paysentineliq.interface.api.problems import build_problem_response
 
@@ -362,13 +363,15 @@ async def auth_capabilities(
 ) -> JSONResponse:
     return JSONResponse(
         {
-            "password_enabled": settings.password_auth_enabled,
+            "password_enabled": settings.password_login_enabled,
+            "signup_enabled": settings.password_signup_enabled,
+            "password_reset_enabled": settings.password_reset_enabled,
             "google_enabled": settings.google_configured,
         }
     )
 
 
-@router.post("/register", status_code=202, dependencies=[Depends(require_password_auth)])
+@router.post("/register", status_code=202, dependencies=[Depends(require_password_email)])
 async def register(
     payload: RegisterRequest,
     background_tasks: BackgroundTasks,
@@ -452,7 +455,7 @@ async def verify_email(
 @router.post(
     "/resend-verification",
     status_code=202,
-    dependencies=[Depends(require_password_auth)],
+    dependencies=[Depends(require_password_email)],
 )
 async def resend_verification(
     payload: EmailRequest,
@@ -481,7 +484,7 @@ async def resend_verification(
 @router.post(
     "/forgot-password",
     status_code=202,
-    dependencies=[Depends(require_password_auth)],
+    dependencies=[Depends(require_password_email)],
 )
 async def forgot_password(
     payload: EmailRequest,
@@ -505,7 +508,7 @@ async def forgot_password(
 @router.post(
     "/reset-password",
     status_code=204,
-    dependencies=[Depends(require_password_auth)],
+    dependencies=[Depends(require_password_email)],
 )
 async def reset_password(
     payload: ResetPasswordRequest,

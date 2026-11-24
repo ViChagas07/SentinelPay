@@ -481,7 +481,14 @@ def get_auth_email_sender(request: Request) -> EmailPort:
 def require_password_auth(
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> None:
-    if not settings.password_auth_enabled:
+    if not settings.password_login_enabled:
+        raise AuthNotConfiguredError()
+
+
+def require_password_email(
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> None:
+    if not settings.password_signup_enabled:
         raise AuthNotConfiguredError()
 
 

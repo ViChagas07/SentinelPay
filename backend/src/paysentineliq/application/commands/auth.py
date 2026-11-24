@@ -204,7 +204,7 @@ class AuthService:
         password: str,
         context: AuthRequestContext | None = None,
     ) -> AuthEmail | None:
-        hasher, now = self._require_password_ready()
+        hasher, now = self._require_email_ready()
         ctx = _sanitize_context(context)
         normalized_email = normalize_email(email)
         violations = validate_password(
@@ -401,7 +401,7 @@ class AuthService:
         email: str,
         context: AuthRequestContext | None = None,
     ) -> AuthEmail | None:
-        _, now = self._require_password_ready()
+        _, now = self._require_email_ready()
         ctx = _sanitize_context(context)
         normalized_email = normalize_email(email)
         token = generate_auth_token()
@@ -441,7 +441,7 @@ class AuthService:
         email: str,
         context: AuthRequestContext | None = None,
     ) -> AuthEmail | None:
-        _, now = self._require_password_ready()
+        _, now = self._require_email_ready()
         ctx = _sanitize_context(context)
         normalized_email = normalize_email(email)
         token = generate_auth_token()
@@ -493,7 +493,7 @@ class AuthService:
         new_password: str,
         context: AuthRequestContext | None = None,
     ) -> AuthEmail | None:
-        hasher, now = self._require_password_ready()
+        hasher, now = self._require_email_ready()
         ctx = _sanitize_context(context)
 
         async with self._unit_of_work as uow:
@@ -656,6 +656,11 @@ class AuthService:
         )
 
     def _require_password_ready(self) -> tuple[PasswordHasher, datetime]:
+        if self._password_hasher is None:
+            raise AuthNotConfiguredError()
+        return self._password_hasher, self._clock()
+
+    def _require_email_ready(self) -> tuple[PasswordHasher, datetime]:
         if self._password_hasher is None or not self._public_base_url:
             raise AuthNotConfiguredError()
         return self._password_hasher, self._clock()

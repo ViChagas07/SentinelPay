@@ -189,16 +189,29 @@ async def test_capabilities_report_password_state() -> None:
     )
     disabled = await _get(disabled_app, "/api/v1/auth/capabilities")
 
-    assert enabled.json() == {"password_enabled": True, "google_enabled": False}
-    assert disabled.json() == {"password_enabled": False, "google_enabled": False}
+    assert enabled.json() == {
+        "password_enabled": True,
+        "signup_enabled": True,
+        "password_reset_enabled": True,
+        "google_enabled": False,
+    }
+    assert disabled.json() == {
+        "password_enabled": False,
+        "signup_enabled": False,
+        "password_reset_enabled": False,
+        "google_enabled": False,
+    }
 
 
-async def test_capabilities_without_email_provider_disables_password() -> None:
+async def test_capabilities_without_email_provider_keeps_login_only() -> None:
     app, _, _, _ = _app(settings=_settings(auth_email_provider="disabled"))
 
     response = await _get(app, "/api/v1/auth/capabilities")
 
-    assert response.json()["password_enabled"] is False
+    body = response.json()
+    assert body["password_enabled"] is True
+    assert body["signup_enabled"] is False
+    assert body["password_reset_enabled"] is False
 
 
 async def test_password_policy_exposes_server_rules() -> None:

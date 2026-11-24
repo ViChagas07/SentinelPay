@@ -114,7 +114,7 @@ class Settings(BaseSettings):
     frontend_url: str = ""
     cookie_domain: str = ""
     oidc_state_ttl_seconds: int = 600
-    auth_password_enabled: bool = False
+    auth_password_enabled: bool = True
     auth_email_provider: Literal["disabled", "development", "smtp"] = "disabled"
     auth_email_development_dir: str = "var/auth-outbox"
     auth_email_max_attempts: int = 3
@@ -253,8 +253,20 @@ class Settings(BaseSettings):
         return False
 
     @property
-    def password_auth_enabled(self) -> bool:
+    def password_login_enabled(self) -> bool:
+        return self.auth_password_enabled
+
+    @property
+    def password_signup_enabled(self) -> bool:
         return self.auth_password_enabled and self.auth_email_ready
+
+    @property
+    def password_reset_enabled(self) -> bool:
+        return self.password_signup_enabled
+
+    @property
+    def password_auth_enabled(self) -> bool:
+        return self.password_login_enabled
 
     @property
     def s3_configured(self) -> bool:
