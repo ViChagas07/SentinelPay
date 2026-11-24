@@ -10,10 +10,17 @@ export type FormFieldProps = {
   label: string;
   error?: string;
   hint?: string;
+  errorTone?: "default" | "danger";
   children: (ids: { inputId: string; describedBy: string | undefined }) => React.ReactNode;
 };
 
-export function FormField({ label, error, hint, children }: FormFieldProps) {
+export function FormField({
+  label,
+  error,
+  hint,
+  errorTone = "default",
+  children,
+}: FormFieldProps) {
   const inputId = useId();
   const errorId = `${inputId}-error`;
   const hintId = `${inputId}-hint`;
@@ -32,7 +39,10 @@ export function FormField({ label, error, hint, children }: FormFieldProps) {
         <p
           id={errorId}
           role="alert"
-          className="text-xs font-medium leading-relaxed text-foreground"
+          className={cn(
+            "text-xs font-medium leading-relaxed",
+            errorTone === "danger" ? "text-risk-high" : "text-foreground",
+          )}
         >
           {error}
         </p>
@@ -69,10 +79,12 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   );
 });
 
-export type PasswordFieldProps = Omit<TextFieldProps, "type">;
+export type PasswordFieldProps = Omit<TextFieldProps, "type"> & {
+  danger?: boolean;
+};
 
 export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
-  function PasswordField({ className, invalid, ...props }, ref) {
+  function PasswordField({ className, invalid, danger, ...props }, ref) {
     const { t } = useI18n();
     const [visible, setVisible] = useState(false);
 
@@ -87,6 +99,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
             "focus-visible:border-petrol-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             "disabled:cursor-not-allowed disabled:opacity-60",
             invalid && "border-foreground/50",
+            danger && "border-risk-high focus-visible:border-risk-high focus-visible:ring-risk-high",
             className,
           )}
           {...props}

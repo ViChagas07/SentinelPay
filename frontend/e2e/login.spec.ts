@@ -204,7 +204,23 @@ test("login keeps both tabs visible when email sign-up is unavailable", async ({
   await expect(page).toHaveURL(/modo=cadastro/);
   await expect(page.getByRole("heading", { level: 2, name: "Crie sua conta" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Cadastrar com Google/ })).toBeVisible();
-  await expect(page.locator('input[type="password"]')).toHaveCount(0);
-  await expect(page.getByLabel("Nome completo")).toHaveCount(0);
-  await expect(page.getByLabel("Confirmar senha")).toHaveCount(0);
+  await expect(page.getByLabel("Nome completo")).toBeVisible();
+  await expect(page.getByLabel("E-mail")).toBeVisible();
+  await expect(page.getByLabel("Senha", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Confirmar senha")).toBeVisible();
+});
+
+test("sign-up flags the password mismatch after the typing stops", async ({ page }) => {
+  await page.goto("/login?modo=cadastro");
+
+  const password = page.getByLabel("Senha", { exact: true });
+  const confirm = page.getByLabel("Confirmar senha");
+
+  await password.fill("frase secreta longa");
+  await confirm.fill("frase secreta longa");
+  await expect(page.getByText(/não coincidem/i)).toHaveCount(0);
+
+  await confirm.fill("frase secreta long");
+  await expect(page.getByText(/não coincidem/i)).toBeVisible({ timeout: 3000 });
+  await expect(confirm).toHaveAttribute("aria-invalid", "true");
 });

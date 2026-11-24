@@ -23,6 +23,7 @@ import {
 } from "@/lib/auth/login-mode";
 import { resolveLoginVisibility } from "@/lib/auth/login-visibility";
 import { identifierFragments, passwordIssues } from "@/lib/auth/password";
+import { useDebouncedPasswordMatch } from "@/lib/auth/password-match";
 import { emailSchema } from "@/lib/auth/schemas";
 import type { TranslationKey } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/provider";
@@ -148,6 +149,7 @@ export function LoginView({
     requestedMode,
   });
   const copy = MODE_COPY[mode];
+  const passwordMatch = useDebouncedPasswordMatch(fields.password, fields.confirm);
   const next = isSafeNextPath(search.next) ? search.next : undefined;
   const errorKey =
     search.reason === "expired" ? loginErrorKey("session_expired") : loginErrorKey(search.code);
@@ -604,12 +606,6 @@ export function LoginView({
                   </p>
                 ) : null}
 
-                {tabsVisible && mode === "signup" && !signupEnabled ? (
-                  <p className="rounded-[6px] border border-border bg-surface-elevated p-3 text-xs leading-relaxed text-muted-foreground">
-                    {t("auth.login.signupEmailUnavailable")}
-                  </p>
-                ) : null}
-
                 {passwordFieldsVisible ? (
                   <>
                     <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
@@ -761,7 +757,12 @@ export function LoginView({
                     {mode === "signup" ? (
                       <FormField
                         label={t("auth.login.confirmPassword")}
-                        error={fieldErrors.confirm}
+                        error={
+                          passwordMatch === "mismatch"
+                            ? t("auth.login.validation.passwordMismatch")
+                            : fieldErrors.confirm
+                        }
+                        errorTone="danger"
                       >
                         {({ inputId, describedBy }) => (
                           <PasswordField
@@ -771,7 +772,8 @@ export function LoginView({
                             autoComplete="new-password"
                             value={fields.confirm}
                             disabled={pending}
-                            invalid={Boolean(fieldErrors.confirm)}
+                            invalid={Boolean(fieldErrors.confirm) || passwordMatch === "mismatch"}
+                            danger={passwordMatch === "mismatch"}
                             aria-describedby={describedBy}
                             onChange={(event) => {
                               const value = event.target.value;

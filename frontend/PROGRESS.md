@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Fase atual: F21 (abas de entrada e cadastro no login) concluída.
+- Fase atual: F22 (campos do cadastro e conferência de senha) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
 - Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta. A aba Entrar mostra e-mail, senha e botão primário sempre que `password_enabled` está ligado, sem exigir SMTP. A aba Criar conta, a verificação e a recuperação dependem de `signup_enabled`, que exige provedor de e-mail. Aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
@@ -59,6 +59,16 @@ Resultados reais em 2026-11-17 (F12):
 - Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada após reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem violações.
 - Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
+
+## Feito em F22
+
+- A aba "Criar conta" sempre exibe os quatro campos: Nome, E-mail, Senha e Repetir senha, além do botão "Cadastrar com Google". Antes, a ausência de `signup_enabled` escondia os campos e deixava só o Google.
+- Conferência de senha por debounce: `lib/auth/password-match.ts` avalia o par depois de 350 ms sem digitação, com `evaluatePasswordMatch` puro e `useDebouncedPasswordMatch` para o componente.
+- Divergência sinalizada em vermelho: borda e anel do campo com `border-risk-high`, mensagem "As senhas não coincidem." em `text-risk-high` e `aria-invalid` verdadeiro. Igualdade volta ao normal sem esperar o debounce.
+- `FormField` ganhou `errorTone` e `PasswordField` ganhou `danger`, reutilizáveis em qualquer formulário de senha.
+- A lógica de visibilidade (`lib/auth/login-visibility.ts`) deixou de esconder os campos sem `signup_enabled`; o aviso textual que bloqueava a leitura do formulário foi removido.
+- Testes: `lib/auth/password-match.test.ts` com 7 casos e e2e de divergência por debounce em `e2e/login.spec.ts`.
+- Verificação: 313 testes unitários, 28 e2e de autenticação verdes, lint, typecheck, `check:content` e build limpos. Confirmado visualmente em 1440x1000 no tema escuro.
 
 ## Feito em F21
 

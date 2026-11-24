@@ -34,6 +34,6 @@ export function resolveLoginVisibility({
     availableModes,
     mode,
     emailSignupAvailable,
-    passwordFieldsVisible: formsEnabled && (mode === "signin" || emailSignupAvailable),
+    passwordFieldsVisible: formsEnabled,
   };
 }

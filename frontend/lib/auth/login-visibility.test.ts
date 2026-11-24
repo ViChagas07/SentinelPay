@@ -28,7 +28,7 @@ describe("resolveLoginVisibility", () => {
     expect(result.tabsVisible).toBe(true);
     expect(result.mode).toBe("signup");
     expect(result.emailSignupAvailable).toBe(false);
-    expect(result.passwordFieldsVisible).toBe(false);
+    expect(result.passwordFieldsVisible).toBe(true);
   });
 
   it("shows the sign-in fields on the sign-in tab without email sign-up", () => {
