@@ -233,6 +233,8 @@ export const pt = {
   "auth.login.signinPrompt": "Já tem uma conta?",
   "auth.login.acceptPrefix": "Li e aceito os",
   "auth.login.acceptError": "Marque o aceite dos termos para continuar.",
+  "auth.login.acceptToUnlock":
+    "Marque o aceite dos termos para preencher os campos.",
   "auth.login.back": "Voltar",
   "auth.login.trustSeal": "Conexão segura. Seus documentos são processados com criptografia.",
   "auth.login.terms": "Termos de uso",

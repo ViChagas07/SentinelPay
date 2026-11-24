@@ -236,6 +236,7 @@ export const en = {
   "auth.login.signinPrompt": "Already have an account?",
   "auth.login.acceptPrefix": "I have read and accept the",
   "auth.login.acceptError": "Accept the terms to continue.",
+  "auth.login.acceptToUnlock": "Accept the terms to fill in the fields.",
   "auth.login.back": "Back",
   "auth.login.trustSeal": "Secure connection. Your documents are processed with encryption.",
   "auth.login.terms": "Terms of use",

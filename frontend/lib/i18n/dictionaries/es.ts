@@ -240,6 +240,7 @@ export const es = {
   "auth.login.signinPrompt": "¿Ya tienes una cuenta?",
   "auth.login.acceptPrefix": "Leí y acepto los",
   "auth.login.acceptError": "Acepta los términos para continuar.",
+  "auth.login.acceptToUnlock": "Acepta los términos para rellenar los campos.",
   "auth.login.back": "Volver",
   "auth.login.trustSeal": "Conexión segura. Tus documentos se procesan con cifrado.",
   "auth.login.terms": "Términos de uso",

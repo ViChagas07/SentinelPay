@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Fase atual: F22 (campos do cadastro e conferência de senha) concluída.
+- Fase atual: F23 (campos bloqueados até o aceite) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
 - Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta. A aba Entrar mostra e-mail, senha e botão primário sempre que `password_enabled` está ligado, sem exigir SMTP. A aba Criar conta, a verificação e a recuperação dependem de `signup_enabled`, que exige provedor de e-mail. Aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
@@ -59,6 +59,15 @@ Resultados reais em 2026-11-17 (F12):
 - Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada após reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem violações.
 - Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
+
+## Feito em F23
+
+- Os campos de Nome, E-mail, Senha e Repetir senha, nas abas Entrar e Criar conta, ficam desabilitados até o aceite de Termos e Privacidade e são liberados no mesmo instante em que a caixa é marcada. O botão de enviar também só funciona depois do aceite.
+- `fieldsLocked` deriva de `accepted` e entra no `disabled` de cada campo, junto de `pending`, sem lógica duplicada.
+- Enquanto a caixa está desmarcada, um texto curto explica o bloqueio (`auth.login.acceptToUnlock`, nos três idiomas), e o aceite continua sendo validado no envio com foco no checkbox.
+- A validação de aceite foi consolidada no início de `submitPasswordForm`, cobrindo entrada e cadastro, e o bloco redundante do modo de cadastro foi removido.
+- Testes: `e2e/login.spec.ts` verifica os quatro campos desabilitados antes do aceite e habilitados depois. Os e2e de autenticação passaram a marcar a caixa antes de preencher.
+- Verificação: 313 testes unitários, 28 e2e de autenticação, lint, typecheck, `check:content` e build verdes. Confirmado no build de produção que `disabled` vale antes do aceite e é removido depois, com o texto de orientação desaparecendo.
 
 ## Feito em F22
 

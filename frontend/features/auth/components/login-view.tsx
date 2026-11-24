@@ -150,6 +150,7 @@ export function LoginView({
   });
   const copy = MODE_COPY[mode];
   const passwordMatch = useDebouncedPasswordMatch(fields.password, fields.confirm);
+  const fieldsLocked = !accepted;
   const next = isSafeNextPath(search.next) ? search.next : undefined;
   const errorKey =
     search.reason === "expired" ? loginErrorKey("session_expired") : loginErrorKey(search.code);
@@ -266,6 +267,12 @@ export function LoginView({
       return;
     }
 
+    if (!accepted) {
+      setAcceptError(true);
+      acceptRef.current?.focus();
+      return;
+    }
+
     const errors: FieldErrors = {};
     const emailError = validateEmail(fields.email);
     const passwordError = validatePasswordField(fields.password);
@@ -288,10 +295,6 @@ export function LoginView({
       if (confirmError) {
         errors.confirm = confirmError;
       }
-
-      if (!accepted) {
-        setAcceptError(true);
-      }
     }
 
     setTouched({ email: true, password: true, name: true, confirm: true });
@@ -308,11 +311,6 @@ export function LoginView({
         confirmRef.current?.focus();
       }
 
-      return;
-    }
-
-    if (mode === "signup" && !accepted) {
-      acceptRef.current?.focus();
       return;
     }
 
@@ -583,6 +581,10 @@ export function LoginView({
                   >
                     {t("auth.login.acceptError")}
                   </p>
+                ) : fieldsLocked ? (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t("auth.login.acceptToUnlock")}
+                  </p>
                 ) : null}
 
                 <Button
@@ -624,7 +626,7 @@ export function LoginView({
                             type="text"
                             autoComplete="name"
                             value={fields.name}
-                            disabled={pending}
+                            disabled={pending || fieldsLocked}
                             invalid={Boolean(fieldErrors.name)}
                             aria-describedby={describedBy}
                             onChange={(event) => {
@@ -667,7 +669,7 @@ export function LoginView({
                           autoComplete="email"
                           placeholder={t("auth.login.emailPlaceholder")}
                           value={fields.email}
-                          disabled={pending}
+                          disabled={pending || fieldsLocked}
                           invalid={Boolean(fieldErrors.email)}
                           aria-describedby={describedBy}
                           onChange={(event) => {
@@ -702,7 +704,7 @@ export function LoginView({
                           name="password"
                           autoComplete={mode === "signup" ? "new-password" : "current-password"}
                           value={fields.password}
-                          disabled={pending}
+                          disabled={pending || fieldsLocked}
                           invalid={Boolean(fieldErrors.password)}
                           aria-describedby={describedBy}
                           onChange={(event) => {
@@ -771,7 +773,7 @@ export function LoginView({
                             name="confirm-password"
                             autoComplete="new-password"
                             value={fields.confirm}
-                            disabled={pending}
+                            disabled={pending || fieldsLocked}
                             invalid={Boolean(fieldErrors.confirm) || passwordMatch === "mismatch"}
                             danger={passwordMatch === "mismatch"}
                             aria-describedby={describedBy}

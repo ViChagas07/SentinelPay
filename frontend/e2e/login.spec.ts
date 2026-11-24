@@ -106,6 +106,7 @@ test("login renders the password form when the backend enables it", async ({ pag
 
 test("sign-up validates the password confirmation and the policy", async ({ page }) => {
   await page.goto("/login?modo=cadastro");
+  await page.getByRole("checkbox").check();
 
   const password = page.getByLabel("Senha", { exact: true });
   const confirm = page.getByLabel("Confirmar senha");
@@ -125,10 +126,10 @@ test("sign-up validates the password confirmation and the policy", async ({ page
 test("sign-up requires the terms before submitting", async ({ page }) => {
   await page.goto("/login?modo=cadastro");
 
-  await page.getByLabel("Nome completo").fill("Pessoa Exemplo");
-  await page.getByLabel("E-mail").fill("pessoa@example.com");
-  await page.getByLabel("Senha", { exact: true }).fill("frase secreta longa");
-  await page.getByLabel("Confirmar senha").fill("frase secreta longa");
+  await expect(page.getByLabel("Nome completo")).toBeDisabled();
+  await expect(page.getByLabel("E-mail")).toBeDisabled();
+  await expect(page.getByLabel("Senha", { exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Confirmar senha")).toBeDisabled();
 
   const submit = page.getByRole("button", { name: /^Criar conta$/ });
   await submit.click();
@@ -137,6 +138,10 @@ test("sign-up requires the terms before submitting", async ({ page }) => {
 
   await page.getByRole("checkbox").check();
   await expect(page.locator("form p[role='alert']")).toHaveCount(0);
+  await expect(page.getByLabel("Nome completo")).toBeEnabled();
+  await expect(page.getByLabel("E-mail")).toBeEnabled();
+  await expect(page.getByLabel("Senha", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Confirmar senha")).toBeEnabled();
 });
 
 test("login back button leaves the login page", async ({ page }) => {
@@ -212,6 +217,7 @@ test("login keeps both tabs visible when email sign-up is unavailable", async ({
 
 test("sign-up flags the password mismatch after the typing stops", async ({ page }) => {
   await page.goto("/login?modo=cadastro");
+  await page.getByRole("checkbox").check();
 
   const password = page.getByLabel("Senha", { exact: true });
   const confirm = page.getByLabel("Confirmar senha");

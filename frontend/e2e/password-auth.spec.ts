@@ -8,9 +8,9 @@ test.describe("password sign in", () => {
     await installAuthBackend(page);
     await page.goto("/login");
 
+    await page.getByRole("checkbox").check();
     await page.getByLabel("E-mail").fill("pessoa@example.com");
     await page.getByLabel("Senha", { exact: true }).fill("frase secreta longa");
-    await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: /^Entrar$/ }).click();
 
     await expect(page).toHaveURL(/\/painel/, { timeout: 20_000 });
@@ -25,9 +25,9 @@ test.describe("password sign in", () => {
     });
     await page.goto("/login");
 
+    await page.getByRole("checkbox").check();
     await page.getByLabel("E-mail").fill("pessoa@example.com");
     await page.getByLabel("Senha", { exact: true }).fill("senha errada longa");
-    await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: /^Entrar$/ }).click();
 
     await expect(page.getByRole("alert").filter({ hasText: /incorretos/i })).toBeVisible();
@@ -43,9 +43,9 @@ test.describe("password sign in", () => {
     });
     await page.goto("/login");
 
+    await page.getByRole("checkbox").check();
     await page.getByLabel("E-mail").fill("pessoa@example.com");
     await page.getByLabel("Senha", { exact: true }).fill("frase secreta longa");
-    await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: /^Entrar$/ }).click();
 
     await expect(page).toHaveURL(/\/confirmar-email/, { timeout: 20_000 });
@@ -62,9 +62,9 @@ test.describe("password sign in", () => {
     });
     await page.goto("/login");
 
+    await page.getByRole("checkbox").check();
     await page.getByLabel("E-mail").fill("pessoa@example.com");
     await page.getByLabel("Senha", { exact: true }).fill("frase secreta longa");
-    await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: /^Entrar$/ }).click();
 
     const alert = page.getByRole("alert").filter({ hasText: /Muitas tentativas/i });
@@ -78,11 +78,11 @@ test.describe("password sign up", () => {
     await installAuthBackend(page);
     await page.goto("/login?modo=cadastro");
 
+    await page.getByRole("checkbox").check();
     await page.getByLabel("Nome completo").fill("Pessoa Exemplo");
     await page.getByLabel("E-mail").fill("pessoa@example.com");
     await page.getByLabel("Senha", { exact: true }).fill("frase secreta longa");
     await page.getByLabel("Confirmar senha").fill("frase secreta longa");
-    await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: /^Criar conta$/ }).click();
 
     await expect(page).toHaveURL(/\/confirmar-email\?email=/, { timeout: 20_000 });
