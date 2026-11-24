@@ -31,7 +31,14 @@ class _FakeSender:
 
 
 class FakeEmailAdapter(_FakeSender):
-    async def send(self, *, to: str, subject: str, body: str) -> None:
+    async def send(
+        self,
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
         self.calls.append({"to": to, "subject": subject, "body": body})
         if self.error is not None:
             raise self.error

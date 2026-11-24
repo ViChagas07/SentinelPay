@@ -118,9 +118,11 @@ def test_policy_rejects_over_max_length() -> None:
 
 def test_policy_payload_exposes_server_rules() -> None:
     payload = password_policy_payload(min_length=10, max_length=128, hibp_enabled=False)
+    requirements = payload["requirements"]
 
     assert payload["min_length"] == 10
     assert payload["max_length"] == 128
-    assert "not_common" in payload["requirements"]
+    assert isinstance(requirements, list)
+    assert "not_common" in requirements
     assert payload["hibp_enabled"] is False
     assert uuid4().version == 4

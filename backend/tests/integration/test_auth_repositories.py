@@ -35,6 +35,7 @@ async def test_user_and_refresh_repository_roundtrip() -> None:
                 assert user.preferred_locale == "pt-BR"
                 assert user.timezone == "America/Sao_Paulo"
 
+                assert user.google_sub is not None
                 fetched = await uow.users.get_by_google_sub(user.google_sub)
                 assert fetched == user
 
