@@ -30,12 +30,14 @@ export default async function LoginPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, SearchValue>> }>) {
   const params = await searchParams;
-  const { passwordEnabled, policy } = await loadLoginCapabilities();
+  const capabilities = await loadLoginCapabilities();
 
   return (
     <LoginView
-      passwordEnabled={passwordEnabled}
-      policy={policy}
+      passwordEnabled={capabilities.passwordEnabled}
+      signupEnabled={capabilities.signupEnabled}
+      passwordResetEnabled={capabilities.passwordResetEnabled}
+      policy={capabilities.policy}
       search={{
         next: readParam(params.next),
         reason: readParam(params.reason),

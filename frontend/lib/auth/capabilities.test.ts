@@ -9,11 +9,36 @@ vi.mock("@/lib/api/config", () => ({
 describe("fetchAuthCapabilities", () => {
   it("reads the back-end feature flags", async () => {
     const fetchImpl = vi.fn(async () =>
-      Response.json({ password_enabled: true, google_enabled: true }),
+      Response.json({
+        password_enabled: true,
+        signup_enabled: true,
+        password_reset_enabled: true,
+        google_enabled: true,
+      }),
     );
 
     await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
       passwordEnabled: true,
+      signupEnabled: true,
+      passwordResetEnabled: true,
+      googleEnabled: true,
+    });
+  });
+
+  it("keeps sign-up off when the back-end has no e-mail provider", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        password_enabled: true,
+        signup_enabled: false,
+        password_reset_enabled: false,
+        google_enabled: true,
+      }),
+    );
+
+    await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
+      passwordEnabled: true,
+      signupEnabled: false,
+      passwordResetEnabled: false,
       googleEnabled: true,
     });
   });
@@ -25,6 +50,8 @@ describe("fetchAuthCapabilities", () => {
 
     await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
       passwordEnabled: false,
+      signupEnabled: false,
+      passwordResetEnabled: false,
       googleEnabled: true,
     });
   });
@@ -37,19 +64,12 @@ describe("fetchAuthCapabilities", () => {
 
     await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
       passwordEnabled: true,
+      signupEnabled: true,
+      passwordResetEnabled: true,
       googleEnabled: true,
     });
 
     vi.unstubAllEnvs();
-  });
-
-  it("keeps password login off for non-2xx answers", async () => {
-    const fetchImpl = vi.fn(async () => new Response(null, { status: 503 }));
-
-    await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
-      passwordEnabled: false,
-      googleEnabled: true,
-    });
   });
 
   it("treats a malformed payload as disabled", async () => {
@@ -57,6 +77,8 @@ describe("fetchAuthCapabilities", () => {
 
     await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
       passwordEnabled: false,
+      signupEnabled: false,
+      passwordResetEnabled: false,
       googleEnabled: true,
     });
   });

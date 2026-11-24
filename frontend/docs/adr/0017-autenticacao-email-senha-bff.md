@@ -12,8 +12,9 @@ configurado. O front precisa esconder a interface sem simular sucesso e sem expo
 ## Decisão
 
 1. A tela consulta `GET /api/v1/auth/capabilities` no servidor Next e recebe
-   `{ password_enabled, google_enabled }`. Falha de rede ou resposta inválida resulta em
-   `password_enabled: false` e Google habilitado, então o login atual continua funcionando.
+   `{ password_enabled, signup_enabled, password_reset_enabled, google_enabled }`. O login por senha
+   depende só de `password_enabled`; cadastro e recuperação dependem do provedor de e-mail. Falha de
+   rede ou resposta inválida desliga tudo e mantém o Google, então o login atual continua funcionando.
 2. Todos os fluxos novos passam pelo BFF. O BFF valida a origem, encaminha apenas cabeçalhos
    necessários, aplica os cookies HttpOnly existentes e nunca devolve tokens ao navegador.
 3. O login por senha reaproveita o mesmo mecanismo de sessão do Google: access em cookie

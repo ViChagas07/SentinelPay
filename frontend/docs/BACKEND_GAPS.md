@@ -406,7 +406,7 @@ Contratos agora atendidos pelo backend (prefixo `/api/v1/auth`):
 
 | Rota | Método | Payload | Resposta | Status |
 | --- | --- | --- | --- | --- |
-| `/auth/capabilities` | GET | nenhum | `{ password_enabled, google_enabled }` | atendido |
+| `/auth/capabilities` | GET | nenhum | `{ password_enabled, signup_enabled, password_reset_enabled, google_enabled }` | atendido |
 | `/auth/password-policy` | GET | nenhum | `{ min_length, max_length, requirements, hibp_enabled }` | atendido |
 | `/auth/register` | POST | `{ nome_completo, email, senha, aceite_termos, aceite_privacidade }` | 202 neutro e e-mail de verificação; 503 quando a flag está desligada | atendido |
 | `/auth/login` | POST | `{ email, senha }` | 200 com o mesmo par de cookies do OIDC; 401 genérico; 403 `email_not_verified`; 429 com `Retry-After` | atendido |
@@ -424,7 +424,7 @@ nunca devolve tokens ao JavaScript.
 | Necessidade | Hoje | O que falta | Prioridade |
 | --- | --- | --- | --- |
 | Provedor de e-mail e domínio remetente | O código tem a porta `EmailSender`, um emissor de desenvolvimento que grava em `var/auth-outbox` e um adaptador SMTP genérico por variáveis de ambiente. | Contratar o provedor ou apontar o SMTP para um domínio remetente verificado, com SPF, DKIM e DMARC, e trocar `AUTH_EMAIL_PROVIDER` para `smtp` em produção. | P1 |
-| Cadastro habilitado em produção | `AUTH_PASSWORD_ENABLED` está desligada por padrão e o endpoint de capacidades já esconde o formulário quando ela está fora. | Decidir quando ligar a flag e manter o SMTP pronto antes disso. | P1 |
+| Cadastro habilitado em produção | `AUTH_PASSWORD_ENABLED` está ligada por padrão e habilita o login por senha. O cadastro só aparece com SMTP pronto, porque `signup_enabled` exige provedor de e-mail. | Configurar SMTP e `APP_BASE_URL` reais antes de divulgar o cadastro. | P1 |
 | Captcha anti-bot | `CAPTCHA_ENABLED` existe e está desligada. Nenhum provedor foi contratado. | Escolher o provedor, implementar a verificação no backend e só então ligar a flag e renderizar o widget. | P2 |
 | Política de vinculação Google e senha | Implementada: vincula apenas conta com e-mail verificado e `email_verified=true` do Google; caso contrário, bloqueia e registra o evento. | Revisão jurídica e de produto da política registrada no ADR 0029. | P2 |
 | Retenção de `auth_events` | Sem prazo automático de expurgo. A exclusão de conta mantém o evento com `user_id` nulo. | Definir o prazo de guarda dos registros de segurança e agendar a rotina de expurgo no worker. | P2 |

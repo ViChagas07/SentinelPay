@@ -2,13 +2,24 @@ import { buildBackendUrl } from "@/lib/api/config";
 
 export type AuthCapabilities = {
   passwordEnabled: boolean;
+  signupEnabled: boolean;
+  passwordResetEnabled: boolean;
   googleEnabled: boolean;
 };
 
-const DISABLED: AuthCapabilities = { passwordEnabled: false, googleEnabled: true };
+const DISABLED: AuthCapabilities = {
+  passwordEnabled: false,
+  signupEnabled: false,
+  passwordResetEnabled: false,
+  googleEnabled: true,
+};
 
 function envPasswordEnabled(): boolean {
   return process.env.AUTH_PASSWORD_ENABLED === "true";
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
 }
 
 export async function fetchAuthCapabilities(
@@ -26,15 +37,27 @@ export async function fetchAuthCapabilities(
 
     const payload = (await response.json()) as {
       password_enabled?: unknown;
+      signup_enabled?: unknown;
+      password_reset_enabled?: unknown;
       google_enabled?: unknown;
     };
+    const passwordEnabled = readBoolean(payload.password_enabled, envPasswordEnabled());
 
     return {
-      passwordEnabled: payload.password_enabled === true,
+      passwordEnabled,
+      signupEnabled: readBoolean(payload.signup_enabled, passwordEnabled),
+      passwordResetEnabled: readBoolean(payload.password_reset_enabled, passwordEnabled),
       googleEnabled: payload.google_enabled !== false,
     };
   } catch {
-    return { ...DISABLED, passwordEnabled: envPasswordEnabled() };
+    const passwordEnabled = envPasswordEnabled();
+
+    return {
+      passwordEnabled,
+      signupEnabled: passwordEnabled,
+      passwordResetEnabled: passwordEnabled,
+      googleEnabled: true,
+    };
   }
 }
 

@@ -39,22 +39,21 @@ test("login shows the form heading without repeating the panel title", async ({ 
   await expect(page.getByRole("heading", { level: 2, name: /cada sinal/i })).toHaveCount(0);
 });
 
-test("login keeps Google blocked until the terms are accepted", async ({ page }) => {
+test("login requires the terms before starting Google sign-in", async ({ page }) => {
   await page.goto("/login");
 
   const google = page.getByRole("button", { name: /Continuar com Google/ });
-  await expect(google).toHaveAttribute("aria-disabled", "true");
-
-  await google.click({ force: true });
+  await google.click();
 
   const alert = page.locator("form p[role='alert']");
   await expect(alert).toContainText(/aceite/i);
   await expect(page.getByRole("checkbox")).toHaveAttribute("aria-invalid", "true");
   await expect(page.getByRole("checkbox")).toBeFocused();
+  await expect(page).toHaveURL(/\/login/);
 
   await page.getByRole("checkbox").check();
-  await expect(google).toHaveAttribute("aria-disabled", "false");
   await expect(alert).toHaveCount(0);
+  await expect(page.getByRole("checkbox")).not.toHaveAttribute("aria-invalid", "true");
 });
 
 test("login tabs switch with the URL and keep the terms acceptance", async ({ page }) => {
@@ -71,10 +70,7 @@ test("login tabs switch with the URL and keep the terms acceptance", async ({ pa
   await expect(signup).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("heading", { level: 2, name: "Crie sua conta" })).toBeVisible();
   await expect(page.getByRole("checkbox")).toBeChecked();
-  await expect(page.getByRole("button", { name: /Cadastrar com Google/ })).toHaveAttribute(
-    "aria-disabled",
-    "false",
-  );
+  await expect(page.getByRole("button", { name: /Cadastrar com Google/ })).toBeEnabled();
 
   await page.getByRole("button", { name: "Entrar", exact: true }).last().click();
   await expect(page).not.toHaveURL(/modo=cadastro/);
@@ -135,11 +131,12 @@ test("sign-up requires the terms before submitting", async ({ page }) => {
   await page.getByLabel("Confirmar senha").fill("frase secreta longa");
 
   const submit = page.getByRole("button", { name: /^Criar conta$/ });
-  await expect(submit).toHaveAttribute("aria-disabled", "true");
-
-  await submit.click({ force: true });
+  await submit.click();
   await expect(page.locator("form p[role='alert']")).toContainText(/aceite/i);
   await expect(page).toHaveURL(/login/);
+
+  await page.getByRole("checkbox").check();
+  await expect(page.locator("form p[role='alert']")).toHaveCount(0);
 });
 
 test("login back button leaves the login page", async ({ page }) => {
@@ -147,7 +144,10 @@ test("login back button leaves the login page", async ({ page }) => {
   await page.goto("/login");
   await expect(page).toHaveURL(/\/login/);
 
-  await page.getByRole("button", { name: /^Voltar$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^Voltar$/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/$/);
 });
 

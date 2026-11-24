@@ -3,7 +3,7 @@
 import { LoaderCircle, Lock } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { GoogleIcon } from "@/components/brand/google-icon";
 import { Wordmark } from "@/components/brand/logo";
@@ -41,6 +41,8 @@ export type LoginSearchParams = {
 export type LoginViewProps = {
   search: LoginSearchParams;
   passwordEnabled: boolean;
+  signupEnabled: boolean;
+  passwordResetEnabled: boolean;
   policy: PasswordPolicy | null;
 };
 
@@ -95,7 +97,13 @@ type GeneralError = {
   code: string;
 };
 
-export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginViewProps>) {
+export function LoginView({
+  search,
+  passwordEnabled,
+  signupEnabled,
+  passwordResetEnabled,
+  policy,
+}: Readonly<LoginViewProps>) {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
@@ -126,47 +134,46 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
   const confirmRef = useRef<HTMLInputElement | null>(null);
   const tabRefs = useRef<Partial<Record<LoginMode, HTMLButtonElement | null>>>({});
   const termsErrorId = useId();
-  const mode = parseLoginMode(searchParams.get("modo") ?? search.modo);
+  const formsEnabled = passwordEnabled && policy !== null;
+  const availableModes: readonly LoginMode[] = signupEnabled ? LOGIN_MODES : (["signin"] as const);
+  const requestedMode = parseLoginMode(searchParams.get("modo") ?? search.modo);
+  const mode: LoginMode = availableModes.includes(requestedMode) ? requestedMode : "signin";
   const copy = MODE_COPY[mode];
   const next = isSafeNextPath(search.next) ? search.next : undefined;
   const errorKey =
     search.reason === "expired" ? loginErrorKey("session_expired") : loginErrorKey(search.code);
   const isDenied = search.reason === "forbidden";
-  const formsEnabled = passwordEnabled && policy !== null;
   const identifiers = identifierFragments(fields.email, fields.name);
 
-  const changeMode = useCallback(
-    (nextMode: LoginMode) => {
-      if (nextMode === mode) {
-        return;
-      }
+  function changeMode(nextMode: LoginMode) {
+    if (nextMode === mode) {
+      return;
+    }
 
-      setGeneralError(null);
-      setFieldErrors({});
-      setTouched({ email: false, password: false, name: false, confirm: false });
-      router.push(
-        buildLoginModeUrl(
-          { pathname, search: searchParams.toString(), hash: window.location.hash },
-          nextMode,
-        ),
-        { scroll: false },
-      );
-    },
-    [mode, pathname, router, searchParams],
-  );
+    setGeneralError(null);
+    setFieldErrors({});
+    setTouched({ email: false, password: false, name: false, confirm: false });
+    router.push(
+      buildLoginModeUrl(
+        { pathname, search: searchParams.toString(), hash: window.location.hash },
+        nextMode,
+      ),
+      { scroll: false },
+    );
+  }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    const index = LOGIN_MODES.indexOf(mode);
+    const index = availableModes.indexOf(mode);
     let nextIndex: number | null = null;
 
     if (event.key === "ArrowRight") {
-      nextIndex = (index + 1) % LOGIN_MODES.length;
+      nextIndex = (index + 1) % availableModes.length;
     } else if (event.key === "ArrowLeft") {
-      nextIndex = (index - 1 + LOGIN_MODES.length) % LOGIN_MODES.length;
+      nextIndex = (index - 1 + availableModes.length) % availableModes.length;
     } else if (event.key === "Home") {
       nextIndex = 0;
     } else if (event.key === "End") {
-      nextIndex = LOGIN_MODES.length - 1;
+      nextIndex = availableModes.length - 1;
     }
 
     if (nextIndex === null) {
@@ -174,7 +181,7 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
     }
 
     event.preventDefault();
-    const nextMode = LOGIN_MODES[nextIndex];
+    const nextMode = availableModes[nextIndex];
 
     if (!nextMode) {
       return;
@@ -434,14 +441,14 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
               </div>
             ) : null}
 
-            {formsEnabled ? (
+            {formsEnabled && signupEnabled ? (
               <div
                 role="tablist"
                 aria-label={t("auth.login.tabsLabel")}
                 onKeyDown={handleTabKeyDown}
                 className="mb-8 grid grid-cols-2 gap-1 rounded-[6px] border border-border bg-surface p-1"
               >
-                {LOGIN_MODES.map((tabMode) => {
+                {availableModes.map((tabMode) => {
                   const selected = tabMode === mode;
 
                   return (
@@ -472,9 +479,9 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
             ) : null}
 
             <div
-              role={formsEnabled ? "tabpanel" : undefined}
-              id={formsEnabled ? "login-panel" : undefined}
-              aria-labelledby={formsEnabled ? `login-tab-${mode}` : undefined}
+              role={formsEnabled && signupEnabled ? "tabpanel" : undefined}
+              id={formsEnabled && signupEnabled ? "login-panel" : undefined}
+              aria-labelledby={formsEnabled && signupEnabled ? `login-tab-${mode}` : undefined}
               className="min-h-[28rem]"
             >
               <h2 className="font-serif text-4xl leading-tight tracking-tight">{t(copy.title)}</h2>
@@ -510,185 +517,6 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
                   void submitPasswordForm();
                 }}
               >
-                {formsEnabled && mode === "signup" ? (
-                  <div className="mb-4">
-                    <FormField label={t("auth.login.fullName")} error={fieldErrors.name}>
-                      {({ inputId, describedBy }) => (
-                        <TextField
-                          ref={nameRef}
-                          id={inputId}
-                          name="name"
-                          type="text"
-                          autoComplete="name"
-                          value={fields.name}
-                          disabled={pending}
-                          invalid={Boolean(fieldErrors.name)}
-                          aria-describedby={describedBy}
-                          onChange={(event) => {
-                            setFields((current) => ({ ...current, name: event.target.value }));
-
-                            if (touched.name) {
-                              setFieldErrors((current) => ({
-                                ...current,
-                                name: event.target.value.trim()
-                                  ? undefined
-                                  : t("auth.login.validation.nameRequired"),
-                              }));
-                            }
-                          }}
-                          onBlur={() => {
-                            setTouched((current) => ({ ...current, name: true }));
-                            setFieldErrors((current) => ({
-                              ...current,
-                              name: fields.name.trim()
-                                ? undefined
-                                : t("auth.login.validation.nameRequired"),
-                            }));
-                          }}
-                        />
-                      )}
-                    </FormField>
-                  </div>
-                ) : null}
-
-                {formsEnabled ? (
-                  <>
-                    <div className="mb-4">
-                      <FormField label={t("auth.login.email")} error={fieldErrors.email}>
-                        {({ inputId, describedBy }) => (
-                          <TextField
-                            ref={emailRef}
-                            id={inputId}
-                            name="email"
-                            type="email"
-                            inputMode="email"
-                            autoComplete="email"
-                            placeholder={t("auth.login.emailPlaceholder")}
-                            value={fields.email}
-                            disabled={pending}
-                            invalid={Boolean(fieldErrors.email)}
-                            aria-describedby={describedBy}
-                            onChange={(event) => {
-                              setFields((current) => ({
-                                ...current,
-                                email: event.target.value,
-                              }));
-
-                              if (touched.email) {
-                                setFieldErrors((current) => ({
-                                  ...current,
-                                  email: validateEmail(event.target.value),
-                                }));
-                              }
-                            }}
-                            onBlur={() => {
-                              setTouched((current) => ({ ...current, email: true }));
-                              setFieldErrors((current) => ({
-                                ...current,
-                                email: validateEmail(fields.email),
-                              }));
-                            }}
-                          />
-                        )}
-                      </FormField>
-                    </div>
-
-                    <div className="mb-1">
-                      <FormField label={t("auth.login.password")} error={fieldErrors.password}>
-                        {({ inputId, describedBy }) => (
-                          <PasswordField
-                            ref={passwordRef}
-                            id={inputId}
-                            name="password"
-                            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                            value={fields.password}
-                            disabled={pending}
-                            invalid={Boolean(fieldErrors.password)}
-                            aria-describedby={describedBy}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setFields((current) => ({ ...current, password: value }));
-
-                              if (touched.password) {
-                                setFieldErrors((current) => ({
-                                  ...current,
-                                  password: validatePasswordField(value),
-                                }));
-                              }
-
-                              if (touched.confirm && fields.confirm) {
-                                syncConfirmError(fields.confirm, value);
-                              }
-                            }}
-                            onBlur={() => {
-                              setTouched((current) => ({ ...current, password: true }));
-                              setFieldErrors((current) => ({
-                                ...current,
-                                password: validatePasswordField(fields.password),
-                              }));
-                            }}
-                          />
-                        )}
-                      </FormField>
-                    </div>
-
-                    {mode === "signin" ? (
-                      <div className="mb-5 flex justify-end">
-                        <Link
-                          href="/esqueci-senha"
-                          className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline decoration-border underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground"
-                        >
-                          {t("auth.login.forgotPassword")}
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="mb-5 mt-2">
-                        {policy ? (
-                          <PasswordStrengthMeter
-                            value={fields.password}
-                            policy={policy}
-                            identifiers={identifiers}
-                          />
-                        ) : null}
-                      </div>
-                    )}
-
-                    {mode === "signup" ? (
-                      <div className="mb-5">
-                        <FormField
-                          label={t("auth.login.confirmPassword")}
-                          error={fieldErrors.confirm}
-                        >
-                          {({ inputId, describedBy }) => (
-                            <PasswordField
-                              ref={confirmRef}
-                              id={inputId}
-                              name="confirm-password"
-                              autoComplete="new-password"
-                              value={fields.confirm}
-                              disabled={pending}
-                              invalid={Boolean(fieldErrors.confirm)}
-                              aria-describedby={describedBy}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setFields((current) => ({ ...current, confirm: value }));
-                                syncConfirmError(value, fields.password);
-                              }}
-                              onBlur={() => {
-                                setTouched((current) => ({ ...current, confirm: true }));
-                                setFieldErrors((current) => ({
-                                  ...current,
-                                  confirm: validateConfirm(fields.confirm),
-                                }));
-                              }}
-                            />
-                          )}
-                        </FormField>
-                      </div>
-                    ) : null}
-                  </>
-                ) : null}
-
                 <div className="flex items-start gap-3">
                   <input
                     ref={acceptRef}
@@ -736,34 +564,9 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
                   <p
                     id={termsErrorId}
                     role="alert"
-                    className="mt-2 text-sm font-medium leading-relaxed text-foreground"
+                    className="text-sm font-medium leading-relaxed text-foreground"
                   >
                     {t("auth.login.acceptError")}
-                  </p>
-                ) : null}
-
-                {formsEnabled ? (
-                  <Button
-                    type="submit"
-                    size="lg"
-                    aria-disabled={!accepted || pending}
-                    aria-busy={pending}
-                    className={cn(
-                      "mt-5 h-12 w-full gap-2 bg-petrol-base text-on-petrol transition-[background-color,opacity] hover:bg-petrol-base/90 active:translate-y-px",
-                      (!accepted || pending) &&
-                        "cursor-not-allowed opacity-60 hover:bg-petrol-base",
-                    )}
-                  >
-                    {pending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}
-                    {pending ? t(copy.submitting) : t(copy.submit)}
-                  </Button>
-                ) : null}
-
-                {formsEnabled ? (
-                  <p className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="h-px flex-1 bg-border" aria-hidden="true" />
-                    {t("auth.login.or")}
-                    <span className="h-px flex-1 bg-border" aria-hidden="true" />
                   </p>
                 ) : null}
 
@@ -771,14 +574,9 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
                   type="button"
                   size="lg"
                   variant="outline"
-                  aria-disabled={!accepted || googlePending}
                   aria-busy={googlePending}
                   onClick={startGoogleLogin}
-                  className={cn(
-                    "mt-4 h-12 w-full gap-3 border-border bg-surface text-foreground transition-[background-color,border-color] hover:bg-surface-elevated active:translate-y-px [&_svg]:size-5",
-                    (!accepted || googlePending) &&
-                      "cursor-not-allowed opacity-70 hover:bg-surface",
-                  )}
+                  className="h-12 w-full gap-3 border-border bg-surface text-foreground transition-[background-color,border-color] hover:bg-surface-elevated active:translate-y-px [&_svg]:size-5"
                 >
                   {googlePending ? (
                     <LoaderCircle className="animate-spin" aria-hidden="true" />
@@ -789,13 +587,207 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
                 </Button>
 
                 {copy.googleHint ? (
-                  <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">
+                  <p className="text-center text-xs leading-relaxed text-muted-foreground">
                     {t(copy.googleHint)}
                   </p>
                 ) : null}
 
+                {formsEnabled ? (
+                  <>
+                    <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
+                      <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                      {t("auth.login.or")}
+                      <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                    </div>
+
+                    {mode === "signup" ? (
+                      <FormField label={t("auth.login.fullName")} error={fieldErrors.name}>
+                        {({ inputId, describedBy }) => (
+                          <TextField
+                            ref={nameRef}
+                            id={inputId}
+                            name="name"
+                            type="text"
+                            autoComplete="name"
+                            value={fields.name}
+                            disabled={pending}
+                            invalid={Boolean(fieldErrors.name)}
+                            aria-describedby={describedBy}
+                            onChange={(event) => {
+                              setFields((current) => ({
+                                ...current,
+                                name: event.target.value,
+                              }));
+
+                              if (touched.name) {
+                                setFieldErrors((current) => ({
+                                  ...current,
+                                  name: event.target.value.trim()
+                                    ? undefined
+                                    : t("auth.login.validation.nameRequired"),
+                                }));
+                              }
+                            }}
+                            onBlur={() => {
+                              setTouched((current) => ({ ...current, name: true }));
+                              setFieldErrors((current) => ({
+                                ...current,
+                                name: fields.name.trim()
+                                  ? undefined
+                                  : t("auth.login.validation.nameRequired"),
+                              }));
+                            }}
+                          />
+                        )}
+                      </FormField>
+                    ) : null}
+
+                    <FormField label={t("auth.login.email")} error={fieldErrors.email}>
+                      {({ inputId, describedBy }) => (
+                        <TextField
+                          ref={emailRef}
+                          id={inputId}
+                          name="email"
+                          type="email"
+                          inputMode="email"
+                          autoComplete="email"
+                          placeholder={t("auth.login.emailPlaceholder")}
+                          value={fields.email}
+                          disabled={pending}
+                          invalid={Boolean(fieldErrors.email)}
+                          aria-describedby={describedBy}
+                          onChange={(event) => {
+                            setFields((current) => ({
+                              ...current,
+                              email: event.target.value,
+                            }));
+
+                            if (touched.email) {
+                              setFieldErrors((current) => ({
+                                ...current,
+                                email: validateEmail(event.target.value),
+                              }));
+                            }
+                          }}
+                          onBlur={() => {
+                            setTouched((current) => ({ ...current, email: true }));
+                            setFieldErrors((current) => ({
+                              ...current,
+                              email: validateEmail(fields.email),
+                            }));
+                          }}
+                        />
+                      )}
+                    </FormField>
+
+                    <FormField label={t("auth.login.password")} error={fieldErrors.password}>
+                      {({ inputId, describedBy }) => (
+                        <PasswordField
+                          ref={passwordRef}
+                          id={inputId}
+                          name="password"
+                          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                          value={fields.password}
+                          disabled={pending}
+                          invalid={Boolean(fieldErrors.password)}
+                          aria-describedby={describedBy}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setFields((current) => ({ ...current, password: value }));
+
+                            if (touched.password) {
+                              setFieldErrors((current) => ({
+                                ...current,
+                                password: validatePasswordField(value),
+                              }));
+                            }
+
+                            if (touched.confirm && fields.confirm) {
+                              syncConfirmError(fields.confirm, value);
+                            }
+                          }}
+                          onBlur={() => {
+                            setTouched((current) => ({ ...current, password: true }));
+                            setFieldErrors((current) => ({
+                              ...current,
+                              password: validatePasswordField(fields.password),
+                            }));
+                          }}
+                        />
+                      )}
+                    </FormField>
+
+                    {mode === "signin" ? (
+                      <div className="-mt-1 flex justify-end">
+                        {passwordResetEnabled ? (
+                          <Link
+                            href="/esqueci-senha"
+                            className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline decoration-border underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground"
+                          >
+                            {t("auth.login.forgotPassword")}
+                          </Link>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="-mt-1">
+                        {policy ? (
+                          <PasswordStrengthMeter
+                            value={fields.password}
+                            policy={policy}
+                            identifiers={identifiers}
+                          />
+                        ) : null}
+                      </div>
+                    )}
+
+                    {mode === "signup" ? (
+                      <FormField
+                        label={t("auth.login.confirmPassword")}
+                        error={fieldErrors.confirm}
+                      >
+                        {({ inputId, describedBy }) => (
+                          <PasswordField
+                            ref={confirmRef}
+                            id={inputId}
+                            name="confirm-password"
+                            autoComplete="new-password"
+                            value={fields.confirm}
+                            disabled={pending}
+                            invalid={Boolean(fieldErrors.confirm)}
+                            aria-describedby={describedBy}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setFields((current) => ({ ...current, confirm: value }));
+                              syncConfirmError(value, fields.password);
+                            }}
+                            onBlur={() => {
+                              setTouched((current) => ({ ...current, confirm: true }));
+                              setFieldErrors((current) => ({
+                                ...current,
+                                confirm: validateConfirm(fields.confirm),
+                              }));
+                            }}
+                          />
+                        )}
+                      </FormField>
+                    ) : null}
+
+                    <Button
+                      type="submit"
+                      size="lg"
+                      aria-busy={pending}
+                      className="h-12 w-full gap-2 bg-petrol-base text-on-petrol transition-[background-color,opacity] hover:bg-petrol-base/90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {pending ? (
+                        <LoaderCircle className="animate-spin" aria-hidden="true" />
+                      ) : null}
+                      {pending ? t(copy.submitting) : t(copy.submit)}
+                    </Button>
+                  </>
+                ) : null}
+
                 {generalError?.code === "email_not_verified" ? (
-                  <div className="mt-4 rounded-[6px] border border-border bg-surface p-3">
+                  <div className="rounded-[6px] border border-border bg-surface p-3">
                     <p className="text-sm font-medium">{t("auth.login.unverifiedTitle")}</p>
                     <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                       {t("auth.login.unverifiedDescription")}
@@ -810,7 +802,7 @@ export function LoginView({ search, passwordEnabled, policy }: Readonly<LoginVie
                 ) : null}
               </form>
 
-              {formsEnabled ? (
+              {formsEnabled && signupEnabled ? (
                 <p className="mt-6 text-sm text-muted-foreground">
                   {t(copy.footerPrompt)}{" "}
                   <button

@@ -2,6 +2,7 @@ import type { Page, Route } from "@playwright/test";
 
 export type AuthBackendOptions = {
   passwordEnabled?: boolean;
+  signupEnabled?: boolean;
   login?: (body: { email?: string; senha?: string }) => {
     status: number;
     body: unknown;
@@ -47,9 +48,7 @@ async function readBody(route: Route): Promise<Record<string, unknown>> {
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : {};
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }
@@ -60,6 +59,7 @@ export async function installAuthBackend(
   options: AuthBackendOptions = {},
 ): Promise<void> {
   const enabled = options.passwordEnabled ?? true;
+  const signupEnabled = options.signupEnabled ?? enabled;
 
   const handler: BackendHandler = async (route) => {
     const request = route.request();
@@ -72,7 +72,12 @@ export async function installAuthBackend(
     }
 
     if (path === "/api/v1/auth/capabilities") {
-      json(route, 200, { password_enabled: enabled, google_enabled: true });
+      json(route, 200, {
+        password_enabled: enabled,
+        signup_enabled: signupEnabled,
+        password_reset_enabled: signupEnabled,
+        google_enabled: true,
+      });
       return;
     }
 
@@ -83,16 +88,15 @@ export async function installAuthBackend(
 
     if (path === "/api/v1/auth/login" && request.method() === "POST") {
       const body = (await readBody(route)) as { email?: string; senha?: string };
-      const result =
-        options.login?.(body) ?? {
-          status: 200,
-          body: {
-            access_token: "e2e-access",
-            token_type: "bearer",
-            expires_in: 900,
-            user: { id: "user-1", email: body.email ?? "pessoa@example.com" },
-          },
-        };
+      const result = options.login?.(body) ?? {
+        status: 200,
+        body: {
+          access_token: "e2e-access",
+          token_type: "bearer",
+          expires_in: 900,
+          user: { id: "user-1", email: body.email ?? "pessoa@example.com" },
+        },
+      };
 
       const headers: Record<string, string> = result.retryAfter
         ? { "retry-after": result.retryAfter }

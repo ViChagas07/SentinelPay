@@ -2,9 +2,9 @@
 
 ## Estado atual
 
-- Fase atual: F18 (autentica√ß√£o por e-mail e senha no front) conclu√≠da.
+- Fase atual: F19 (login por senha vis√≠vel por padr√£o) conclu√≠da.
 - Pr√≥xima fase: nenhuma prevista. O front-end est√° em estado de entrega.
-- Login: painel esquerdo preservado, com logo dobrado para 44 px e bot√£o "Voltar" acima dele. Painel direito com abas Entrar e Criar conta ligadas ao Google OIDC e, quando `AUTH_PASSWORD_ENABLED` est√° ligada, a e-mail, senha, verifica√ß√£o e recupera√ß√£o com dados reais do backend. Aceite obrigat√≥rio, estado na URL por `?modo=cadastro` e selo de confian√ßa em HTTPS.
+- Login: painel esquerdo preservado, com logo dobrado para 44 px e bot√£o "Voltar" acima dele. Painel direito com abas Entrar e Criar conta. A aba Entrar mostra e-mail, senha e bot√£o prim√°rio sempre que `password_enabled` est√° ligado, sem exigir SMTP. A aba Criar conta, a verifica√ß√£o e a recupera√ß√£o dependem de `signup_enabled`, que exige provedor de e-mail. Aceite obrigat√≥rio, estado na URL por `?modo=cadastro` e selo de confian√ßa em HTTPS.
 - Landing: header com navega√ß√£o centralizada, pain√©is do "Como funciona" trocando por segmento, r√©gua do √≠ndice de risco colorida por faixa, se√ß√£o de normas com respiro e CTA final centralizado e ampliado.
 - Marca: s√≠mbolo oficial aplicado no header, sidebar, login, landing, carregamento, progresso, erro, vazio, rodap√© e README. Originais em `assets/brand/originals/` e derivados em `public/brand/`.
 - Acessibilidade: matriz axe em 16 rotas, 2 temas e 3 idiomas, com zero viola√ß√µes.
@@ -59,6 +59,15 @@ Resultados reais em 2026-11-17 (F12):
 - Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada ap√≥s reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem viola√ß√µes.
 - Migration `0011_analysis_progress` aplicada ap√≥s backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relat√≥rio S3 e resultado parcial limpos.
+
+## Feito em F19
+
+- DiagnÛstico: o formul·rio de senha existia, mas ficava oculto porque `password_enabled` dependia de provedor de e-mail. Por isso a tela mostrava sÛ o Google.
+- Backend: `AUTH_PASSWORD_ENABLED` passou a ser ligada por padr„o e as capacidades foram separadas em `password_enabled` (login), `signup_enabled` (cadastro) e `password_reset_enabled` (recuperaÁ„o). Login por senha n„o exige SMTP; cadastro e recuperaÁ„o exigem.
+- Compose e `.env.example` receberam as vari·veis `AUTH_*` com padr„o ligado e SMTP apontando para o Mailpit local.
+- Front: painel direito reordenado conforme a referÍncia, com abas, aceite, bot„o Google, divisor "ou", campos e bot„o prim·rio. A aba Criar conta sÛ aparece com `signup_enabled`, e o link "Esqueceu a senha?" sÛ com `password_reset_enabled`.
+- O envio n„o È mais bloqueado por `aria-disabled`: clicar sem o aceite mostra o erro acessÌvel e foca o checkbox, e o bot„o permanece legÌvel e oper·vel por teclado. O estado desabilitado do bot„o prim·rio passou a manter contraste AA.
+- ValidaÁ„o real no navegador em 1440x950, temas escuro e claro, abas Entrar e Criar conta, com backend de auth respondendo pelas capacidades.
 
 ## Feito em F18
 
