@@ -128,7 +128,7 @@ test("risk index class badge follows the band and the ruler spans the card", asy
   await slider.focus();
   await page.keyboard.press("Home");
   await expect(badge).toBeVisible();
-  await expect(badge).toHaveCSS("background-color", "rgb(37, 99, 235)");
+  await expect(badge).toHaveCSS("background-color", "rgb(46, 107, 80)");
 
   await page.keyboard.press("End");
   await expect(riskSection.getByText("Alto", { exact: true })).toHaveCSS(

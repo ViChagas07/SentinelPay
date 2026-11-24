@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Fase atual: F23 (campos bloqueados até o aceite) concluída.
+- Fase atual: F24 (cor verde da classe baixa no índice demonstrativo) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
 - Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta. A aba Entrar mostra e-mail, senha e botão primário sempre que `password_enabled` está ligado, sem exigir SMTP. A aba Criar conta, a verificação e a recuperação dependem de `signup_enabled`, que exige provedor de e-mail. Aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
@@ -59,6 +59,14 @@ Resultados reais em 2026-11-17 (F12):
 - Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada após reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem violações.
 - Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
+
+## Feito em F24
+
+- A classe "Baixo" do índice de risco demonstrativo da landing passou de azul para verde: badge "Baixo", preenchimento da barra e losango do controle deslizante usam o mesmo token.
+- `--risk-demo-low` mudou de `#2563eb` para `#2e6b50`, o verde de CTA da marca, mantendo `--risk-demo-low-foreground` branco. O contraste branco sobre `#2e6b50` fica em torno de 6,3:1, acima do AA.
+- Nenhuma mudança em `--risk-low` do produto. A paleta demonstrativa continua separada da paleta real de risco.
+- `e2e/landing.spec.ts` atualizado para exigir `rgb(46, 107, 80)` na classe baixa.
+- Verificação: 313 testes unitários, 8 e2e da landing, regressão visual da landing nos dois temas, lint, typecheck, `check:content` e build verdes. Confirmado no build de produção com o índice em 0 e em 27.
 
 ## Feito em F23
 

@@ -36,7 +36,7 @@ describe("risk presentation", () => {
 });
 
 describe("landing risk palette", () => {
-  it("uses blue for low, yellow for attention and red for high", () => {
+  it("uses green for low, yellow for attention and red for high", () => {
     expect(getLandingRiskPalette("low")).toEqual({
       color: "var(--risk-demo-low)",
       foreground: "var(--risk-demo-low-foreground)",
