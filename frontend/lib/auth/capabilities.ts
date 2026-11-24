@@ -7,15 +7,41 @@ export type AuthCapabilities = {
   googleEnabled: boolean;
 };
 
-const DISABLED: AuthCapabilities = {
-  passwordEnabled: false,
+const FALLBACK_SIGNIN: AuthCapabilities = {
+  passwordEnabled: true,
   signupEnabled: false,
   passwordResetEnabled: false,
   googleEnabled: true,
 };
 
 function envPasswordEnabled(): boolean {
-  return process.env.AUTH_PASSWORD_ENABLED === "true";
+  const value = process.env.AUTH_PASSWORD_ENABLED?.trim().toLowerCase();
+
+  return value !== "false" && value !== "0";
+}
+
+function envSignupOptIn(): boolean {
+  return process.env.AUTH_PASSWORD_ENABLED?.trim().toLowerCase() === "true";
+}
+
+function fallbackCapabilities(): AuthCapabilities {
+  if (!envPasswordEnabled()) {
+    return {
+      passwordEnabled: false,
+      signupEnabled: false,
+      passwordResetEnabled: false,
+      googleEnabled: true,
+    };
+  }
+
+  return envSignupOptIn()
+    ? {
+        passwordEnabled: true,
+        signupEnabled: true,
+        passwordResetEnabled: true,
+        googleEnabled: true,
+      }
+    : FALLBACK_SIGNIN;
 }
 
 function readBoolean(value: unknown, fallback: boolean): boolean {
@@ -32,7 +58,7 @@ export async function fetchAuthCapabilities(
     });
 
     if (!response.ok) {
-      return { ...DISABLED, passwordEnabled: envPasswordEnabled() };
+      return fallbackCapabilities();
     }
 
     const payload = (await response.json()) as {
@@ -45,19 +71,12 @@ export async function fetchAuthCapabilities(
 
     return {
       passwordEnabled,
-      signupEnabled: readBoolean(payload.signup_enabled, passwordEnabled),
-      passwordResetEnabled: readBoolean(payload.password_reset_enabled, passwordEnabled),
+      signupEnabled: readBoolean(payload.signup_enabled, false),
+      passwordResetEnabled: readBoolean(payload.password_reset_enabled, false),
       googleEnabled: payload.google_enabled !== false,
     };
   } catch {
-    const passwordEnabled = envPasswordEnabled();
-
-    return {
-      passwordEnabled,
-      signupEnabled: passwordEnabled,
-      passwordResetEnabled: passwordEnabled,
-      googleEnabled: true,
-    };
+    return fallbackCapabilities();
   }
 }
 

@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Fase atual: F19 (login por senha visível por padrão) concluída.
+- Fase atual: F20 (fallback de capacidades de autenticação) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
 - Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta. A aba Entrar mostra e-mail, senha e botão primário sempre que `password_enabled` está ligado, sem exigir SMTP. A aba Criar conta, a verificação e a recuperação dependem de `signup_enabled`, que exige provedor de e-mail. Aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
@@ -60,14 +60,24 @@ Resultados reais em 2026-11-17 (F12):
 - Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
 
+## Feito em F20
+
+- Correção: `/login` mostrado apenas com Google em produção mesmo após o deploy da F19.
+- Causa: `fetchAuthCapabilities` devolvia `passwordEnabled: false` quando `/api/v1/auth/capabilities` falhava, embora o backend declare `auth_password_enabled = True`. O Render de produção não responde (DNS resolve, HTTP expira em 120 s), então o fallback desligava o formulário. Além disso, `LoginView` exige `passwordEnabled && policy !== null`, e o fallback nunca trazia a política.
+- Correção em `lib/auth/capabilities.ts`: fallback explícito em três estados. `AUTH_PASSWORD_ENABLED=false` desliga entrada e cadastro; vazio mantém a entrada com `FALLBACK_POLICY` e cadastro desligado; `true` mantém entrada e cadastro para teste e desenvolvimento. A mesma regra vale para resposta HTTP não ok, JSON malformado e falha de rede.
+- `signupEnabled` e `passwordResetEnabled` deixaram de herdar `passwordEnabled` quando o payload não traz os campos: agora o padrão é `false`, como no backend sem provedor de e-mail.
+- Restaurado `target="_blank"` e `rel="noreferrer"` nos links de Termos e Privacidade do aceite, perdidos na reescrita da F19, para o checkbox não perder o estado.
+- `frontend/.env.example` documenta o fallback de `AUTH_PASSWORD_ENABLED`.
+- Verificação: com `API_INTERNAL_URL` em porta morta, o HTML de `/login` traz "passwordEnabled":true com os campos E-mail e Senha. 301 testes unitários, `e2e/login.spec.ts` (14 casos) e `e2e/legal.spec.ts` (3 casos) verdes.
+
 ## Feito em F19
 
-- Diagn�stico: o formul�rio de senha existia, mas ficava oculto porque `password_enabled` dependia de provedor de e-mail. Por isso a tela mostrava s� o Google.
-- Backend: `AUTH_PASSWORD_ENABLED` passou a ser ligada por padr�o e as capacidades foram separadas em `password_enabled` (login), `signup_enabled` (cadastro) e `password_reset_enabled` (recupera��o). Login por senha n�o exige SMTP; cadastro e recupera��o exigem.
-- Compose e `.env.example` receberam as vari�veis `AUTH_*` com padr�o ligado e SMTP apontando para o Mailpit local.
-- Front: painel direito reordenado conforme a refer�ncia, com abas, aceite, bot�o Google, divisor "ou", campos e bot�o prim�rio. A aba Criar conta s� aparece com `signup_enabled`, e o link "Esqueceu a senha?" s� com `password_reset_enabled`.
-- O envio n�o � mais bloqueado por `aria-disabled`: clicar sem o aceite mostra o erro acess�vel e foca o checkbox, e o bot�o permanece leg�vel e oper�vel por teclado. O estado desabilitado do bot�o prim�rio passou a manter contraste AA.
-- Valida��o real no navegador em 1440x950, temas escuro e claro, abas Entrar e Criar conta, com backend de auth respondendo pelas capacidades.
+- Diagnóstico: o formulário de senha existia, mas ficava oculto porque `password_enabled` dependia de provedor de e-mail. Por isso a tela mostrava só o Google.
+- Backend: `AUTH_PASSWORD_ENABLED` passou a ser ligada por padrão e as capacidades foram separadas em `password_enabled` (login), `signup_enabled` (cadastro) e `password_reset_enabled` (recuperação). Login por senha não exige SMTP; cadastro e recuperação exigem.
+- Compose e `.env.example` receberam as variáveis `AUTH_*` com padrão ligado e SMTP apontando para o Mailpit local.
+- Front: painel direito reordenado conforme a referência, com abas, aceite, botão Google, divisor "ou", campos e botão primário. A aba Criar conta só aparece com `signup_enabled`, e o link "Esqueceu a senha?" só com `password_reset_enabled`.
+- O envio não é mais bloqueado por `aria-disabled`: clicar sem o aceite mostra o erro acessível e foca o checkbox, e o botão permanece legível e operável por teclado. O estado desabilitado do botão primário passou a manter contraste AA.
+- Validação real no navegador em 1440x950, temas escuro e claro, abas Entrar e Criar conta, com backend de auth respondendo pelas capacidades.
 
 ## Feito em F18
 
@@ -158,7 +168,7 @@ Resultados reais em 2026-11-17 (F12):
 - Header público em grid de três colunas iguais a partir de `lg`, com navegação centralizada e ações alinhadas à direita. Abaixo de `lg` o menu mobile continua igual.
 - Itens de tema e idioma no dropdown recebem `gap-3` e ícones de 16 px com `shrink-0`, separando ícone e rótulo.
 - "Como funciona" sem `items-start` no grid: a coluna do painel passa a acompanhar a altura dos três segmentos e o `sticky` funciona. Cada segmento tem borda esquerda petróleo quando ativo, com `min-h-[62vh]` para dar ritmo de rolagem, e o painel troca entre envio, análise e decisão.
-- Índice de risco: track nativo transparente, trilho próprio de ponta a ponta com preenchimento proporcional e marcadores de 40 e 70. A cor segue a faixa: azul de demonstração em baixo, amarelo em médio e vermelho em alto, aplicada ao preenchimento, ao polegar e ao selo de classe em destaque.
+- Ýndice de risco: track nativo transparente, trilho próprio de ponta a ponta com preenchimento proporcional e marcadores de 40 e 70. A cor segue a faixa: azul de demonstração em baixo, amarelo em médio e vermelho em alto, aplicada ao preenchimento, ao polegar e ao selo de classe em destaque.
 - Paleta de demonstração em `getLandingRiskPalette` com teste próprio; o restante do app continua com `--risk-low`, `--risk-medium` e `--risk-high`.
 - Normas: o primeiro item deixa de usar `first:pt-0` e todos os itens seguem com `py-9` e número alinhado à primeira linha do título.
 - CTA final centralizado nas duas colunas, com 4 rem de altura, texto maior e fundo verde musgo próprio (`--landing-cta` em `#2e6b50`, hover `#377a5c`), com borda petróleo e texto `--on-petrol`.

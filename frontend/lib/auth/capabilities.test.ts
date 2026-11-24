@@ -43,7 +43,21 @@ describe("fetchAuthCapabilities", () => {
     });
   });
 
-  it("keeps password login off when the back-end fails", async () => {
+  it("keeps password login on when the back-end fails, matching the back-end default", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("boom");
+    });
+
+    await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
+      passwordEnabled: true,
+      signupEnabled: false,
+      passwordResetEnabled: false,
+      googleEnabled: true,
+    });
+  });
+
+  it("honours an explicit opt-out when the back-end is unreachable", async () => {
+    vi.stubEnv("AUTH_PASSWORD_ENABLED", "false");
     const fetchImpl = vi.fn(async () => {
       throw new Error("boom");
     });
@@ -54,9 +68,11 @@ describe("fetchAuthCapabilities", () => {
       passwordResetEnabled: false,
       googleEnabled: true,
     });
+
+    vi.unstubAllEnvs();
   });
 
-  it("respects the server flag when the back-end is unreachable", async () => {
+  it("keeps sign-up on when the environment opts in and the back-end fails", async () => {
     vi.stubEnv("AUTH_PASSWORD_ENABLED", "true");
     const fetchImpl = vi.fn(async () => {
       throw new Error("boom");
@@ -72,11 +88,35 @@ describe("fetchAuthCapabilities", () => {
     vi.unstubAllEnvs();
   });
 
-  it("treats a malformed payload as disabled", async () => {
+  it("keeps sign-up off while sign-in stays on when the back-end fails without opt-in", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("boom");
+    });
+
+    await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
+      passwordEnabled: true,
+      signupEnabled: false,
+      passwordResetEnabled: false,
+      googleEnabled: true,
+    });
+  });
+
+  it("falls back to the default contract when the payload is malformed", async () => {
     const fetchImpl = vi.fn(async () => Response.json({ password_enabled: "yes" }));
 
     await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
-      passwordEnabled: false,
+      passwordEnabled: true,
+      signupEnabled: false,
+      passwordResetEnabled: false,
+      googleEnabled: true,
+    });
+  });
+
+  it("treats a failed response as a fallback, not as disabled", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 503 }));
+
+    await expect(fetchAuthCapabilities(fetchImpl as unknown as typeof fetch)).resolves.toEqual({
+      passwordEnabled: true,
       signupEnabled: false,
       passwordResetEnabled: false,
       googleEnabled: true,
