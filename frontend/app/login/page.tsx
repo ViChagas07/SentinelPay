@@ -42,6 +42,7 @@ export default async function LoginPage({
         next: readParam(params.next),
         reason: readParam(params.reason),
         code: readParam(params.code),
+        error: readParam(params.error),
         modo: readParam(params.modo),
       }}
     />

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { ApiConfigurationError } from "@/lib/api/config";
 import { isAbortError } from "@/lib/session/backend";
 import { sessionRequest } from "@/lib/session/server";
 
@@ -56,6 +57,21 @@ async function handler(
   } catch (error) {
     if (isAbortError(error)) {
       return new Response(null, { status: 499 });
+    }
+
+    if (error instanceof ApiConfigurationError) {
+      return Response.json(
+        {
+          type: "about:blank",
+          title: "Service unavailable",
+          status: 503,
+          detail: "The API is not configured.",
+          instance: "/api/v1",
+          code: "network_error",
+          request_id: "",
+        },
+        { status: 503, headers: { "content-type": "application/problem+json" } },
+      );
     }
 
     if (error instanceof Error && error.name === "TimeoutError") {

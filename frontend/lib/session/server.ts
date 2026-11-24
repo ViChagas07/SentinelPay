@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { buildBackendUrl } from "@/lib/api/config";
+import { ApiConfigurationError, buildBackendUrl } from "@/lib/api/config";
 import { requestRefresh, type RefreshOutcome } from "@/lib/session/backend";
 import {
   SESSION_COOKIE,
@@ -182,11 +182,24 @@ export function expiredResponse(): Response {
 }
 
 function refresh(request: NextRequest, signal?: AbortSignal) {
-  return requestRefresh({
-    cookies: request.cookies,
-    backendUrl: buildBackendUrl("/api/v1/auth/refresh"),
-    signal,
-  });
+  try {
+    return requestRefresh({
+      cookies: request.cookies,
+      backendUrl: buildBackendUrl("/api/v1/auth/refresh"),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof ApiConfigurationError) {
+      return Promise.resolve({
+        kind: "failed" as const,
+        code: "network_error",
+        status: 502,
+        setCookies: [],
+      });
+    }
+
+    throw error;
+  }
 }
 
 function sessionCookies(

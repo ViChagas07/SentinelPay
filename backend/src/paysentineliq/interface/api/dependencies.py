@@ -44,6 +44,7 @@ from paysentineliq.application.ports.cancellation import CancellationPort
 from paysentineliq.application.ports.document_inspector import DocumentInspector
 from paysentineliq.application.ports.document_read_repository import DocumentReadRepository
 from paysentineliq.application.ports.document_unit_of_work import DocumentUnitOfWork
+from paysentineliq.application.ports.login_ticket import LoginTicketStore
 from paysentineliq.application.ports.messaging import EmailPort
 from paysentineliq.application.ports.notifications import (
     NotificationCenterRepositoryPort,
@@ -232,6 +233,11 @@ def get_oidc_client(request: Request) -> OIDCClient:
 
 def get_oidc_state_store(request: Request) -> OIDCStateStore:
     store: OIDCStateStore = request.app.state.oidc_state_store
+    return store
+
+
+def get_login_ticket_store(request: Request) -> LoginTicketStore:
+    store: LoginTicketStore = request.app.state.login_ticket_store
     return store
 
 

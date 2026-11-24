@@ -44,6 +44,8 @@ export const AUTH_FAILED_REASON = "auth_failed";
 export const LOGIN_ERROR_CODES = [
   "invalid_state",
   "google_auth_failed",
+  "access_denied",
+  "invalid_ticket",
   "email_not_verified",
   "too_many_attempts",
   "rate_limited",

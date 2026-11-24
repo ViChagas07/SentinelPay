@@ -1195,6 +1195,22 @@
         "title": "RetrievalModelHealth",
         "type": "object"
       },
+      "SessionTicketRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "ticket": {
+            "maxLength": 256,
+            "minLength": 20,
+            "title": "Ticket",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket"
+        ],
+        "title": "SessionTicketRequest",
+        "type": "object"
+      },
       "TokenRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2236,6 +2252,45 @@
           }
         },
         "summary": "Reset Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/session-ticket": {
+      "post": {
+        "operationId": "exchange_session_ticket_api_v1_auth_session_ticket_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange Session Ticket",
         "tags": [
           "auth"
         ]

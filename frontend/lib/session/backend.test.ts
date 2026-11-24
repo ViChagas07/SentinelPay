@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CookieReader } from "./cookies";
-import { buildForwardCookies, readSetCookies, requestRefresh, toLoginErrorCode } from "./backend";
+import {
+  buildForwardCookies,
+  readSetCookies,
+  requestRefresh,
+  requestTicketExchange,
+  toLoginErrorCode,
+} from "./backend";
 import { buildClearSessionCookies, buildSessionCookies, expiredResponse } from "./server";
 
 function reader(values: Record<string, string | undefined>): CookieReader {
@@ -106,6 +112,67 @@ describe("requestRefresh", () => {
     expect(outcome).toMatchObject({ kind: "failed", code: "network_error", status: 502 });
     expect(toLoginErrorCode("network_error")).toBe("network_error");
     expect(toLoginErrorCode("invalid_refresh_token")).toBeNull();
+  });
+});
+
+describe("requestTicketExchange", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts the ticket and accepts the first-party session cookies", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(refreshResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const outcome = await requestTicketExchange({
+      ticket: "ticket-value",
+      backendUrl: "https://api.example/api/v1/auth/session-ticket",
+      clientIp: "203.0.113.10",
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    const headers = new Headers(init?.headers);
+    expect(url).toBe("https://api.example/api/v1/auth/session-ticket");
+    expect(init).toMatchObject({ method: "POST", cache: "no-store" });
+    expect(init?.body).toBe(JSON.stringify({ ticket: "ticket-value" }));
+    expect(headers.get("X-Forwarded-For")).toBe("203.0.113.10");
+    expect(outcome.kind).toBe("refreshed");
+
+    if (outcome.kind === "refreshed") {
+      expect(outcome.session.accessToken).toBe("header.payload.signature");
+      expect(outcome.setCookies).toHaveLength(2);
+    }
+  });
+
+  it("reports an expired ticket without exposing the ticket", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ code: "invalid_ticket" }), {
+        status: 400,
+        headers: { "content-type": "application/problem+json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const outcome = await requestTicketExchange({
+      ticket: "secret-ticket",
+      backendUrl: "https://api.example/api/v1/auth/session-ticket",
+    });
+
+    expect(outcome).toMatchObject({ kind: "failed", code: "invalid_ticket", status: 400 });
+    expect(JSON.stringify(outcome)).not.toContain("secret-ticket");
+    expect(toLoginErrorCode("invalid_ticket")).toBe("invalid_ticket");
+    expect(toLoginErrorCode("access_denied")).toBe("access_denied");
+  });
+
+  it("maps a network failure to a login-safe code", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+
+    const outcome = await requestTicketExchange({
+      ticket: "ticket-value",
+      backendUrl: "https://api.example/api/v1/auth/session-ticket",
+    });
+
+    expect(outcome).toMatchObject({ kind: "failed", code: "network_error", status: 502 });
   });
 });
 

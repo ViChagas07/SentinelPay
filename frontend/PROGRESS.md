@@ -2,8 +2,11 @@
 
 ## Estado atual
 
-- Fase atual: F24 (cor verde da classe baixa no índice demonstrativo) concluída.
+- Fase atual: F25 (login Google OIDC em produção) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
+- Login Google: o callback da API entrega um ticket de uso único, o BFF troca em `/api/v1/auth/session-ticket` e grava a sessão em cookies first-party. O fluxo não depende mais de cookie de refresh no domínio da API.
+- Configuração: `API_INTERNAL_URL` host sem esquema é normalizado para `https`; valor inválido responde `503 auth_not_configured`, nunca `500` genérico.
+- Erros do OIDC: `access_denied`, state inválido, e-mail não verificado, limite de tentativas e indisponibilidade redirecionam para `/login` com `code` e `error` seguros.
 - Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta. A aba Entrar mostra e-mail, senha e botão primário sempre que `password_enabled` está ligado, sem exigir SMTP. A aba Criar conta, a verificação e a recuperação dependem de `signup_enabled`, que exige provedor de e-mail. Aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
 - Marca: símbolo oficial aplicado no header, sidebar, login, landing, carregamento, progresso, erro, vazio, rodapé e README. Originais em `assets/brand/originals/` e derivados em `public/brand/`.
@@ -59,6 +62,17 @@ Resultados reais em 2026-11-17 (F12):
 - Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada após reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem violações.
 - Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
+
+## Feito em F25
+
+- Causa raiz comprovada do 500: `API_INTERNAL_URL` da Vercel não era uma URL absoluta válida. Reprodução local com `sentinelpay.up.railway.app` sem esquema gerou `TypeError: Invalid URL` e `500` vazio, igual ao de produção. `lib/api/config.ts` passou a normalizar espaço, aspas e esquema ausente e a devolver `503 auth_not_configured` quando o valor é inválido.
+- Causa raiz da sessão: o callback gravava `refresh_token` no domínio da API e o BFF do front não recebe cookies de outro domínio. O backend agora emite ticket de uso único e o front troca em `POST /api/v1/auth/session-ticket`, gravando `sp_session`, `sp_refresh` e `sp_csrf` no domínio do front.
+- O `/api/v1/auth/complete` aceita `ticket`, mantém o fallback de refresh para same-site e limpa `sp_oidc` em sucesso e erro.
+- Erros do callback redirecionam para `/login?reason=auth_failed&code=<codigo>&error=<codigo>`; o login lê `code` ou `error` e traduz `access_denied` e `invalid_ticket` em pt, es e en.
+- `middleware.ts` preserva o ticket ao encaminhar o retorno do OIDC para `/api/v1/auth/complete`.
+- Testes novos: normalização de URL, troca de ticket, ticket de uso único no callback, state inválido, `access_denied`, usuário novo e existente, TTL/UTF e middleware.
+- Verificação: `npm run lint`, `npm run typecheck`, `npm run test` (324 testes), `npm run check:content` e `npm run build` verdes. Backend: `make check` com 1006 passed + 2 skips (cobertura 81,66%), 91 testes direcionados de auth, mypy strict e teste Redis do ticket com `--run-docker` verdes; OpenAPI regenerado. Teste manual do BFF: ticket válido grava `sp_session`, `sp_refresh` e `sp_csrf`; ticket inválido volta ao login com `invalid_ticket`.
+- O Railway respondeu `502 Application failed to respond` em `/health` e `/ready` durante o diagnóstico. É um bloqueio de deploy/ambiente separado, sem evidência de código; as instruções de logs e variáveis estão no relatório final.
 
 ## Feito em F24
 

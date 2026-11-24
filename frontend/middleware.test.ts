@@ -64,6 +64,15 @@ describe("middleware", () => {
     expect(locationOf(response)).toBe("/api/v1/auth/complete");
   });
 
+  it("preserves the one-time ticket when routing the OIDC callback", () => {
+    const response = middleware(
+      makeRequest("/?ticket=abc123", { sp_oidc: "/folha" }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(locationOf(response)).toBe("/api/v1/auth/complete?ticket=abc123");
+  });
+
   it("does not intercept the complete endpoint itself", () => {
     const response = middleware(makeRequest("/api/v1/auth/complete", { sp_oidc: "/folha" }));
     expect(response.headers.get("location")).toBeNull();

@@ -92,6 +92,34 @@ def test_non_local_keeps_explicit_security_hash_secret() -> None:
     assert settings.security_hash_secret == "explicit-production-secret"
 
 
+def test_url_settings_are_trimmed() -> None:
+    settings = _production_settings(
+        frontend_url='  "https://app.example.com"  ',
+        google_redirect_uri="  https://api.example.com/api/v1/auth/google/callback  ",
+    )
+
+    assert settings.frontend_url == "https://app.example.com"
+    assert settings.google_redirect_uri == "https://api.example.com/api/v1/auth/google/callback"
+
+
+def test_non_local_rejects_insecure_frontend_url() -> None:
+    with pytest.raises(ValidationError):
+        _production_settings(frontend_url="http://app.example.com")
+
+
+def test_non_local_rejects_wrong_google_callback_path() -> None:
+    with pytest.raises(ValidationError):
+        _production_settings(
+            google_redirect_uri="https://api.example.com/api/auth/google/callback",
+        )
+
+
+def test_login_ticket_ttl_default_and_validation() -> None:
+    assert _production_settings().login_ticket_ttl_seconds == 60
+    with pytest.raises(ValidationError):
+        _production_settings(login_ticket_ttl_seconds=0)
+
+
 def test_non_local_allows_missing_metrics_token() -> None:
     settings = _production_settings(metrics_token="")
 

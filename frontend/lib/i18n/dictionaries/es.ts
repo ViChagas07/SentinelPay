@@ -250,6 +250,8 @@ export const es = {
   "auth.login.errorTitle": "No fue posible entrar.",
   "auth.login.errors.invalid_state": "La sesión de inicio expiró. Intenta de nuevo.",
   "auth.login.errors.google_auth_failed": "Google no confirmó la autenticación. Intenta de nuevo.",
+  "auth.login.errors.access_denied": "El acceso con Google fue cancelado. Intenta de nuevo.",
+  "auth.login.errors.invalid_ticket": "La confirmación del inicio expiró. Intenta de nuevo.",
   "auth.login.errors.email_not_verified": "El correo de la cuenta Google no está verificado.",
   "auth.login.errors.too_many_attempts": "Demasiados intentos. Espera unos minutos.",
   "auth.login.errors.rate_limited": "Demasiadas solicitudes. Espera unos instantes.",

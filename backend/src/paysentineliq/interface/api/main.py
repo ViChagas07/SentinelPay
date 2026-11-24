@@ -38,6 +38,7 @@ from paysentineliq.infrastructure.security.auth_rate_limit import (
 from paysentineliq.infrastructure.security.bruteforce import BruteForceService
 from paysentineliq.infrastructure.security.google_oidc import GoogleOIDCClient
 from paysentineliq.infrastructure.security.jwt import JwtAccessTokenService
+from paysentineliq.infrastructure.security.login_tickets import RedisLoginTicketStore
 from paysentineliq.infrastructure.security.oidc_state import RedisOIDCStateStore
 from paysentineliq.infrastructure.security.passwords import Argon2PasswordHasher
 from paysentineliq.infrastructure.security.rate_limit import TokenBucketRateLimiter
@@ -157,6 +158,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         application.state.revoked_tokens = RedisRevokedTokenStore(redis)
         application.state.oidc_state_store = RedisOIDCStateStore(redis)
+        application.state.login_ticket_store = RedisLoginTicketStore(redis)
         application.state.oidc_client = GoogleOIDCClient(
             client_id=resolved_settings.google_client_id,
             client_secret=resolved_settings.google_client_secret,

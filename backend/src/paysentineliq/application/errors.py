@@ -108,6 +108,16 @@ class InvalidOAuthStateError(ApplicationError):
         )
 
 
+class InvalidLoginTicketError(ApplicationError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="invalid_ticket",
+            message="The sign-in ticket is missing, invalid or expired.",
+            status_code=400,
+            title="Bad request",
+        )
+
+
 class InvalidRefreshTokenError(ApplicationError):
     def __init__(self) -> None:
         super().__init__(

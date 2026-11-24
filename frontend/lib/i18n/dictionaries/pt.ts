@@ -244,6 +244,8 @@ export const pt = {
   "auth.login.errorTitle": "Não foi possível entrar.",
   "auth.login.errors.invalid_state": "A sessão de login expirou. Tente novamente.",
   "auth.login.errors.google_auth_failed": "O Google não confirmou a autenticação. Tente novamente.",
+  "auth.login.errors.access_denied": "O acesso pelo Google foi cancelado. Tente novamente.",
+  "auth.login.errors.invalid_ticket": "A confirmação do login expirou. Tente novamente.",
   "auth.login.errors.email_not_verified": "O e-mail da conta Google não está verificado.",
   "auth.login.errors.too_many_attempts": "Muitas tentativas. Aguarde alguns minutos.",
   "auth.login.errors.rate_limited": "Muitas requisições. Aguarde alguns instantes.",

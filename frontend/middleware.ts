@@ -26,8 +26,9 @@ export function middleware(request: NextRequest) {
 
   if (readOidcNext(request.cookies)) {
     const completeUrl = request.nextUrl.clone();
+    const ticket = request.nextUrl.searchParams.get("ticket");
     completeUrl.pathname = AUTH_COMPLETE_PATH;
-    completeUrl.search = "";
+    completeUrl.search = ticket ? `?ticket=${encodeURIComponent(ticket)}` : "";
     return NextResponse.redirect(completeUrl);
   }
 

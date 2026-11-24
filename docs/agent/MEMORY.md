@@ -77,6 +77,11 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - O transporte pinado da guarda SSRF substitui o pool privado `_pool` do httpx/httpcore; revalidar em upgrade dessas libs.
 - O `GOOGLE_REDIRECT_URI` do `.env` de producao atual aponta para `/api/auth/google/callback`; a P04 usa `/api/v1/auth/google/callback` e o valor precisa ser corrigido antes de um deploy real.
 - O fluxo real com Google nao foi executado (sem credenciais); testes usam token/JWKS mockados. Nao declarar login Google validado em producao.
+- Auth em producao: `API_INTERNAL_URL` da Vercel precisa ser URL absoluta. Valor sem esquema (`sentinelpay.up.railway.app`) faz `new URL` lancar `TypeError: Invalid URL` dentro do Route Handler e o Next devolve 500 vazio. O front normaliza host sem esquema e responde `503 auth_not_configured` para valor invalido.
+- Auth cross-site: o BFF em `sentinelpay1.vercel.app` nao recebe cookies gravados em `sentinelpay.up.railway.app`. O callback do Google nao pode depender do cookie `refresh_token` no dominio da API; o fluxo usa ticket de uso único (`AUTH_LOGIN_TICKET_TTL_SECONDS`, padrao 60) trocado em `POST /api/v1/auth/session-ticket`.
+- Auth: `GOOGLE_REDIRECT_URI` fora de local precisa ser `https://<api-host>/api/v1/auth/google/callback`; o valor antigo do `.env` (`/api/auth/...`, sem `v1`) nao corresponde a rota. O Google Console precisa ter exatamente a mesma URI.
+- Auth: falhas do callback redirecionam para `<FRONTEND_URL>/login?reason=auth_failed&code=<codigo>&error=<codigo>`; os codigos estaveis incluem `invalid_state`, `google_auth_failed`, `access_denied`, `invalid_ticket`, `email_not_verified`, `too_many_attempts` e `security_service_unavailable`.
+- Railway em 2026-11-24 respondeu `502 Application failed to respond` em `/health` e `/ready`; o processo nao estava atendendo. Sem acesso aos logs do painel, a causa do deploy permanece NAO VALIDADA.
 - PowerShell 5.1 nao aceita `&&`; encadear comandos com `;` ou `if ($?)`.
 - O Graphify ignora `.env` por seguranca e por `.gitignore`; o caminho aparece como ignorado na saida, o que e esperado.
 - P13: tarefa Celery e sincrona; chame o caso de uso async por `run_async` com um loop NOVO por tarefa e feche loop/pending/asyncgens. O engine do worker usa `NullPool` e e descartado ao fim; nao compartilhe engine/loop entre tarefas.

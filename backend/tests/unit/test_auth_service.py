@@ -108,6 +108,18 @@ async def test_google_first_access_records_consents_and_event() -> None:
     assert uow.auth_events.types() == ["google_signup"]
 
 
+async def test_google_sign_in_reuses_user_and_records_login_event() -> None:
+    service, uow, _, _, _ = _service()
+
+    first = await service.login_with_google(_IDENTITY)
+    second = await service.login_with_google(_IDENTITY)
+
+    assert first.user.id == second.user.id
+    assert len(uow.users.users) == 1
+    assert uow.auth_events.types() == ["google_signup", "login"]
+    assert first.refresh_token != second.refresh_token
+
+
 async def test_refresh_rotates_token_in_same_family() -> None:
     service, uow, token_service, _, clock = _service()
     login = await service.login_with_google(_IDENTITY)

@@ -2,6 +2,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import TracebackType
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 from uuid import UUID, uuid4
 
 import httpx
@@ -23,6 +24,7 @@ from paysentineliq.interface.api.dependencies import (
     get_auth_service,
     get_auth_unit_of_work,
     get_brute_force,
+    get_login_ticket_store,
     get_oidc_client,
     get_oidc_state_store,
 )
@@ -84,6 +86,21 @@ class FakeStateStore:
 
     async def pop(self, state: str) -> OIDCState | None:
         return self.states.pop(state, None)
+
+
+class FakeTicketStore:
+    def __init__(self) -> None:
+        self.tickets: dict[str, str] = {}
+        self.issued = 0
+
+    async def issue(self, refresh_token: str, ttl_seconds: int) -> str:
+        self.issued += 1
+        ticket = f"ticket-{self.issued}"
+        self.tickets[ticket] = refresh_token
+        return ticket
+
+    async def consume(self, ticket: str) -> str | None:
+        return self.tickets.pop(ticket, None)
 
 
 class FakeAuthService:
@@ -206,12 +223,14 @@ def _auth_app(
     settings: Settings | None = None,
     oidc: FakeOIDCClient | None = None,
     state_store: FakeStateStore | None = None,
+    ticket_store: FakeTicketStore | None = None,
     auth_service: FakeAuthService | None = None,
     brute_force: FakeBruteForce | None = None,
 ) -> tuple[
     FastAPI,
     FakeOIDCClient,
     FakeStateStore,
+    FakeTicketStore,
     FakeAuthService,
     FakeBruteForce,
 ]:
@@ -224,14 +243,16 @@ def _auth_app(
     app.state.revoked_tokens = FakeRevokedStore()
     fake_oidc = oidc or FakeOIDCClient()
     fake_store = state_store or FakeStateStore()
+    fake_tickets = ticket_store or FakeTicketStore()
     fake_auth = auth_service or FakeAuthService()
     fake_brute = brute_force or FakeBruteForce()
     app.dependency_overrides[get_oidc_client] = lambda: fake_oidc
     app.dependency_overrides[get_oidc_state_store] = lambda: fake_store
+    app.dependency_overrides[get_login_ticket_store] = lambda: fake_tickets
     app.dependency_overrides[get_auth_service] = lambda: fake_auth
     app.dependency_overrides[get_brute_force] = lambda: fake_brute
     app.dependency_overrides[get_auth_unit_of_work] = lambda: FakeAuthUow(_USER)
-    return app, fake_oidc, fake_store, fake_auth, fake_brute
+    return app, fake_oidc, fake_store, fake_tickets, fake_auth, fake_brute
 
 
 async def _request(
@@ -241,6 +262,7 @@ async def _request(
     *,
     cookies: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
+    json_body: object | None = None,
 ) -> httpx.Response:
     request_headers = dict(headers or {})
     if cookies:
@@ -253,6 +275,7 @@ async def _request(
             method,
             path,
             headers=request_headers,
+            json=json_body,
         )
 
 
@@ -261,7 +284,7 @@ def _set_cookies(response: httpx.Response) -> str:
 
 
 async def test_login_redirects_with_state_cookie_and_pkce() -> None:
-    app, oidc, store, _, _ = _auth_app()
+    app, oidc, store, _, _, _ = _auth_app()
 
     response = await _request(app, "GET", "/api/v1/auth/google/login")
 
@@ -276,7 +299,7 @@ async def test_login_redirects_with_state_cookie_and_pkce() -> None:
 
 async def test_login_requires_google_configuration() -> None:
     settings = _settings(google_client_id="")
-    app, _, _, _, _ = _auth_app(settings=settings)
+    app, _, _, _, _, _ = _auth_app(settings=settings)
 
     response = await _request(app, "GET", "/api/v1/auth/google/login")
 
@@ -284,8 +307,16 @@ async def test_login_requires_google_configuration() -> None:
     assert response.json()["code"] == "auth_not_configured"
 
 
-async def test_callback_sets_cookies_and_redirects_without_tokens() -> None:
-    app, _oidc, store, auth_service, brute = _auth_app()
+def _login_redirect(response: httpx.Response) -> dict[str, list[str]]:
+    location = urlparse(response.headers["location"])
+    assert (
+        f"{location.scheme}://{location.netloc}{location.path}" == "https://frontend.example/login"
+    )
+    return parse_qs(location.query)
+
+
+async def test_callback_redirects_to_frontend_with_single_use_ticket() -> None:
+    app, _oidc, store, tickets, auth_service, brute = _auth_app()
     state = "state-value"
     store.states[state] = OIDCState(
         nonce="nonce",
@@ -300,8 +331,14 @@ async def test_callback_sets_cookies_and_redirects_without_tokens() -> None:
         cookies={"oidc_state": state},
     )
 
+    location = urlparse(response.headers["location"])
     assert response.status_code == 303
-    assert response.headers["location"] == "https://frontend.example"
+    assert (
+        f"{location.scheme}://{location.netloc}{location.path}"
+        == "https://frontend.example/api/v1/auth/complete"
+    )
+    assert parse_qs(location.query)["ticket"] == ["ticket-1"]
+    assert tickets.tickets["ticket-1"] == "refresh-token"
     assert auth_service.login_calls == [_IDENTITY]
     assert state not in store.states
     assert brute.resets
@@ -313,7 +350,7 @@ async def test_callback_sets_cookies_and_redirects_without_tokens() -> None:
 
 
 async def test_callback_rejects_invalid_state() -> None:
-    app, _, _, auth_service, brute = _auth_app()
+    app, _, _, _, auth_service, brute = _auth_app()
 
     response = await _request(
         app,
@@ -322,14 +359,17 @@ async def test_callback_rejects_invalid_state() -> None:
         cookies={"oidc_state": "other"},
     )
 
-    assert response.status_code == 400
-    assert response.json()["code"] == "invalid_state"
+    params = _login_redirect(response)
+    assert response.status_code == 303
+    assert params["code"] == ["invalid_state"]
+    assert params["error"] == ["invalid_state"]
+    assert params["reason"] == ["auth_failed"]
     assert auth_service.login_calls == []
     assert brute.failures
 
 
 async def test_callback_blocks_bruteforce() -> None:
-    app, _, store, auth_service, brute = _auth_app()
+    app, _, store, _, auth_service, brute = _auth_app()
     state = "blocked-state"
     store.states[state] = OIDCState("nonce", "verifier", "https://callback")
     brute.blocked = True
@@ -341,14 +381,15 @@ async def test_callback_blocks_bruteforce() -> None:
         cookies={"oidc_state": state},
     )
 
-    assert response.status_code == 429
-    assert response.headers["Retry-After"] == "30"
-    assert response.json()["code"] == "too_many_attempts"
+    params = _login_redirect(response)
+    assert response.status_code == 303
+    assert params["code"] == ["too_many_attempts"]
+    assert params["retry_after"] == ["30"]
     assert auth_service.login_calls == []
 
 
 async def test_callback_records_oidc_failure() -> None:
-    app, oidc, store, auth_service, brute = _auth_app()
+    app, oidc, store, _, auth_service, brute = _auth_app()
     state = "oidc-error-state"
     store.states[state] = OIDCState("nonce", "verifier", "https://callback")
     oidc.error = OAuthAuthenticationError()
@@ -360,14 +401,96 @@ async def test_callback_records_oidc_failure() -> None:
         cookies={"oidc_state": state},
     )
 
-    assert response.status_code == 401
-    assert response.json()["code"] == "google_auth_failed"
+    params = _login_redirect(response)
+    assert response.status_code == 303
+    assert params["code"] == ["google_auth_failed"]
     assert auth_service.login_calls == []
     assert brute.failures
 
 
+async def test_callback_redirects_access_denied() -> None:
+    app, _, store, _, auth_service, brute = _auth_app()
+    state = "denied-state"
+    store.states[state] = OIDCState("nonce", "verifier", "https://callback")
+
+    response = await _request(
+        app,
+        "GET",
+        f"/api/v1/auth/google/callback?error=access_denied&state={state}",
+        cookies={"oidc_state": state},
+    )
+
+    params = _login_redirect(response)
+    assert response.status_code == 303
+    assert params["code"] == ["access_denied"]
+    assert params["error"] == ["access_denied"]
+    assert auth_service.login_calls == []
+    assert brute.failures
+
+
+async def test_session_ticket_exchanges_for_first_party_cookies() -> None:
+    app, _, _, tickets, auth_service, brute = _auth_app()
+    tickets.tickets["t" * 43] = "refresh-token"
+
+    response = await _request(
+        app,
+        "POST",
+        "/api/v1/auth/session-ticket",
+        json_body={"ticket": "t" * 43},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["access_token"] == "access-token"
+    assert response.json()["user"]["role"] == "user"
+    assert auth_service.refresh_calls == ["refresh-token"]
+    assert brute.resets
+    assert "t" * 43 not in tickets.tickets
+    cookies = _set_cookies(response)
+    assert "refresh_token=refresh-token" in cookies
+    assert "HttpOnly" in cookies
+    assert "csrf_token=" in cookies
+
+
+async def test_session_ticket_is_single_use() -> None:
+    app, _, _, tickets, auth_service, _ = _auth_app()
+    tickets.tickets["o" * 43] = "refresh-token"
+
+    first = await _request(
+        app,
+        "POST",
+        "/api/v1/auth/session-ticket",
+        json_body={"ticket": "o" * 43},
+    )
+    second = await _request(
+        app,
+        "POST",
+        "/api/v1/auth/session-ticket",
+        json_body={"ticket": "o" * 43},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 400
+    assert second.json()["code"] == "invalid_ticket"
+    assert auth_service.refresh_calls == ["refresh-token"]
+
+
+async def test_session_ticket_rejects_unknown_ticket() -> None:
+    app, _, _, _, auth_service, _ = _auth_app()
+
+    response = await _request(
+        app,
+        "POST",
+        "/api/v1/auth/session-ticket",
+        json_body={"ticket": "unknown-ticket-value"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_ticket"
+    assert auth_service.refresh_calls == []
+
+
 async def test_refresh_requires_csrf() -> None:
-    app, _, _, auth_service, _ = _auth_app()
+    app, _, _, _, auth_service, _ = _auth_app()
 
     response = await _request(
         app,
@@ -382,7 +505,7 @@ async def test_refresh_requires_csrf() -> None:
 
 
 async def test_refresh_rotates_cookies_and_returns_access() -> None:
-    app, _, _, auth_service, brute = _auth_app()
+    app, _, _, _, auth_service, brute = _auth_app()
 
     response = await _request(
         app,
@@ -403,7 +526,7 @@ async def test_refresh_rotates_cookies_and_returns_access() -> None:
 
 
 async def test_refresh_invalid_token_clears_cookies() -> None:
-    app, _, _, auth_service, brute = _auth_app()
+    app, _, _, _, auth_service, brute = _auth_app()
     auth_service.refresh_error = InvalidRefreshTokenError()
 
     response = await _request(
@@ -423,7 +546,7 @@ async def test_refresh_invalid_token_clears_cookies() -> None:
 
 
 async def test_logout_requires_csrf() -> None:
-    app, _, _, auth_service, _ = _auth_app()
+    app, _, _, _, auth_service, _ = _auth_app()
 
     response = await _request(
         app,
@@ -437,7 +560,7 @@ async def test_logout_requires_csrf() -> None:
 
 
 async def test_logout_clears_cookies_and_revokes_refresh() -> None:
-    app, _, _, auth_service, _ = _auth_app()
+    app, _, _, _, auth_service, _ = _auth_app()
 
     response = await _request(
         app,
@@ -455,7 +578,7 @@ async def test_logout_clears_cookies_and_revokes_refresh() -> None:
 
 
 async def test_protected_routes_reject_anonymous() -> None:
-    app, _, _, _, _ = _auth_app()
+    app, _, _, _, _, _ = _auth_app()
 
     me = await _request(app, "GET", "/api/v1/users/me")
     user = await _request(app, "GET", "/api/v1/protected/user")

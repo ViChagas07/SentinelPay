@@ -6,7 +6,7 @@ from urllib.parse import unquote, urlparse
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_LOCAL_DATABASE_URL = "postgresql+asyncpg://sentinel:CHANGE_ME@localhost:55432/paysentineliq"
@@ -130,6 +130,7 @@ class Settings(BaseSettings):
     frontend_url: str = ""
     cookie_domain: str = ""
     oidc_state_ttl_seconds: int = 600
+    login_ticket_ttl_seconds: int = 60
     auth_password_enabled: bool = True
     auth_email_provider: Literal["disabled", "development", "smtp"] = "disabled"
     auth_email_development_dir: str = "var/auth-outbox"
@@ -242,6 +243,13 @@ class Settings(BaseSettings):
     guardrail_max_text_chars: int = 20_000
     guardrail_llm_excerpt_chars: int = 6_000
     guardrail_allowed_output_urls: str = ""
+
+    @field_validator("frontend_url", "app_base_url", "google_redirect_uri", mode="before")
+    @classmethod
+    def _strip_url_values(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().strip("'\"")
+        return value
 
     @property
     def ocr_languages_list(self) -> list[str]:
@@ -374,6 +382,18 @@ class Settings(BaseSettings):
                     missing.append(name)
             if self.jwt_secret and len(self.jwt_secret) < 32:
                 raise ValueError("JWT_SECRET must be at least 32 characters")
+            if self.frontend_url and urlparse(self.frontend_url).scheme != "https":
+                raise ValueError("FRONTEND_URL must start with https:// outside local")
+            if self.google_redirect_uri:
+                parsed_redirect = urlparse(self.google_redirect_uri)
+                if parsed_redirect.scheme != "https":
+                    raise ValueError(
+                        "GOOGLE_REDIRECT_URI must start with https:// outside local",
+                    )
+                if parsed_redirect.path.rstrip("/") != "/api/v1/auth/google/callback":
+                    raise ValueError(
+                        "GOOGLE_REDIRECT_URI must target /api/v1/auth/google/callback",
+                    )
 
         if self.access_token_ttl_minutes <= 0:
             raise ValueError("ACCESS_TOKEN_TTL_MINUTES must be positive")
@@ -381,6 +401,8 @@ class Settings(BaseSettings):
             raise ValueError("REFRESH_TOKEN_TTL_DAYS must be positive")
         if self.oidc_state_ttl_seconds <= 0:
             raise ValueError("OIDC_STATE_TTL_SECONDS must be positive")
+        if self.login_ticket_ttl_seconds <= 0:
+            raise ValueError("AUTH_LOGIN_TICKET_TTL_SECONDS must be positive")
         if self.upload_max_mb <= 0:
             raise ValueError("UPLOAD_MAX_MB must be positive")
         if self.pdf_max_pages <= 0:

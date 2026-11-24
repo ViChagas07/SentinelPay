@@ -36,6 +36,7 @@ export type LoginSearchParams = {
   next?: string;
   reason?: string;
   code?: string;
+  error?: string;
   modo?: string;
 };
 
@@ -153,7 +154,9 @@ export function LoginView({
   const fieldsLocked = !accepted;
   const next = isSafeNextPath(search.next) ? search.next : undefined;
   const errorKey =
-    search.reason === "expired" ? loginErrorKey("session_expired") : loginErrorKey(search.code);
+    search.reason === "expired"
+      ? loginErrorKey("session_expired")
+      : (loginErrorKey(search.code) ?? loginErrorKey(search.error));
   const isDenied = search.reason === "forbidden";
   const identifiers = identifierFragments(fields.email, fields.name);
 

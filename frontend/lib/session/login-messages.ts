@@ -7,6 +7,8 @@ export const BUILD_LOGIN_ERROR_KEYS: Record<
 > = {
   invalid_state: "auth.login.errors.invalid_state",
   google_auth_failed: "auth.login.errors.google_auth_failed",
+  access_denied: "auth.login.errors.access_denied",
+  invalid_ticket: "auth.login.errors.invalid_ticket",
   email_not_verified: "auth.login.errors.email_not_verified",
   too_many_attempts: "auth.login.errors.too_many_attempts",
   rate_limited: "auth.login.errors.rate_limited",

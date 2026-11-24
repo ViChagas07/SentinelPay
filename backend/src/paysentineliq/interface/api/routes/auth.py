@@ -3,6 +3,7 @@ import logging
 import re
 import secrets
 from typing import Annotated, Literal
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
@@ -16,14 +17,17 @@ from paysentineliq.application.commands.auth import (
 from paysentineliq.application.errors import (
     AuthNotConfiguredError,
     EmailNotVerifiedError,
+    InvalidLoginTicketError,
     InvalidOAuthStateError,
     InvalidRefreshTokenError,
     OAuthAuthenticationError,
     RefreshTokenReuseError,
+    SecurityServiceUnavailableError,
     TooManyAttemptsError,
 )
 from paysentineliq.application.notifications.auth_delivery import deliver_auth_email
 from paysentineliq.application.notifications.auth_emails import AuthEmail
+from paysentineliq.application.ports.login_ticket import LoginTicketStore
 from paysentineliq.application.ports.messaging import EmailPort
 from paysentineliq.application.ports.oidc import OIDCClient
 from paysentineliq.application.ports.oidc_state import OIDCState, OIDCStateStore
@@ -58,6 +62,7 @@ from paysentineliq.interface.api.dependencies import (
     get_auth_service,
     get_brute_force,
     get_current_user,
+    get_login_ticket_store,
     get_oidc_client,
     get_oidc_state_store,
     get_optional_access_claims,
@@ -141,6 +146,10 @@ class ChangePasswordRequest(_StrictModel):
     nova_senha: str = Field(min_length=1, max_length=256)
 
 
+class SessionTicketRequest(_StrictModel):
+    ticket: str = Field(min_length=20, max_length=256)
+
+
 async def _enforce_auth_rate_limit(
     limiter: AuthRateLimiter,
     scope: AuthRateLimitScope,
@@ -210,12 +219,62 @@ async def google_login(
     return response
 
 
+def _frontend_redirect(
+    settings: Settings,
+    path: str,
+    params: dict[str, str] | None = None,
+) -> RedirectResponse:
+    base = settings.frontend_url.strip().rstrip("/")
+    if not base:
+        raise AuthNotConfiguredError()
+
+    query = urlencode(params) if params else ""
+    target = f"{base}{path}"
+    if query:
+        target = f"{target}?{query}"
+    return RedirectResponse(target, status_code=303)
+
+
+def _login_error_redirect(
+    settings: Settings,
+    code: str,
+    *,
+    retry_after_seconds: int | None = None,
+) -> RedirectResponse:
+    params = {
+        "reason": "auth_failed",
+        "code": code,
+        "error": code,
+    }
+    if retry_after_seconds is not None:
+        params["retry_after"] = str(retry_after_seconds)
+
+    response = _frontend_redirect(settings, "/login", params)
+    clear_oidc_state_cookie(response, domain=settings.cookie_domain)
+    return response
+
+
+def _login_error_code(exc: BaseException) -> str:
+    if isinstance(exc, InvalidOAuthStateError):
+        return "invalid_state"
+    if isinstance(exc, EmailNotVerifiedError):
+        return "email_not_verified"
+    if isinstance(exc, TooManyAttemptsError):
+        return "too_many_attempts"
+    if isinstance(exc, SecurityServiceUnavailableError):
+        return "security_service_unavailable"
+    if isinstance(exc, AuthNotConfiguredError):
+        return "auth_not_configured"
+    return "google_auth_failed"
+
+
 @router.get("/google/callback")
 async def google_callback(
     request: Request,
     settings: Annotated[Settings, Depends(get_app_settings)],
     oidc: Annotated[OIDCClient, Depends(get_oidc_client)],
     state_store: Annotated[OIDCStateStore, Depends(get_oidc_state_store)],
+    ticket_store: Annotated[LoginTicketStore, Depends(get_login_ticket_store)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     brute_force: Annotated[BruteForceService, Depends(get_brute_force)],
     auth_context: Annotated[AuthRequestContext, Depends(get_auth_request_context)],
@@ -228,18 +287,31 @@ async def google_callback(
 
     if not state or not state_cookie or not hmac.compare_digest(state, state_cookie):
         await _record_failure(request, brute_force, identifier)
-        raise InvalidOAuthStateError()
+        return _login_error_redirect(settings, "invalid_state")
 
-    await _ensure_not_blocked(request, brute_force, identifier)
+    try:
+        await _ensure_not_blocked(request, brute_force, identifier)
+    except TooManyAttemptsError as exc:
+        return _login_error_redirect(
+            settings,
+            "too_many_attempts",
+            retry_after_seconds=exc.retry_after_seconds,
+        )
 
-    stored = await state_store.pop(state)
+    try:
+        stored = await state_store.pop(state)
+    except SecurityServiceUnavailableError:
+        _logger.error("oidc_state_store_unavailable")
+        return _login_error_redirect(settings, "security_service_unavailable")
+
     if stored is None:
         await _record_failure(request, brute_force, identifier)
-        raise InvalidOAuthStateError()
+        return _login_error_redirect(settings, "invalid_state")
 
     if error or not code:
         await _record_failure(request, brute_force, identifier)
-        raise OAuthAuthenticationError()
+        failure_code = "access_denied" if error == "access_denied" else "google_auth_failed"
+        return _login_error_redirect(settings, failure_code)
 
     try:
         identity = await oidc.exchange_code(
@@ -248,14 +320,36 @@ async def google_callback(
             redirect_uri=stored.redirect_uri,
             expected_nonce=stored.nonce,
         )
-    except (OAuthAuthenticationError, EmailNotVerifiedError):
+    except (OAuthAuthenticationError, EmailNotVerifiedError) as exc:
         await _record_failure(request, brute_force, identifier)
-        raise
+        return _login_error_redirect(settings, _login_error_code(exc))
+    except Exception as exc:
+        _logger.error("oidc_exchange_failed error_type=%s", type(exc).__name__)
+        await _record_failure(request, brute_force, identifier)
+        return _login_error_redirect(settings, "google_auth_failed")
 
-    result = await auth_service.login_with_google(identity, auth_context)
+    try:
+        result = await auth_service.login_with_google(identity, auth_context)
+    except Exception as exc:
+        _logger.error("google_login_failed error_type=%s", type(exc).__name__)
+        await _record_failure(request, brute_force, identifier)
+        return _login_error_redirect(settings, _login_error_code(exc))
+
     await brute_force.reset(identifier=identifier, ip=_client_ip(request))
 
-    response = RedirectResponse(settings.frontend_url, status_code=303)
+    try:
+        ticket = await ticket_store.issue(
+            result.refresh_token,
+            ttl_seconds=settings.login_ticket_ttl_seconds,
+        )
+    except SecurityServiceUnavailableError:
+        return _login_error_redirect(settings, "security_service_unavailable")
+
+    response = _frontend_redirect(
+        settings,
+        "/api/v1/auth/complete",
+        {"ticket": ticket},
+    )
     set_refresh_cookie(
         response,
         result.refresh_token,
@@ -270,6 +364,56 @@ async def google_callback(
         domain=settings.cookie_domain,
     )
     clear_oidc_state_cookie(response, domain=settings.cookie_domain)
+    return response
+
+
+@router.post("/session-ticket")
+async def exchange_session_ticket(
+    payload: SessionTicketRequest,
+    request: Request,
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    ticket_store: Annotated[LoginTicketStore, Depends(get_login_ticket_store)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    brute_force: Annotated[BruteForceService, Depends(get_brute_force)],
+) -> Response:
+    identifier = f"ticket:{hash_refresh_token(payload.ticket)[:16]}"
+    await _ensure_not_blocked(request, brute_force, identifier)
+
+    raw_refresh = await ticket_store.consume(payload.ticket)
+    if raw_refresh is None:
+        await _record_failure(request, brute_force, identifier)
+        raise InvalidLoginTicketError()
+
+    try:
+        result = await auth_service.refresh(raw_refresh)
+    except (InvalidRefreshTokenError, RefreshTokenReuseError) as exc:
+        await _record_failure(request, brute_force, identifier)
+        raise InvalidLoginTicketError() from exc
+
+    await brute_force.reset(identifier=identifier, ip=_client_ip(request))
+
+    response = JSONResponse(
+        {
+            "access_token": result.access_token,
+            "token_type": "bearer",  # nosec B105
+            "expires_in": result.expires_in_seconds,
+            "user": _user_payload(result.user),
+        }
+    )
+    response.headers["Cache-Control"] = "no-store"
+    set_refresh_cookie(
+        response,
+        result.refresh_token,
+        max_age_seconds=settings.refresh_token_ttl_days * 86400,
+        secure=_secure(settings),
+        domain=settings.cookie_domain,
+    )
+    set_csrf_cookie(
+        response,
+        generate_csrf_token(),
+        secure=_secure(settings),
+        domain=settings.cookie_domain,
+    )
     return response
 
 

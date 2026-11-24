@@ -246,6 +246,8 @@ export const en = {
   "auth.login.errorTitle": "Could not sign you in.",
   "auth.login.errors.invalid_state": "The sign-in session expired. Try again.",
   "auth.login.errors.google_auth_failed": "Google did not confirm the authentication. Try again.",
+  "auth.login.errors.access_denied": "Google access was cancelled. Try again.",
+  "auth.login.errors.invalid_ticket": "The sign-in confirmation expired. Try again.",
   "auth.login.errors.email_not_verified": "The Google account email is not verified.",
   "auth.login.errors.too_many_attempts": "Too many attempts. Wait a few minutes.",
   "auth.login.errors.rate_limited": "Too many requests. Wait a moment.",

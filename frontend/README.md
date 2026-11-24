@@ -128,6 +128,13 @@ A árvore de pastas e as fronteiras entre `app/`, `components/`, `features/`, `l
 4. O build usa `npm run build`. Os cabeçalhos de borda estão em `vercel.json` e a CSP em `next.config.ts`.
 5. Nunca coloque segredo, token de API ou chave privada em variáveis `NEXT_PUBLIC_*`.
 
+### Login Google em produção
+
+- Na Vercel, `API_INTERNAL_URL` deve ser uma URL absoluta, por exemplo `https://sentinelpay.up.railway.app`, sem aspas e sem barra final.
+- No Railway, `FRONTEND_URL` deve ser exatamente `https://sentinelpay1.vercel.app` e `GOOGLE_REDIRECT_URI` deve ser `https://sentinelpay.up.railway.app/api/v1/auth/google/callback`.
+- No Google Console, a mesma URI precisa estar em "URIs de redirecionamento autorizados" e a origem `https://sentinelpay1.vercel.app` em "Origens JavaScript autorizadas".
+- O callback entrega um ticket de uso único e o BFF conclui em `/api/v1/auth/complete?ticket=...`, sem cookie de refresh no domínio da API.
+
 ## Observabilidade
 
 A integração com Sentry é opcional. Com `NEXT_PUBLIC_SENTRY_DSN` preenchido, o SDK é carregado sob demanda e envia apenas a exceção sanitizada e tags seguras. Coleta de cookies, cabeçalhos, corpos de requisição, query string e dados de usuário fica desligada. Sem DSN, nada é enviado e nenhum chunk de observabilidade é carregado.

@@ -20,6 +20,10 @@ export type RefreshOutcome =
   | { kind: "missing" }
   | { kind: "failed"; code: string; status: number; setCookies: string[] };
 
+export type TicketOutcome =
+  | { kind: "refreshed"; session: BackendSession; setCookies: string[] }
+  | { kind: "failed"; code: string; status: number; setCookies: string[] };
+
 export function readSetCookies(headers: Headers): string[] {
   const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
 
@@ -162,6 +166,92 @@ export async function requestRefresh(options: {
   }
 }
 
+function parseSessionPayload(payload: unknown): BackendSession | null {
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+
+  const record = payload as {
+    access_token?: unknown;
+    expires_in?: unknown;
+    user?: unknown;
+  };
+
+  if (typeof record.access_token !== "string" || record.access_token.length === 0) {
+    return null;
+  }
+
+  const expiresIn =
+    typeof record.expires_in === "number" && Number.isFinite(record.expires_in)
+      ? record.expires_in
+      : 900;
+
+  return {
+    accessToken: record.access_token,
+    expiresInSeconds: expiresIn,
+    user: record.user,
+  };
+}
+
+export async function requestTicketExchange(options: {
+  ticket: string;
+  backendUrl: string;
+  clientIp?: string | null;
+  fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
+}): Promise<TicketOutcome> {
+  const doFetch = options.fetchImpl ?? fetch;
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+
+  if (options.clientIp) {
+    headers["X-Forwarded-For"] = options.clientIp;
+  }
+
+  let response: Response;
+
+  try {
+    response = await doFetch(options.backendUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ticket: options.ticket }),
+      cache: "no-store",
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    return { kind: "failed", code: "network_error", status: 502, setCookies: [] };
+  }
+
+  const setCookies = readSetCookies(response.headers);
+
+  if (!response.ok) {
+    return {
+      kind: "failed",
+      code: await readErrorCode(response),
+      status: response.status,
+      setCookies,
+    };
+  }
+
+  try {
+    const session = parseSessionPayload(await response.json());
+
+    if (!session) {
+      return { kind: "failed", code: "invalid_response", status: 502, setCookies };
+    }
+
+    return { kind: "refreshed", session, setCookies };
+  } catch {
+    return { kind: "failed", code: "invalid_response", status: 502, setCookies };
+  }
+}
+
 export async function readErrorCode(response: Response): Promise<string> {
   try {
     const payload: unknown = await response.json();
@@ -181,6 +271,8 @@ export function toLoginErrorCode(code: string): LoginErrorCode | null {
   switch (code) {
     case "invalid_state":
     case "google_auth_failed":
+    case "access_denied":
+    case "invalid_ticket":
     case "email_not_verified":
     case "too_many_attempts":
     case "rate_limited":

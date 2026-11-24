@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { buildBackendUrl } from "@/lib/api/config";
+import { ApiConfigurationError, buildBackendUrl } from "@/lib/api/config";
 import { passwordAuthProxy } from "@/lib/session/password-auth";
 import { OIDC_NEXT_COOKIE, OIDC_NEXT_MAX_AGE_SECONDS } from "@/lib/session/constants";
 import { isSecureRequest } from "@/lib/session/cookies";
@@ -12,7 +12,29 @@ export const dynamic = "force-dynamic";
 export function GET(request: NextRequest) {
   const next = resolveNextPath(request.nextUrl.searchParams.get("next"), APP_HOME_PATH);
   const secure = isSecureRequest(request.url, request.headers.get("x-forwarded-proto"));
-  const target = new URL(buildBackendUrl("/api/v1/auth/google/login"));
+  let target: URL;
+
+  try {
+    target = new URL(buildBackendUrl("/api/v1/auth/google/login"));
+  } catch (error) {
+    if (error instanceof ApiConfigurationError) {
+      return Response.json(
+        {
+          type: "about:blank",
+          title: "Service unavailable",
+          status: 503,
+          detail: "Authentication is not configured.",
+          instance: "/api/v1",
+          code: "auth_not_configured",
+          request_id: "",
+        },
+        { status: 503, headers: { "content-type": "application/problem+json" } },
+      );
+    }
+
+    throw error;
+  }
+
   const response = NextResponse.redirect(target, { status: 302 });
 
   response.cookies.set({
