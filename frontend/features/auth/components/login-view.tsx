@@ -17,11 +17,11 @@ import { PasswordStrengthMeter } from "@/features/auth/components/password-stren
 import type { PasswordPolicy } from "@/lib/auth/capabilities";
 import { requestPasswordLogin, requestRegister } from "@/lib/auth/client";
 import {
-  LOGIN_MODES,
   buildLoginModeUrl,
   parseLoginMode,
   type LoginMode,
 } from "@/lib/auth/login-mode";
+import { resolveLoginVisibility } from "@/lib/auth/login-visibility";
 import { identifierFragments, passwordIssues } from "@/lib/auth/password";
 import { emailSchema } from "@/lib/auth/schemas";
 import type { TranslationKey } from "@/lib/i18n";
@@ -134,10 +134,19 @@ export function LoginView({
   const confirmRef = useRef<HTMLInputElement | null>(null);
   const tabRefs = useRef<Partial<Record<LoginMode, HTMLButtonElement | null>>>({});
   const termsErrorId = useId();
-  const formsEnabled = passwordEnabled && policy !== null;
-  const availableModes: readonly LoginMode[] = signupEnabled ? LOGIN_MODES : (["signin"] as const);
   const requestedMode = parseLoginMode(searchParams.get("modo") ?? search.modo);
-  const mode: LoginMode = availableModes.includes(requestedMode) ? requestedMode : "signin";
+  const {
+    formsEnabled,
+    tabsVisible,
+    availableModes,
+    mode,
+    passwordFieldsVisible,
+  } = resolveLoginVisibility({
+    passwordEnabled,
+    signupEnabled,
+    policyAvailable: policy !== null,
+    requestedMode,
+  });
   const copy = MODE_COPY[mode];
   const next = isSafeNextPath(search.next) ? search.next : undefined;
   const errorKey =
@@ -251,7 +260,7 @@ export function LoginView({
   }
 
   async function submitPasswordForm(): Promise<void> {
-    if (pending || !formsEnabled) {
+    if (pending || !passwordFieldsVisible) {
       return;
     }
 
@@ -441,7 +450,7 @@ export function LoginView({
               </div>
             ) : null}
 
-            {formsEnabled && signupEnabled ? (
+            {tabsVisible ? (
               <div
                 role="tablist"
                 aria-label={t("auth.login.tabsLabel")}
@@ -479,9 +488,9 @@ export function LoginView({
             ) : null}
 
             <div
-              role={formsEnabled && signupEnabled ? "tabpanel" : undefined}
-              id={formsEnabled && signupEnabled ? "login-panel" : undefined}
-              aria-labelledby={formsEnabled && signupEnabled ? `login-tab-${mode}` : undefined}
+              role={tabsVisible ? "tabpanel" : undefined}
+              id={tabsVisible ? "login-panel" : undefined}
+              aria-labelledby={tabsVisible ? `login-tab-${mode}` : undefined}
               className="min-h-[28rem]"
             >
               <h2 className="font-serif text-4xl leading-tight tracking-tight">{t(copy.title)}</h2>
@@ -581,8 +590,7 @@ export function LoginView({
                   aria-busy={googlePending}
                   onClick={startGoogleLogin}
                   className="h-12 w-full gap-3 border-border bg-surface text-foreground transition-[background-color,border-color] hover:bg-surface-elevated active:translate-y-px [&_svg]:size-5"
-                >
-                  {googlePending ? (
+                >                  {googlePending ? (
                     <LoaderCircle className="animate-spin" aria-hidden="true" />
                   ) : (
                     <GoogleIcon className="size-5" />
@@ -596,7 +604,13 @@ export function LoginView({
                   </p>
                 ) : null}
 
-                {formsEnabled ? (
+                {tabsVisible && mode === "signup" && !signupEnabled ? (
+                  <p className="rounded-[6px] border border-border bg-surface-elevated p-3 text-xs leading-relaxed text-muted-foreground">
+                    {t("auth.login.signupEmailUnavailable")}
+                  </p>
+                ) : null}
+
+                {passwordFieldsVisible ? (
                   <>
                     <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
                       <span className="h-px flex-1 bg-border" aria-hidden="true" />
@@ -806,7 +820,7 @@ export function LoginView({
                 ) : null}
               </form>
 
-              {formsEnabled && signupEnabled ? (
+              {tabsVisible ? (
                 <p className="mt-6 text-sm text-muted-foreground">
                   {t(copy.footerPrompt)}{" "}
                   <button

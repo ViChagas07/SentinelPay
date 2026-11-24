@@ -180,3 +180,31 @@ test("denied access notice is shown", async ({ page }) => {
     },
   );
 });
+
+test("login keeps both tabs visible when email sign-up is unavailable", async ({ page }) => {
+  const signupDisabled = await page.request
+    .get("/api/v1/auth/capabilities")
+    .then((response) => response.json())
+    .catch(() => null);
+
+  test.skip(
+    !signupDisabled || signupDisabled.signup_enabled !== false || !signupDisabled.password_enabled,
+    "backend ativo com cadastro por e-mail; o estado sem cadastro e coberto em lib/auth/login-visibility.test.ts",
+  );
+
+  await page.goto("/login");
+
+  const signin = page.getByRole("tab", { name: "Entrar" });
+  const signup = page.getByRole("tab", { name: "Criar conta" });
+  await expect(signin).toBeVisible();
+  await expect(signup).toBeVisible();
+  await expect(signin).toHaveAttribute("aria-selected", "true");
+
+  await signup.click();
+  await expect(page).toHaveURL(/modo=cadastro/);
+  await expect(page.getByRole("heading", { level: 2, name: "Crie sua conta" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Cadastrar com Google/ })).toBeVisible();
+  await expect(page.locator('input[type="password"]')).toHaveCount(0);
+  await expect(page.getByLabel("Nome completo")).toHaveCount(0);
+  await expect(page.getByLabel("Confirmar senha")).toHaveCount(0);
+});

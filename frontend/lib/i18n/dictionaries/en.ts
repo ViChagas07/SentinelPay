@@ -230,6 +230,8 @@ export const en = {
   "auth.login.signupWithGoogle": "Sign up with Google",
   "auth.login.signupGoogleHint":
     "The first sign-in with a Google account already creates your SentinelPay account.",
+  "auth.login.signupEmailUnavailable":
+    "Sign-up with email and password is not available right now. Create your account by continuing with Google.",
   "auth.login.signupPrompt": "Do not have an account?",
   "auth.login.signinPrompt": "Already have an account?",
   "auth.login.acceptPrefix": "I have read and accept the",

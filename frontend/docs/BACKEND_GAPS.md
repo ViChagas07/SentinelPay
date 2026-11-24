@@ -376,58 +376,77 @@ Fallbacks da F11:
 
 ## 21. F12: progresso e cancelamento (2026-11-17)
 
-A P18.1 fechou as lacunas de progresso e cancelamento. Contratos agora disponíveis:
+A P18.1 fechou as lacunas de progresso e cancelamento. Contratos agora disponï¿½veis:
 
-- `GET /api/v1/analyses/{id}` inclui `progress` com `percent` (0 a 100), `stage` (`validation`, `ocr`, `extraction`, `classification`, `rag`, `llm`, `persistence`), `detail`, `started_at` e `indeterminate`, além de `cancelled_at`.
-- `GET /api/v1/analyses/{id}/events` entrega `text/event-stream` com snapshot inicial, eventos `progress` e `done`. O snapshot permite reconectar e abrir a tela no meio da análise.
+- `GET /api/v1/analyses/{id}` inclui `progress` com `percent` (0 a 100), `stage` (`validation`, `ocr`, `extraction`, `classification`, `rag`, `llm`, `persistence`), `detail`, `started_at` e `indeterminate`, alï¿½m de `cancelled_at`.
+- `GET /api/v1/analyses/{id}/events` entrega `text/event-stream` com snapshot inicial, eventos `progress` e `done`. O snapshot permite reconectar e abrir a tela no meio da anï¿½lise.
 - `POST /api/v1/analyses/{id}/cancel` responde 202 com `{ analysis_id, status }`. Estados `completed`, `degraded` e `failed` retornam 409 `analysis_not_cancellable`.
 - Status novos: `running`, `cancelling` e `cancelled`. `processing` continua aceito como alias legado.
 
-O front usa SSE e cai para polling de `GET /analyses/{id}` após duas falhas de conexão. A linha do tempo histórica completa de eventos e retries continua fora do contrato e segue como lacuna P2.
+O front usa SSE e cai para polling de `GET /analyses/{id}` apï¿½s duas falhas de conexï¿½o. A linha do tempo histï¿½rica completa de eventos e retries continua fora do contrato e segue como lacuna P2.
 
 ## 22. F13: identidade visual (2026-11-17)
 
-O front entrega o kit de marca em `frontend/public/brand/` e mantém os originais intactos em `frontend/assets/brand/originals/`. O favicon oficial recebido tem xadrez de transparência gravado nos pixels e foi descartado. Os favicons em uso foram gerados do símbolo transparente.
+O front entrega o kit de marca em `frontend/public/brand/` e mantï¿½m os originais intactos em `frontend/assets/brand/originals/`. O favicon oficial recebido tem xadrez de transparï¿½ncia gravado nos pixels e foi descartado. Os favicons em uso foram gerados do sï¿½mbolo transparente.
 
-Relatórios PDF e e-mails transacionais não são gerados pelo front. Para aplicar a marca nesses canais, o backend precisa de uma cópia própria do asset, porque não deve ler `frontend/public` em runtime.
+Relatï¿½rios PDF e e-mails transacionais nï¿½o sï¿½o gerados pelo front. Para aplicar a marca nesses canais, o backend precisa de uma cï¿½pia prï¿½pria do asset, porque nï¿½o deve ler `frontend/public` em runtime.
 
 | Canal | Necessidade | Hoje | Proposta | Prioridade |
 | --- | --- | --- | --- | --- |
-| Relatório PDF, cabeçalho | usar a versão com fundo branco, com proporção e respiro preservados | O relatório JSON existe no bucket, sem template versionado no repositório. | Copiar `logo-symbol-on-white-512.png` para os assets do gerador de PDF e inserir no cabeçalho, com altura entre 24 e 40 px e área de respiro de 25%. | P2 |
-| E-mails transacionais, cabeçalho | usar a versão com fundo branco, com `alt` e proporção preservados | Não há templates de e-mail no backend. | Copiar o mesmo asset para o serviço de e-mail e inserir no cabeçalho. Nunca usar a variante clara em fundo branco nem a versão colorida em fundo escuro. | P2 |
+| Relatï¿½rio PDF, cabeï¿½alho | usar a versï¿½o com fundo branco, com proporï¿½ï¿½o e respiro preservados | O relatï¿½rio JSON existe no bucket, sem template versionado no repositï¿½rio. | Copiar `logo-symbol-on-white-512.png` para os assets do gerador de PDF e inserir no cabeï¿½alho, com altura entre 24 e 40 px e ï¿½rea de respiro de 25%. | P2 |
+| E-mails transacionais, cabeï¿½alho | usar a versï¿½o com fundo branco, com `alt` e proporï¿½ï¿½o preservados | Nï¿½o hï¿½ templates de e-mail no backend. | Copiar o mesmo asset para o serviï¿½o de e-mail e inserir no cabeï¿½alho. Nunca usar a variante clara em fundo branco nem a versï¿½o colorida em fundo escuro. | P2 |
 
 ## 23. F15 e F16: login com e-mail e senha (2026-11-23)
 
 O redesenho do painel direito de `/login` introduziu as abas "Entrar" e "Criar conta". A F16 ligou
-essas abas ao fluxo real de e-mail e senha, atrás da flag `AUTH_PASSWORD_ENABLED`, que vem do
-endpoint público de capacidades.
+essas abas ao fluxo real de e-mail e senha, atrï¿½s da flag `AUTH_PASSWORD_ENABLED`, que vem do
+endpoint pï¿½blico de capacidades.
 
 Contratos agora atendidos pelo backend (prefixo `/api/v1/auth`):
 
-| Rota | Método | Payload | Resposta | Status |
+| Rota | Mï¿½todo | Payload | Resposta | Status |
 | --- | --- | --- | --- | --- |
 | `/auth/capabilities` | GET | nenhum | `{ password_enabled, signup_enabled, password_reset_enabled, google_enabled }` | atendido |
 | `/auth/password-policy` | GET | nenhum | `{ min_length, max_length, requirements, hibp_enabled }` | atendido |
-| `/auth/register` | POST | `{ nome_completo, email, senha, aceite_termos, aceite_privacidade }` | 202 neutro e e-mail de verificação; 503 quando a flag está desligada | atendido |
-| `/auth/login` | POST | `{ email, senha }` | 200 com o mesmo par de cookies do OIDC; 401 genérico; 403 `email_not_verified`; 429 com `Retry-After` | atendido |
+| `/auth/register` | POST | `{ nome_completo, email, senha, aceite_termos, aceite_privacidade }` | 202 neutro e e-mail de verificaï¿½ï¿½o; 503 quando a flag estï¿½ desligada | atendido |
+| `/auth/login` | POST | `{ email, senha }` | 200 com o mesmo par de cookies do OIDC; 401 genï¿½rico; 403 `email_not_verified`; 429 com `Retry-After` | atendido |
 | `/auth/verify-email` | POST | `{ token }` | 204 com `email_verified_at` atualizado; 400 `invalid_auth_token` | atendido |
 | `/auth/resend-verification` | POST | `{ email }` | 202 neutro com limite por IP e e-mail | atendido |
 | `/auth/forgot-password` | POST | `{ email }` | 202 neutro, tempo equalizado e link de 30 minutos | atendido |
-| `/auth/reset-password` | POST | `{ token, nova_senha }` | 204, revoga as sessões ativas e envia aviso | atendido |
-| `/auth/change-password` | POST | `{ senha_atual, nova_senha }` | 204 com sessão autenticada | atendido, sem tela de conta ainda |
+| `/auth/reset-password` | POST | `{ token, nova_senha }` | 204, revoga as sessï¿½es ativas e envia aviso | atendido |
+| `/auth/change-password` | POST | `{ senha_atual, nova_senha }` | 204 com sessï¿½o autenticada | atendido, sem tela de conta ainda |
 
-O BFF expõe os mesmos caminhos em `/api/v1/auth/*`, valida a origem, mantém os cookies HttpOnly e
+O BFF expï¿½e os mesmos caminhos em `/api/v1/auth/*`, valida a origem, mantï¿½m os cookies HttpOnly e
 nunca devolve tokens ao JavaScript.
 
-### Pendências que dependem de decisão externa
+### Pendï¿½ncias que dependem de decisï¿½o externa
 
 | Necessidade | Hoje | O que falta | Prioridade |
 | --- | --- | --- | --- |
-| Provedor de e-mail e domínio remetente | O código tem a porta `EmailSender`, um emissor de desenvolvimento que grava em `var/auth-outbox` e um adaptador SMTP genérico por variáveis de ambiente. | Contratar o provedor ou apontar o SMTP para um domínio remetente verificado, com SPF, DKIM e DMARC, e trocar `AUTH_EMAIL_PROVIDER` para `smtp` em produção. | P1 |
-| Cadastro habilitado em produção | `AUTH_PASSWORD_ENABLED` está ligada por padrão e habilita o login por senha. O cadastro só aparece com SMTP pronto, porque `signup_enabled` exige provedor de e-mail. | Configurar SMTP e `APP_BASE_URL` reais antes de divulgar o cadastro. | P1 |
-| Captcha anti-bot | `CAPTCHA_ENABLED` existe e está desligada. Nenhum provedor foi contratado. | Escolher o provedor, implementar a verificação no backend e só então ligar a flag e renderizar o widget. | P2 |
-| Política de vinculação Google e senha | Implementada: vincula apenas conta com e-mail verificado e `email_verified=true` do Google; caso contrário, bloqueia e registra o evento. | Revisão jurídica e de produto da política registrada no ADR 0029. | P2 |
-| Retenção de `auth_events` | Sem prazo automático de expurgo. A exclusão de conta mantém o evento com `user_id` nulo. | Definir o prazo de guarda dos registros de segurança e agendar a rotina de expurgo no worker. | P2 |
-| Limites de rate limit e bloqueio | Valores padrão configuráveis por ambiente: 20 tentativas de login por IP e 10 por e-mail em 15 minutos; 10 e 5 para cadastro; 10 e 5 para esqueci; 10 e 3 para reenvio; bloqueio progressivo a partir de 5 falhas, até 1 hora. | Validar os números com dados reais de uso e ajustar as variáveis `AUTH_RATE_LIMIT_*` e `ACCOUNT_LOCKOUT_*`. | P2 |
-| Tela de troca de senha na conta | O endpoint `/auth/change-password` existe e segue o mesmo contrato, mas `/account` ainda não tem a seção. | Adicionar a seção em `/account` consumindo o endpoint. | P2 |
-| Verificação de senha vazada (HIBP) | `PASSWORD_HIBP_ENABLED` existe e está desligada. | Aprovar saída de rede para a API do HIBP por k-anonymity antes de ligar. | P3 |
+| Provedor de e-mail e domï¿½nio remetente | O cï¿½digo tem a porta `EmailSender`, um emissor de desenvolvimento que grava em `var/auth-outbox` e um adaptador SMTP genï¿½rico por variï¿½veis de ambiente. | Contratar o provedor ou apontar o SMTP para um domï¿½nio remetente verificado, com SPF, DKIM e DMARC, e trocar `AUTH_EMAIL_PROVIDER` para `smtp` em produï¿½ï¿½o. | P1 |
+| Cadastro habilitado em produï¿½ï¿½o | `AUTH_PASSWORD_ENABLED` estï¿½ ligada por padrï¿½o e habilita o login por senha. O cadastro sï¿½ aparece com SMTP pronto, porque `signup_enabled` exige provedor de e-mail. | Configurar SMTP e `APP_BASE_URL` reais antes de divulgar o cadastro. | P1 |
+| Captcha anti-bot | `CAPTCHA_ENABLED` existe e estï¿½ desligada. Nenhum provedor foi contratado. | Escolher o provedor, implementar a verificaï¿½ï¿½o no backend e sï¿½ entï¿½o ligar a flag e renderizar o widget. | P2 |
+| Polï¿½tica de vinculaï¿½ï¿½o Google e senha | Implementada: vincula apenas conta com e-mail verificado e `email_verified=true` do Google; caso contrï¿½rio, bloqueia e registra o evento. | Revisï¿½o jurï¿½dica e de produto da polï¿½tica registrada no ADR 0029. | P2 |
+| Retenï¿½ï¿½o de `auth_events` | Sem prazo automï¿½tico de expurgo. A exclusï¿½o de conta mantï¿½m o evento com `user_id` nulo. | Definir o prazo de guarda dos registros de seguranï¿½a e agendar a rotina de expurgo no worker. | P2 |
+| Limites de rate limit e bloqueio | Valores padrï¿½o configurï¿½veis por ambiente: 20 tentativas de login por IP e 10 por e-mail em 15 minutos; 10 e 5 para cadastro; 10 e 5 para esqueci; 10 e 3 para reenvio; bloqueio progressivo a partir de 5 falhas, atï¿½ 1 hora. | Validar os nï¿½meros com dados reais de uso e ajustar as variï¿½veis `AUTH_RATE_LIMIT_*` e `ACCOUNT_LOCKOUT_*`. | P2 |
+| Tela de troca de senha na conta | O endpoint `/auth/change-password` existe e segue o mesmo contrato, mas `/account` ainda nï¿½o tem a seï¿½ï¿½o. | Adicionar a seï¿½ï¿½o em `/account` consumindo o endpoint. | P2 |
+| Verificaï¿½ï¿½o de senha vazada (HIBP) | `PASSWORD_HIBP_ENABLED` existe e estï¿½ desligada. | Aprovar saï¿½da de rede para a API do HIBP por k-anonymity antes de ligar. | P3 |
+## 24. F21: cadastro com Google e foto de perfil (2026-11-24)
+
+O cadastro por Google ja funciona hoje: `login_with_google` cria a conta quando o `google_sub` nao
+existe, marca o e-mail como verificado e registra consentimento em `google_signin`. A foto de perfil, porem, nao e coletada nem armazenada, e nao ha senha local para contas Google.
+
+| Necessidade | Metodo e rota desejada | Payload | Resposta esperada | Hoje | Tela que depende | Prioridade |
+| --- | --- | --- | --- | --- | --- | --- |
+| Guardar a foto do perfil Google | `POST /api/v1/users/me` ou campo `avatar_url` em `GET /users/me` | `{ avatar_url }` ou `null` para remover | `200` com o perfil atualizado | O escopo `profile` entrega `picture` no ID token, mas `GoogleIdentity` so mapeia `google_sub`, `email` e `name`. O model `users` nao tem coluna de avatar e o front desenha iniciais em `user-avatar.tsx`. | Sidebar, menu do usuario e `/account` | P2 |
+| Trocar a foto | mesma rota com `PUT /api/v1/users/me/avatar` | `{ avatar_url }` | `200` | inexistente | `/account` secao perfil | P3 |
+
+Notas de implementacao para o backend, se decidir atender:
+
+- Adicionar `picture_url` em `GoogleIdentity` e ler `claims.get("picture")` em `google_oidc.py`.
+- Criar coluna `avatar_url` em `users` com migration, validando `https` e host do Google, para evitar
+  carregar URL arbitraria no `img` do front.
+- O front ja tem `UserAvatar` com fallback de iniciais; basta consumir o campo quando existir.
+- Senha local para conta Google nao existe por desenho. O acesso e sempre OIDC e a senha nunca e
+  extraida do Google. Cadastro com e-mail e senha e um fluxo separado, dependente de SMTP e da flag
+  `signup_enabled`.

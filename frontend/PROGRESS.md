@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Fase atual: F20 (fallback de capacidades de autenticação) concluída.
+- Fase atual: F21 (abas de entrada e cadastro no login) concluída.
 - Próxima fase: nenhuma prevista. O front-end está em estado de entrega.
 - Login: painel esquerdo preservado, com logo dobrado para 44 px e botão "Voltar" acima dele. Painel direito com abas Entrar e Criar conta. A aba Entrar mostra e-mail, senha e botão primário sempre que `password_enabled` está ligado, sem exigir SMTP. A aba Criar conta, a verificação e a recuperação dependem de `signup_enabled`, que exige provedor de e-mail. Aceite obrigatório, estado na URL por `?modo=cadastro` e selo de confiança em HTTPS.
 - Landing: header com navegação centralizada, painéis do "Como funciona" trocando por segmento, régua do índice de risco colorida por faixa, seção de normas com respiro e CTA final centralizado e ampliado.
@@ -59,6 +59,16 @@ Resultados reais em 2026-11-17 (F12):
 - Playwright: `e2e/verification.spec.ts` com 2 testes verdes (progresso real, retomada após reload e cancelamento) e `e2e/verification-errors.spec.ts` com 12 testes verdes. O painel de progresso passou no axe sem violações.
 - Migration `0011_analysis_progress` aplicada após backup. Testes Docker de corrida de cancelamento verdes.
 - Teste manual com API e worker reais: SSE entregou snapshot em `queued` e `running`, cancelamento em OCR retornou 202 `cancelling` e o estado final ficou `cancelled`, com score, relatório S3 e resultado parcial limpos.
+
+## Feito em F21
+
+- Abas "Entrar" e "Criar conta" no topo do formulário de `/login`, no formato de controle segmentado, com `role="tablist"`, setas, Home e End, `aria-selected` e `aria-controls` apontando para o mesmo painel.
+- As abas deixaram de depender de `signup_enabled`. Agora aparecem sempre que o login por senha está ativo, e a aba de cadastro mostra o caminho real disponível: botão "Cadastrar com Google" e aviso neutro quando o cadastro por e-mail não está ligado.
+- Cadastro via Google: o primeiro acesso já cria a conta no backend (`login_with_google`), marca o e-mail como verificado e registra consentimento. A aba de cadastro usa o mesmo fluxo OIDC, com o texto "Cadastrar com Google".
+- Lógica de visibilidade extraída para `lib/auth/login-visibility.ts` e coberta por `login-visibility.test.ts`, porque as capacidades são lidas no servidor e não podem ser interceptadas pelo `page.route` do Playwright.
+- Causa raiz adicional corrigida: o catch-all do BFF exigia sessão mesmo para rotas públicas, então `/api/v1/auth/capabilities` respondia 401 e o fallback escondia o formulário. Foram criados Route Handlers públicos em `app/api/v1/auth/capabilities` e `app/api/v1/auth/password-policy`, com `lib/auth/public-capabilities.ts`, timeout de 8 s e fallback local coerente com `AUTH_PASSWORD_ENABLED`.
+- Foto de perfil do Google e senha local: registrados em `docs/BACKEND_GAPS.md` secao 24. O escopo `profile` entrega a claim `picture`, mas `GoogleIdentity` não a mapeia, o model `users` não tem coluna de avatar e o front desenha iniciais. Conta Google não tem senha local por desenho; o acesso é sempre OIDC.
+- Verificação: build de produção com `API_INTERNAL_URL` em porta morta devolve `{"password_enabled":true,"signup_enabled":false,...}` nas rotas públicas e renderiza as duas abas, com e sem cadastro por e-mail. 306 testes unitários, 30 e2e de autenticação, matriz axe, teclado e responsivo de `/login` verdes.
 
 ## Feito em F20
 
