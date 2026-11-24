@@ -35,6 +35,7 @@ This index lists the decisions that shaped SentinelPay. The records are kept in 
 | [0028](0028-langfuse-pipeline-traces.md) | End-to-end trace per analysis and Langfuse experiments | Accepted |
 | [0029](0029-vinculacao-google-senha.md) | Google and password account linking policy | Accepted |
 | [0030](0030-politica-senha-e-tokens.md) | Password policy, Argon2id and single-use tokens | Accepted |
+| [0031](0031-segredos-derivados-no-deploy.md) | Derived security hash secret and optional metrics token | Accepted |
 
 ## How to add an ADR
 

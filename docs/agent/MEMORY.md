@@ -13,7 +13,8 @@ Registre aqui apenas o que ajuda sessoes futuras: decisoes que valem sempre, arm
 - `make test-docker` executa `up` + `migrate` (com backup) antes dos testes; a imagem da API precisa ser rebuildada quando migrations novas forem adicionadas.
 - Os testes forcam `APP_ENV=local` e URLs locais no `backend/conftest.py`, mesmo que exista configuracao de producao no ambiente.
 - `httpx` e dependencia de runtime (usada pela guarda SSRF), nao apenas de teste; nao mover para o grupo dev.
-- Fora de local, `SECURITY_HASH_SECRET` e obrigatorio para pseudonimizar chaves de rate limit/forca bruta; o `.env` de producao atual ainda precisa receber esse valor.
+- Fora de local, `SECURITY_HASH_SECRET` vazio e derivado de `JWT_SECRET` por HKDF-SHA256 (ADR 0031); explicito tem precedencia. Trocar o JWT ou o hash secret invalida rate limit em andamento e destinos cifrados de notificacao.
+- Fora de local, `METRICS_TOKEN` vazio nao derruba a subida: `/metrics` fica bloqueado com 401 ate o token ser definido; placeholders continuam recusados.
 - O `instance` do problem+json usa o template da rota quando existe, para nao refletir payload/PII do path.
 - Docs Swagger/Redoc/OpenAPI ficam desativados fora de `APP_ENV=local`.
 - Auth: Google OIDC com PKCE/state/nonce; access JWT HS256; refresh opaco rotativo com apenas hash no banco e familia revogada em reuso; `require_role` usa a role do banco, nao apenas a claim.

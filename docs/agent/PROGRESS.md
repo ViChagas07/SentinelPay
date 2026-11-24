@@ -18,6 +18,7 @@
 - Graphify (atualizar somente codigo): `graphify update .`.
 
 ## Estado
+- Deploy Railway (2026-11-24): `Settings` deixou de exigir `SECURITY_HASH_SECRET` e `METRICS_TOKEN` fora de local. O hash secret e derivado de `JWT_SECRET` por HKDF-SHA256 quando ausente; `METRICS_TOKEN` vazio mantem `/metrics` em 401 sem derrubar a API. ADR 0031 criada. Suite sem Docker 997 passed + 2 skips + 50 deselected; Ruff/format/mypy strict verdes. Testes Docker nao reexecutados (mudanca sem schema).
 - Fase atual: P19 (README final, demo e OpenAPI) concluida. Proxima etapa: manutencao e validacao real de LLM/OCR/Pinecone conforme a lista de nao validados.
 - Suites em 2026-11-17 (P18.1): `pytest -m "not docker"` 906 passed + 2 skips + 50 deselected; `mypy src tests` 405 arquivos; Ruff/format verdes; `test_analysis_cancellation.py` com 3 testes Docker verdes; contrato OpenAPI regenerado. Migration `0011_analysis_progress` aplicada apos backup `backups/paysentineliq_20261117T130734Z.sql`; `alembic current` = `0011_analysis_progress (head)`.
 - Progresso: `analyses` ganhou `progress_percent`, `current_stage`, `stage_detail`, `stage_started_at`, `cancel_requested_at` e `cancelled_at`; pesos em `domain/analysis_progress.py` (5/25/10/10/20/25/5); o grafo grava evento `progress` e percentual ao iniciar/concluir etapas; OCR envia pagina N de M; RAG e LLM mantem etapa atual com estado indeterminado no front.

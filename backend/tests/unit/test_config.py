@@ -10,6 +10,27 @@ from paysentineliq.infrastructure.config import (
 )
 
 
+def _production_settings(**overrides: object) -> Settings:
+    values: dict[str, object] = {
+        "app_env": "production",
+        "database_url": "postgresql+asyncpg://user:pass@db:5432/app",
+        "redis_url": "redis://cache:6379/0",
+        "rabbitmq_url": "amqp://user:pass@rabbitmq:5672//",
+        "celery_result_backend": "redis://cache:6379/1",
+        "jwt_secret": "x" * 64,
+        "google_client_id": "test-client",
+        "google_client_secret": "test-secret",
+        "google_redirect_uri": "https://example.com/api/v1/auth/google/callback",
+        "frontend_url": "https://app.example.com",
+        "s3_bucket": "test-bucket",
+        "s3_access_key_id": "test-key",
+        "s3_secret_access_key": "test-secret",
+        "metrics_token": "production-metrics-token",
+    }
+    values.update(overrides)
+    return Settings.model_validate(values)
+
+
 def test_local_uses_safe_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("APP_ENV", "DATABASE_URL", "REDIS_URL"):
         monkeypatch.delenv(name, raising=False)
@@ -54,6 +75,32 @@ def test_non_local_accepts_external_urls() -> None:
 
     assert settings.app_env == "production"
     assert settings.database_url.startswith("postgresql+asyncpg://")
+
+
+def test_non_local_derives_security_hash_secret_from_jwt_secret() -> None:
+    first = _production_settings()
+    second = _production_settings()
+
+    assert first.security_hash_secret
+    assert first.security_hash_secret != first.jwt_secret
+    assert first.security_hash_secret == second.security_hash_secret
+
+
+def test_non_local_keeps_explicit_security_hash_secret() -> None:
+    settings = _production_settings(security_hash_secret="explicit-production-secret")
+
+    assert settings.security_hash_secret == "explicit-production-secret"
+
+
+def test_non_local_allows_missing_metrics_token() -> None:
+    settings = _production_settings(metrics_token="")
+
+    assert settings.metrics_token == ""
+
+
+def test_non_local_rejects_placeholder_metrics_token() -> None:
+    with pytest.raises(ValidationError):
+        _production_settings(metrics_token="CHANGE_ME")
 
 
 def test_reads_values_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:

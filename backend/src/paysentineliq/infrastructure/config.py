@@ -1,13 +1,29 @@
+import base64
 import secrets
 from functools import lru_cache
 from typing import Literal, Self
 from urllib.parse import unquote, urlparse
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_LOCAL_DATABASE_URL = "postgresql+asyncpg://sentinel:CHANGE_ME@localhost:55432/paysentineliq"
 DEFAULT_LOCAL_REDIS_URL = "redis://localhost:6379/0"
+
+_HASH_SECRET_SALT = b"paysentineliq-settings-v1"
+_HASH_SECRET_INFO = b"security-hash-secret"
+
+
+def _derive_security_hash_secret(jwt_secret: str) -> str:
+    key = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=_HASH_SECRET_SALT,
+        info=_HASH_SECRET_INFO,
+    ).derive(jwt_secret.encode("utf-8"))
+    return base64.urlsafe_b64encode(key).decode("ascii")
 
 
 class Settings(BaseSettings):
@@ -332,17 +348,17 @@ class Settings(BaseSettings):
             else:
                 missing.append("CELERY_RESULT_BACKEND")
 
-        if not self.security_hash_secret:
-            if self.app_env == "local":
-                self.security_hash_secret = secrets.token_urlsafe(32)
-            else:
-                missing.append("SECURITY_HASH_SECRET")
-
         if not self.jwt_secret:
             if self.app_env == "local":
                 self.jwt_secret = secrets.token_urlsafe(48)
             else:
                 missing.append("JWT_SECRET")
+
+        if not self.security_hash_secret:
+            if self.jwt_secret:
+                self.security_hash_secret = _derive_security_hash_secret(self.jwt_secret)
+            else:
+                missing.append("SECURITY_HASH_SECRET")
 
         if self.app_env != "local":
             for name, value in (
@@ -540,8 +556,6 @@ class Settings(BaseSettings):
             if self.app_env == "local":
                 # Token fixo e publico, valido somente em APP_ENV=local; nao e segredo real.
                 self.metrics_token = "local-metrics-token"  # nosec B105
-            else:
-                missing.append("METRICS_TOKEN")
         elif self.app_env != "local" and self.metrics_token.strip() in {
             "CHANGE_ME",
             "local-metrics-token",
