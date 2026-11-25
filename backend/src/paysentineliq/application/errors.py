@@ -69,10 +69,10 @@ class ForbiddenError(ApplicationError):
 
 
 class AuthNotConfiguredError(ApplicationError):
-    def __init__(self) -> None:
+    def __init__(self, detail: str | None = None) -> None:
         super().__init__(
             code="auth_not_configured",
-            message="Authentication is not configured.",
+            message=detail or "Authentication is not configured.",
             status_code=503,
             title="Service unavailable",
         )

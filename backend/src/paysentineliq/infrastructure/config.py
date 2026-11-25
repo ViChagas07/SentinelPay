@@ -1,4 +1,5 @@
 import base64
+import logging
 import secrets
 from functools import lru_cache
 from typing import Literal, Self
@@ -14,6 +15,8 @@ DEFAULT_LOCAL_REDIS_URL = "redis://localhost:6379/0"
 
 _HASH_SECRET_SALT = b"paysentineliq-settings-v1"
 _HASH_SECRET_INFO = b"security-hash-secret"
+
+_logger = logging.getLogger("paysentineliq")
 
 
 def _derive_security_hash_secret(jwt_secret: str) -> str:
@@ -259,9 +262,38 @@ class Settings(BaseSettings):
 
     @property
     def google_configured(self) -> bool:
-        return bool(
-            self.google_client_id and self.google_client_secret and self.google_redirect_uri
+        return (
+            bool(self.google_client_id)
+            and bool(self.google_client_secret)
+            and bool(self.frontend_url)
+            and self.google_redirect_uri_valid
         )
+
+    @property
+    def google_redirect_uri_valid(self) -> bool:
+        if not self.google_redirect_uri:
+            return False
+        parsed = urlparse(self.google_redirect_uri)
+        allowed_schemes = {"http", "https"} if self.app_env == "local" else {"https"}
+        return (
+            parsed.scheme in allowed_schemes
+            and parsed.path.rstrip("/") == "/api/v1/auth/google/callback"
+        )
+
+    @property
+    def google_configuration_missing(self) -> list[str]:
+        missing: list[str] = []
+        if not self.google_client_id:
+            missing.append("GOOGLE_CLIENT_ID")
+        if not self.google_client_secret:
+            missing.append("GOOGLE_CLIENT_SECRET")
+        if not self.google_redirect_uri:
+            missing.append("GOOGLE_REDIRECT_URI")
+        elif not self.google_redirect_uri_valid:
+            missing.append("GOOGLE_REDIRECT_URI(https://<api-host>/api/v1/auth/google/callback)")
+        if not self.frontend_url:
+            missing.append("FRONTEND_URL")
+        return missing
 
     @property
     def public_base_url(self) -> str:
@@ -370,10 +402,6 @@ class Settings(BaseSettings):
 
         if self.app_env != "local":
             for name, value in (
-                ("GOOGLE_CLIENT_ID", self.google_client_id),
-                ("GOOGLE_CLIENT_SECRET", self.google_client_secret),
-                ("GOOGLE_REDIRECT_URI", self.google_redirect_uri),
-                ("FRONTEND_URL", self.frontend_url),
                 ("S3_BUCKET", self.s3_bucket),
                 ("S3_ACCESS_KEY_ID", self.s3_access_key_id),
                 ("S3_SECRET_ACCESS_KEY", self.s3_secret_access_key),
@@ -384,16 +412,9 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET must be at least 32 characters")
             if self.frontend_url and urlparse(self.frontend_url).scheme != "https":
                 raise ValueError("FRONTEND_URL must start with https:// outside local")
-            if self.google_redirect_uri:
-                parsed_redirect = urlparse(self.google_redirect_uri)
-                if parsed_redirect.scheme != "https":
-                    raise ValueError(
-                        "GOOGLE_REDIRECT_URI must start with https:// outside local",
-                    )
-                if parsed_redirect.path.rstrip("/") != "/api/v1/auth/google/callback":
-                    raise ValueError(
-                        "GOOGLE_REDIRECT_URI must target /api/v1/auth/google/callback",
-                    )
+            # GOOGLE_REDIRECT_URI e validado por google_redirect_uri_valid: um valor
+            # legado ou divergente do Google Console desabilita apenas o login Google,
+            # em vez de derrubar o processo no import do app.
 
         if self.access_token_ttl_minutes <= 0:
             raise ValueError("ACCESS_TOKEN_TTL_MINUTES must be positive")

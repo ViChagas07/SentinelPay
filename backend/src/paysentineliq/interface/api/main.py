@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
@@ -71,11 +72,19 @@ from paysentineliq.interface.api.routes.users import router as users_router
 from paysentineliq.interface.api.security_headers import SecurityHeadersMiddleware
 from paysentineliq.interface.api.upload_limit import UploadSizeLimitMiddleware
 
+_logger = logging.getLogger("paysentineliq")
+
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
     configure_logging(resolved_settings)
     configure_tracing(resolved_settings)
+
+    if not resolved_settings.google_configured:
+        _logger.warning(
+            "google_oidc_not_configured missing=%s google_routes_status=503",
+            ",".join(resolved_settings.google_configuration_missing) or "none",
+        )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:

@@ -74,6 +74,19 @@ from paysentineliq.interface.api.problems import build_problem_response
 router = APIRouter(prefix="/auth", tags=["auth"])
 _logger = logging.getLogger("paysentineliq")
 
+_GOOGLE_NOT_CONFIGURED_DETAIL = (
+    "Google sign-in is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, "
+    "GOOGLE_REDIRECT_URI and FRONTEND_URL."
+)
+
+
+def require_google_configured(
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> None:
+    if not settings.google_configured or not settings.frontend_url:
+        raise AuthNotConfiguredError(_GOOGLE_NOT_CONFIGURED_DETAIL)
+
+
 _EMAIL_RE = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
@@ -184,13 +197,11 @@ def _schedule_email(
 
 @router.get("/google/login")
 async def google_login(
-    settings: Annotated[Settings, Depends(get_app_settings)],
+    _configured: Annotated[None, Depends(require_google_configured)],
     oidc: Annotated[OIDCClient, Depends(get_oidc_client)],
     state_store: Annotated[OIDCStateStore, Depends(get_oidc_state_store)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> RedirectResponse:
-    if not settings.google_configured or not settings.frontend_url:
-        raise AuthNotConfiguredError()
-
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     code_verifier = secrets.token_urlsafe(64)
@@ -226,7 +237,7 @@ def _frontend_redirect(
 ) -> RedirectResponse:
     base = settings.frontend_url.strip().rstrip("/")
     if not base:
-        raise AuthNotConfiguredError()
+        raise AuthNotConfiguredError(_GOOGLE_NOT_CONFIGURED_DETAIL)
 
     query = urlencode(params) if params else ""
     target = f"{base}{path}"
@@ -272,6 +283,7 @@ def _login_error_code(exc: BaseException) -> str:
 async def google_callback(
     request: Request,
     settings: Annotated[Settings, Depends(get_app_settings)],
+    _configured: Annotated[None, Depends(require_google_configured)],
     oidc: Annotated[OIDCClient, Depends(get_oidc_client)],
     state_store: Annotated[OIDCStateStore, Depends(get_oidc_state_store)],
     ticket_store: Annotated[LoginTicketStore, Depends(get_login_ticket_store)],
@@ -284,6 +296,9 @@ async def google_callback(
 ) -> RedirectResponse:
     state_cookie = request.cookies.get(OIDC_STATE_COOKIE_NAME)
     identifier = f"state:{state}" if state else "state:missing"
+
+    if not settings.frontend_url.strip():
+        raise AuthNotConfiguredError(_GOOGLE_NOT_CONFIGURED_DETAIL)
 
     if not state or not state_cookie or not hmac.compare_digest(state, state_cookie):
         await _record_failure(request, brute_force, identifier)

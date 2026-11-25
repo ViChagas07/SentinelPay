@@ -107,11 +107,32 @@ def test_non_local_rejects_insecure_frontend_url() -> None:
         _production_settings(frontend_url="http://app.example.com")
 
 
-def test_non_local_rejects_wrong_google_callback_path() -> None:
-    with pytest.raises(ValidationError):
-        _production_settings(
-            google_redirect_uri="https://api.example.com/api/auth/google/callback",
-        )
+def test_non_local_keeps_app_bootable_with_wrong_google_callback_path() -> None:
+    settings = _production_settings(
+        google_redirect_uri="https://api.example.com/api/auth/google/callback",
+    )
+
+    assert settings.google_configured is False
+    assert settings.google_configuration_missing == [
+        "GOOGLE_REDIRECT_URI(https://<api-host>/api/v1/auth/google/callback)",
+    ]
+
+
+def test_non_local_keeps_app_bootable_without_google_credentials() -> None:
+    settings = _production_settings(
+        google_client_id="",
+        google_client_secret="",
+        google_redirect_uri="",
+        frontend_url="",
+    )
+
+    assert settings.google_configured is False
+    assert settings.google_configuration_missing == [
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "GOOGLE_REDIRECT_URI",
+        "FRONTEND_URL",
+    ]
 
 
 def test_login_ticket_ttl_default_and_validation() -> None:

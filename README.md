@@ -214,6 +214,41 @@ make openapi-docs
 
 A contract test fails if the documentation snapshot and the test snapshot diverge.
 
+## Production deployment
+
+The backend image is built from `backend/Dockerfile` with the repository root as build context. The container runs `uvicorn paysentineliq.interface.api.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=* --no-access-log`. On Railway, target the container port `8000`, or override the start command with `--port $PORT`.
+
+Required variables outside `APP_ENV=local`:
+
+| Variable | Format | Notes |
+| --- | --- | --- |
+| `APP_ENV` | `production` | Any value other than `local` enables strict validation. |
+| `DATABASE_URL` | `postgresql+asyncpg://user:pass@host:5432/db` | Required. |
+| `REDIS_URL` | `redis://host:6379/0` | Required. |
+| `RABBITMQ_URL` | `amqp://user:pass@host:5672//` | Required. |
+| `CELERY_RESULT_BACKEND` | `redis://host:6379/1` | Required. |
+| `JWT_SECRET` | 32 or more random characters | Required. `JWT_SECRET_KEY` is accepted as an alias. |
+| `S3_BUCKET` | bucket name | Required. |
+| `S3_ACCESS_KEY_ID` | access key | Required. |
+| `S3_SECRET_ACCESS_KEY` | secret key | Required. |
+| `FRONTEND_URL` | `https://sentinelpay1.vercel.app` | Required. Exact origin, no trailing slash. |
+| `CORS_ALLOWED_ORIGINS` | `https://sentinelpay1.vercel.app` | Exact origin, never `*`. |
+| `ALLOWED_HOSTS` | `sentinelpay.up.railway.app,localhost,127.0.0.1` | Include the public API host. |
+| `METRICS_TOKEN` | random string or empty | Empty keeps `/metrics` returning 401. |
+
+Google sign-in variables, optional for boot:
+
+| Variable | Format | Notes |
+| --- | --- | --- |
+| `GOOGLE_CLIENT_ID` | `xxxx.apps.googleusercontent.com` | Missing disables Google sign-in only. |
+| `GOOGLE_CLIENT_SECRET` | Google client secret | Never commit or log it. |
+| `GOOGLE_REDIRECT_URI` | `https://sentinelpay.up.railway.app/api/v1/auth/google/callback` | Must match the Google Console authorized redirect URI exactly. |
+| `AUTH_LOGIN_TICKET_TTL_SECONDS` | `60` | Lifetime of the one-time login ticket. |
+
+When Google credentials are missing, invalid or point to a different callback path, the app still boots. It logs one `google_oidc_not_configured` warning with the missing variable names, `GET /api/v1/auth/capabilities` reports `google_enabled=false`, and only `/api/v1/auth/google/login` and `/api/v1/auth/google/callback` return `503 auth_not_configured`.
+
+The callback path in code is `/api/v1/auth/google/callback`. The older `/api/auth/google/callback` path does not exist in this service, so the Google Console entry must use the `/api/v1` prefix.
+
 ## Key decisions
 
 The full index is in [docs/adr/README.md](docs/adr/README.md). The decisions that matter most for this project:
